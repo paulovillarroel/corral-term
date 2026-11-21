@@ -151,7 +151,11 @@ def find_console(lang: str) -> str | None:
 
 
 def cmd_layout(args: argparse.Namespace) -> None:
-    """New tab: agent on the left, R console top right, variables bottom right."""
+    """New tab: agent on the left; on the right, script over console, variables below.
+
+    Script and console share the upper area; `corral toggle` (ctrl+b t) gives it to
+    one or the other, like tabs that keep a few lines of the other visible.
+    """
     ws = current_workspace()
     if not ws:
         raise CorralError("no encontré un workspace de herdr")
@@ -164,18 +168,24 @@ def cmd_layout(args: argparse.Namespace) -> None:
         "pane", "split", left, "--direction", "right", "--ratio", str(args.ratio), "--cwd", cwd, "--no-focus"
     )["pane"]["pane_id"]
 
-    # Only one console per language: take the label away from older panes.
+    # Only one of each per workspace: take the labels away from older panes.
     label = console_label("r")
     for pane in list_panes(ws):
-        if pane.get("label") == label:
+        if pane.get("label") in (label, "corral:vars", "corral:script"):
             herdr("pane", "rename", pane["pane_id"], "--clear")
-    herdr("pane", "rename", right, label)
-    herdr("pane", "run", right, args.console)
 
-    for pane in list_panes(ws):
-        if pane.get("label") == "corral:vars":
-            herdr("pane", "rename", pane["pane_id"], "--clear")
-    vars_pane = split_vars_pane(right)
+    # Right column: [script over console] over variables.
+    vars_pane = split_vars_pane(right, ratio=0.7)
+    editor = args.editor if args.editor and shutil.which(shlex.split(args.editor)[0]) else ""
+    if editor:
+        console = herdr("pane", "split", right, "--direction", "down", "--ratio", "0.55", "--cwd", cwd,
+                        "--no-focus")["pane"]["pane_id"]
+        herdr("pane", "rename", right, "corral:script")
+        herdr("pane", "run", right, editor)
+    else:
+        console = right
+    herdr("pane", "rename", console, label)
+    herdr("pane", "run", console, args.console)
 
     if args.shell:
         shell = herdr(
@@ -185,7 +195,104 @@ def cmd_layout(args: argparse.Namespace) -> None:
 
     if args.agent:
         herdr("pane", "run", left, args.agent)
-    print(json.dumps({"tab": tab["tab"]["tab_id"], "agent": left, "console": right}))
+    print(json.dumps({"tab": tab["tab"]["tab_id"], "agent": left, "console": console,
+                      "script": right if editor else None, "vars": vars_pane}))
+
+
+def herdr_socket(method: str, params: dict) -> dict:
+    """Raw socket call, for the few methods the herdr CLI does not expose."""
+    import socket as _socket
+    path = os.environ.get("HERDR_SOCKET_PATH") or str(Path.home() / ".config" / "herdr" / "herdr.sock")
+    with _socket.socket(_socket.AF_UNIX) as sock:
+        sock.settimeout(5)
+        sock.connect(path)
+        sock.sendall(json.dumps({"id": "corral", "method": method, "params": params}).encode() + b"\n")
+        buf = b""
+        while not buf.endswith(b"\n"):
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+    data = json.loads(buf or b"{}")
+    if "error" in data:
+        raise CorralError(data["error"].get("message", "herdr falló"))
+    return data.get("result", {})
+
+
+def find_labeled(label: str) -> str | None:
+    for pane in list_panes(current_workspace()):
+        if pane.get("label") == label:
+            return pane["pane_id"]
+    return None
+
+
+def split_between(node: dict, a: str, b: str, path: list[bool]) -> tuple[list[bool], dict, bool] | None:
+    """Path to the split that separates panes a and b; True if a is in its first half."""
+    if node.get("type") != "split":
+        return None
+    def has(n: dict, pid: str) -> bool:
+        if n.get("type") == "pane":
+            return n.get("pane_id") == pid
+        return has(n["first"], pid) or has(n["second"], pid)
+    first, second = node["first"], node["second"]
+    if has(first, a) and has(second, b):
+        return path, node, True
+    if has(first, b) and has(second, a):
+        return path, node, False
+    for i, child in enumerate((first, second)):
+        if has(child, a) and has(child, b):
+            return split_between(child, a, b, path + [bool(i)])
+    return None
+
+
+TOGGLE_MODES = {"ambos": 0.55, "script": 0.86, "consola": 0.14}
+
+
+def cmd_toggle(args: argparse.Namespace) -> None:
+    """Give the upper right area to the script, the console, or both (ctrl+b t)."""
+    script, console = find_labeled("corral:script"), find_labeled(console_label("r"))
+    if not script or not console:
+        notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script --split'")
+        return
+    layout = herdr_socket("layout.export", {"pane_id": console})["layout"]
+    found = split_between(layout["root"], script, console, [])
+    if not found:
+        raise CorralError("el script y la consola no están en la misma división")
+    path, node, script_first = found
+    share = node["ratio"] if script_first else 1 - node["ratio"]  # script's share
+    current = "script" if share > 0.75 else "consola" if share < 0.25 else "ambos"
+    order = ["ambos", "script", "consola"]
+    mode = args.mode or order[(order.index(current) + 1) % len(order)]
+    share = TOGGLE_MODES[mode]
+    herdr_socket("layout.set_split_ratio", {"tab_id": layout["tab_id"], "path": path,
+                                            "ratio": share if script_first else 1 - share})
+    # Put the cursor where the space went (focus moves from the other pane toward it).
+    if mode != "ambos":
+        toward_script = "up" if script_first else "down"
+        toward_console = "down" if script_first else "up"
+        source, direction = (console, toward_script) if mode == "script" else (script, toward_console)
+        try:
+            herdr("pane", "focus", "--pane", source, "--direction", direction)
+        except CorralError:
+            pass
+    notify("Corral", {"ambos": "Script y consola", "script": "Script", "consola": "Consola"}[mode])
+
+
+def cmd_script(args: argparse.Namespace) -> None:
+    """Add the script editor above the console in an existing layout."""
+    if find_labeled("corral:script"):
+        notify("Script", "ya hay un panel de script en este workspace")
+        return
+    console = find_console("r")
+    if not console:
+        raise CorralError("no hay consola corral:r en este workspace")
+    editor = args.editor
+    if not shutil.which(shlex.split(editor)[0]):
+        raise CorralError(f"no encuentro el editor '{editor}'")
+    new = herdr("pane", "split", console, "--direction", "down", "--ratio", "0.45", "--no-focus")["pane"]["pane_id"]
+    herdr("pane", "swap", "--source-pane", new, "--target-pane", console)
+    herdr("pane", "rename", new, "corral:script")
+    herdr("pane", "run", new, editor + (" " + shlex.quote(args.file) if args.file else ""))
 
 
 def cmd_console(args: argparse.Namespace) -> None:
@@ -248,6 +355,17 @@ def cmd_send(args: argparse.Namespace) -> None:
     if not pane:
         notify("Sin consola", f"No hay panel {console_label(args.lang)}. Usa 'corral console' o 'corral layout'")
         sys.exit(1)
+    if args.source:
+        # Long code (a whole script): source a temp file instead of pasting every line.
+        run_dir = STATE_DIR / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        for old_file in run_dir.glob("*.R"):  # keep a day of history, no more
+            if time.time() - old_file.stat().st_mtime > 86400:
+                old_file.unlink(missing_ok=True)
+        tmp = run_dir / f"{time.strftime('%H%M%S')}-{secrets.token_hex(3)}.R"
+        tmp.write_text(text + "\n", encoding="utf-8")
+        label = Path(args.name).name if args.name else "script"
+        text = f'source("{tmp}", echo = TRUE, max.deparse.length = Inf, encoding = "UTF-8")  # {label}'
     herdr("pane", "run", pane, text)
     lines = text.count("\n") + 1
     print(f"corral: enviado a {pane} desde {source} ({lines} línea{'s' if lines != 1 else ''})", file=sys.stderr)
@@ -539,6 +657,11 @@ def resolve_session_dir() -> Path | None:
     try:
         return Path(console_session()[1]["dir"])
     except CorralError:
+        try:
+            if find_console("r"):
+                return None  # this workspace has a console, but R isn't running in it yet
+        except CorralError:
+            pass
         session = pick_session()
         return Path(session["dir"]) if session else None
 
@@ -608,7 +731,7 @@ def cmd_vars_tui(_: argparse.Namespace) -> None:
     tui().vars_viewer(Path(d), run_in_console=run_in_pane, open_plot=open_plot)
 
 
-def split_vars_pane(console: str | None = None) -> str:
+def split_vars_pane(console: str | None = None, ratio: float = 0.62) -> str:
     """Permanent variables pane under the R console, like Positron's Variables view."""
     console = console or find_console("r")
     if not console:
@@ -617,7 +740,7 @@ def split_vars_pane(console: str | None = None) -> str:
         if pane.get("label") == "corral:vars":
             notify("Variables", f"ya está abierto en {pane['pane_id']}")
             return pane["pane_id"]
-    new = herdr("pane", "split", console, "--direction", "down", "--ratio", "0.62", "--no-focus")["pane"]["pane_id"]
+    new = herdr("pane", "split", console, "--direction", "down", "--ratio", str(ratio), "--no-focus")["pane"]["pane_id"]
     herdr("pane", "rename", new, "corral:vars")
     herdr("pane", "run", new, f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT))} vars --pane")
     return new
@@ -957,7 +1080,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="corral", description="Consola de R, tablas y gráficos junto a tus agentes.")
     parser.add_argument("--version", action="version", version=f"corral {VERSION}")
     sub = parser.add_subparsers(dest="command", required=True,
-                                metavar="{layout,send,eval,console,plots,vars,view,mirador,open,config,doctor}")
+                                metavar="{layout,send,eval,toggle,script,console,plots,vars,view,mirador,open,config,doctor}")
 
     p = sub.add_parser("layout", help="abre una pestaña con agente, consola de R y shell")
     p.add_argument("--cwd")
@@ -966,7 +1089,18 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--console", default=os.environ.get("CORRAL_R", "R --quiet --no-save"))
     p.add_argument("--ratio", type=float, default=0.55, help="fracción del ancho para el panel del agente")
     p.add_argument("--shell", action="store_true", help="agregar una shell junto al panel de variables")
+    p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"), help="editor del panel de script ('' sin script)")
     p.set_defaults(func=cmd_layout)
+
+    p = sub.add_parser("toggle", help="alterna el espacio entre script y consola (ctrl+b t)")
+    p.add_argument("mode", nargs="?", choices=list(TOGGLE_MODES), help="ambos, script o consola; sin valor, rota")
+    p.set_defaults(func=cmd_toggle)
+
+    p = sub.add_parser("script", help="agrega el editor de scripts sobre la consola")
+    p.add_argument("file", nargs="?")
+    p.add_argument("--split", action="store_true", help="(por defecto) abrir el panel sobre la consola")
+    p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"))
+    p.set_defaults(func=cmd_script)
 
     p = sub.add_parser("console", help="marca un panel como consola de R")
     p.add_argument("--pane")
@@ -977,6 +1111,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("text", nargs="*")
     p.add_argument("--lang", default="r")
     p.add_argument("--clipboard", action="store_true", help="usar el portapapeles si no hay otro texto")
+    p.add_argument("--source", action="store_true", help="ejecutar con source(echo = TRUE) en vez de pegar el código")
+    p.add_argument("--name", help="nombre del archivo, para mostrarlo en la consola")
     p.set_defaults(func=cmd_send)
 
     p = sub.add_parser("view", help="abre una tabla (parquet, csv, …) en un popup o en esta terminal")

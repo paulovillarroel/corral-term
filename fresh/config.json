@@ -1,0 +1,39 @@
+{
+  "check_for_updates": false,
+  "active_keybinding_map": "vscode",
+  "languages": {
+    "r": {
+      "extensions": ["R", "r", "Rprofile"],
+      "grammar": "R",
+      "comment_prefix": "# ",
+      "tab_size": 2,
+      "use_tabs": false,
+      "formatter": {
+        "command": "air",
+        "args": ["format", "--stdin-file-path", "$FILE"],
+        "stdin": true,
+        "timeout_ms": 10000
+      },
+      "format_on_save": true
+    }
+  },
+  "lsp": {
+    "r": {
+      "name": "languageserver",
+      "command": "R",
+      "args": ["--no-echo", "--no-restore", "-e", "languageserver::run()"],
+      "enabled": true,
+      "auto_start": true,
+      "except_features": ["format"]
+    }
+  },
+  "keybindings": [
+    { "key": "Enter", "modifiers": ["ctrl"], "action": "corral_run_line" },
+    { "key": "Enter", "modifiers": ["alt"], "action": "corral_run_line" },
+    { "key": "Enter", "modifiers": ["ctrl", "shift"], "action": "corral_run_file" },
+    { "key": "minus", "modifiers": ["alt"], "action": "corral_insert_assign" },
+    { "key": "m", "modifiers": ["ctrl", "shift"], "action": "corral_insert_pipe" },
+    { "key": "c", "modifiers": ["ctrl", "shift"], "action": "toggle_comment" },
+    { "key": "space", "modifiers": ["ctrl"], "action": "lsp_completion" }
+  ]
+}

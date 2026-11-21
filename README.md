@@ -1,6 +1,6 @@
 # Corral
 
-Corral junta en la terminal lo que hoy obliga a abrir Positron: correr un trozo de código en la consola de R, ver los gráficos, revisar las variables y mirar una tabla, todo al lado de los agentes. Está pensado para WSL con [herdr](https://herdr.dev), aunque el comando `corral` funciona en cualquier terminal.
+Corral junta en la terminal lo que hoy obliga a abrir Positron: escribir un script de R y ejecutarlo por partes, ver los gráficos, revisar las variables y mirar una tabla, todo al lado de los agentes. Está pensado para WSL con [herdr](https://herdr.dev), aunque el comando `corral` funciona en cualquier terminal.
 
 Todo ocurre dentro de herdr. Los visores aparecen encima de la terminal cuando los pides y se cierran con `q` o `Esc`, así que nada ocupa espacio mientras trabajas. Si quieres ver algo en grande, **Mirador** muestra lo mismo en el navegador.
 
@@ -16,6 +16,7 @@ Estado: versión 0.1.0. La consola es R normal; la conexión con el kernel Ark v
 | `r/corral.R` | Lado de R: registra la sesión, `View()` y gráficos con httpgd. |
 | `mirador/` | Mirador, la vista en el navegador: un servidor local (`server.py`) y una página (`index.html`). |
 | `claude/skills/corral-r/` | Skill para Claude Code: le enseña a trabajar en tu consola de R con `corral eval`. |
+| `fresh/` | Configuración y plugin del editor [Fresh](https://getfresh.dev) para escribir scripts de R. |
 
 Todo lo que tiene estado vive en un panel de herdr (la sesión de R, los agentes). Los visores se pueden cerrar sin perder nada, porque leen de esas sesiones cada vez que se abren.
 
@@ -51,7 +52,17 @@ Todo lo que tiene estado vive en un panel de herdr (la sesión de R, los agentes
    ln -s ~/workspace/personal/corral-term/claude/skills/corral-r ~/.claude/skills/corral-r
    ```
 
-6. Revisa que todo esté en orden:
+6. El editor de scripts: [Fresh](https://getfresh.dev), con `languageserver` para el autocompletado y los diagnósticos, y [Air](https://posit-dev.github.io/air/) para el formato.
+
+   ```bash
+   # Fresh: binario oficial de https://github.com/sinelaw/fresh/releases (x86_64-unknown-linux-musl) en ~/.local/bin
+   uv tool install air-formatter
+   Rscript -e 'install.packages("languageserver")'
+   cp ~/workspace/personal/corral-term/fresh/config.json ~/.config/fresh/config.json
+   ln -s ~/workspace/personal/corral-term/fresh/plugins/corral.ts ~/.config/fresh/plugins/corral.ts
+   ```
+
+7. Revisa que todo esté en orden:
 
    ```bash
    corral doctor
@@ -65,7 +76,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 
 | Quieres | Haces |
 |---|---|
-| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda, la consola de R arriba a la derecha y el panel de variables abajo. Con `corral layout --shell` agrega una shell junto a las variables. |
+| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda y, a la derecha, el script, la consola de R y las variables. Con `corral layout --shell` agrega una shell junto a las variables. |
+| Alternar script y consola | `ctrl+b t` rota entre **Script** (el editor ocupa casi todo y la consola muestra sus últimas líneas), **Consola** (al revés) y **Ambos**. El cursor pasa al panel que se agranda. También `corral toggle script\|consola\|ambos`. En un layout que ya tenías: `corral script`. |
 | Ver tus objetos y gráficos mientras trabajas | El panel de variables se actualiza después de cada comando, tuyo o de Claude, y sigue a la consola aunque reinicies R. Lista tus objetos y los últimos 12 gráficos con su título. Enter sobre un data frame abre la tabla; sobre un gráfico lo muestra nítido (en herdr si tu terminal dibuja imágenes, si no en Mirador); sobre otro objeto corre `str()`. En un layout que ya tenías: `corral vars --split`. |
 | Correr código en R | Selecciona texto con el mouse en cualquier panel (por ejemplo, código que escribió Claude); herdr lo copia solo. Después `ctrl+b enter`. Si no hay selección, se envía lo que tengas en el portapapeles. |
 | Ver los gráficos | El primer gráfico de cada sesión abre Mirador solo, como ventana normal a la derecha de la pantalla y al frente. Después se actualiza sin robarte el foco. `ctrl+b f` lo trae al frente en el último gráfico. En una terminal que dibuje imágenes (ver abajo), `ctrl+b f` muestra el gráfico dentro de herdr. |
@@ -76,6 +88,26 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | Abrir `quarto preview` | `ctrl+click` sobre la URL `http://localhost:...` en herdr. |
 
 Desde la terminal: `corral send 'código'`, `... | corral send`, `corral plots`, `corral vars`, `corral view archivo.parquet`.
+
+### El script
+
+El panel de script es [Fresh](https://getfresh.dev), un editor de terminal sin modos, con los atajos de VS Code (y por lo tanto casi los de Positron), menús y mouse. Para R tiene:
+
+- **Autocompletado** en un menú mientras escribes, o con `Ctrl+Space`; ayuda al pasar sobre una función; ir a la definición. Lo da el paquete `languageserver`.
+- **Diagnósticos** de lintr en la línea donde está el problema.
+- **Formato con Air** cada vez que guardas (`Ctrl+S`).
+
+Atajos de Corral, al estilo de Positron:
+
+| Atajo | Qué hace |
+|---|---|
+| `Ctrl+Enter` | Ejecuta la selección o, si no hay, la instrucción completa bajo el cursor (incluidas cadenas de `\|>` o `+` de varias líneas) y avanza a la siguiente. Si tu terminal no distingue `Ctrl+Enter` de `Enter`, usa `Alt+Enter`. |
+| `Ctrl+Shift+Enter` | Ejecuta el archivo completo con `source(echo = TRUE)`. |
+| `Alt+-` | Inserta ` <- `. |
+| `Ctrl+Shift+M` | Inserta ` \|> `. |
+| `Ctrl+Shift+C` | Comenta o descomenta. |
+
+La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin en [`fresh/plugins/corral.ts`](fresh/plugins/corral.ts). Fresh viene con las búsquedas de actualizaciones y la telemetría desactivadas (`check_for_updates: false`).
 
 ### Claude en tu consola de R
 
@@ -118,6 +150,7 @@ Mirador escucha solo en `127.0.0.1` y pide un token en cada solicitud. El token 
 | `CORRAL_IMAGES` | Cómo dibujar gráficos en la terminal: `auto`, `kitty` o `symbols`. También con `corral config images …` | `auto` |
 | `CORRAL_AGENT` | Comando del panel izquierdo en `layout` (`''` deja una shell) | `claude` |
 | `CORRAL_R` | Comando de la consola en `layout` | `R --quiet --no-save` |
+| `CORRAL_EDITOR` | Editor del panel de script (`''` sin script) | `fresh` |
 | `CORRAL_VIEW` | Dónde abre `View()`: `auto` (popup dentro de herdr, Mirador fuera), `mirador` o `popup` | `auto` |
 | `CORRAL_BROWSER` | Navegador para Mirador: `firefox`, `edge`, `chrome`, `print` (solo muestra la URL) o un comando con `{url}` | Firefox; si no está, Edge o Chrome |
 | `CORRAL_MIRADOR_PORT` | Puerto de Mirador | `7317` |
@@ -136,7 +169,8 @@ Opciones de R:
 
 ## Límites conocidos
 
-- En Warp y Windows Terminal los gráficos dentro de herdr son de baja resolución (ver arriba).
+- En Windows los gráficos no se ven nítidos dentro de herdr; van a Mirador (ver arriba).
+- `Ctrl+Enter` depende de que la terminal lo envíe distinto de `Enter`. `Alt+Enter` funciona siempre.
 - Sin VisiData, las tablas se muestran con DuckDB y `less`: hasta 1000 filas, sin orden ni filtro interactivos.
 - Las tablas de `View()` se guardan en el directorio temporal de R y desaparecen al cerrar R.
 - Para objetos con más de un millón de elementos no se muestra el tamaño en memoria, porque calcularlo en cada comando sería lento.

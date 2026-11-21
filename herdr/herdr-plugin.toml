@@ -27,6 +27,18 @@ contexts = ["pane"]
 command = ["python3", "../bin/corral", "console"]
 
 [[actions]]
+id = "toggle"
+title = "Corral: alternar script y consola"
+contexts = ["global", "workspace", "pane"]
+command = ["python3", "../bin/corral", "toggle"]
+
+[[actions]]
+id = "script"
+title = "Corral: agregar el editor de scripts sobre la consola"
+contexts = ["global", "workspace"]
+command = ["python3", "../bin/corral", "script"]
+
+[[actions]]
 id = "plots"
 title = "Corral: ver gráficos de la sesión de R"
 contexts = ["global", "workspace"]

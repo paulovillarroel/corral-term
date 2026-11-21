@@ -323,10 +323,13 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         """Reload when the session or its variables changed. True if something changed."""
         nonlocal rev, items, meta, session_dir, sel
         f = files()
-        if (f is None or not f[0].is_file()) and resolve:
+        if resolve:
+            # Follow the console of this workspace: a new R, or a console that
+            # registered after this pane started, takes over.
             found = resolve()
             if found != session_dir:
                 session_dir, rev, items, meta, sel = found, None, [], {}, 0
+                plot_state.update(url=None, upid=None, titles={})
                 f = files()
         if f is None or not f[0].is_file():
             changed = bool(items) or rev is not None
