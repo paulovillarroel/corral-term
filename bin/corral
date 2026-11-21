@@ -185,7 +185,7 @@ def cmd_layout(args: argparse.Namespace) -> None:
         console = herdr("pane", "split", right, "--direction", "down", "--ratio", str(TOGGLE_MODES["ambos"]), "--cwd", cwd,
                         "--no-focus")["pane"]["pane_id"]
         herdr("pane", "rename", right, "corral:script")
-        herdr("pane", "run", right, editor_command(editor, scratch_script(ws)))
+        herdr("pane", "run", right, editor_command(editor, scratch_script(ws, cwd)))
     else:
         console = right
     herdr("pane", "rename", console, label)
@@ -206,14 +206,26 @@ def cmd_layout(args: argparse.Namespace) -> None:
 SCRATCH_ROOT = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "corral" / "borradores"
 SCRATCH_INDEX = STATE_DIR / "borradores.json"
 SCRATCH_MAX_AGE = 2 * 86400
+SCRATCH_HEADER = ("# Borrador temporal: se descarta al cerrar este layout.\n"
+                  "# Ctrl+S lo guarda en tu proyecto (o pídeselo a Claude).\n\n")
+SCRATCH_HEADER_RE = re.compile(r"\A# Borrador temporal[^\n]*\n# [^\n]*\n\n?")
 
 
-def scratch_script(workspace: str | None) -> Path:
-    """A new, empty .R file for the script pane, thrown away unless you save it elsewhere.
+def scratch_root(project: str | None) -> Path:
+    """Where scratch files go: <project>/.corral/ (so Air, lintr and the language
+    server see the project), or a temp folder when there is no project to speak of."""
+    if project:
+        root = Path(project).expanduser().resolve()
+        if root not in (Path.home().resolve(), Path("/")) and os.access(root, os.W_OK):
+            return root / ".corral"
+    return SCRATCH_ROOT
+
+
+def scratch_script(workspace: str | None, project: str | None = None) -> Path:
+    """A new, empty .R file for the script pane, thrown away unless you save it.
 
     It must be a real file because the editor only offers completion on saved
-    files. It lives in XDG_RUNTIME_DIR, which WSL empties on restart; older
-    ones are removed here too.
+    files. Old ones (more than two days) are removed here.
     """
     label = "corral"
     try:
@@ -223,19 +235,23 @@ def scratch_script(workspace: str | None) -> Path:
     except CorralError:
         pass
     label = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or "corral"
-    SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-    for old in SCRATCH_ROOT.iterdir():
+    root = scratch_root(project)
+    root.mkdir(parents=True, exist_ok=True)
+    if root.name == ".corral":
+        # Git ignores the whole folder without touching the project's .gitignore.
+        ignore = root / ".gitignore"
+        if not ignore.exists():
+            ignore.write_text("# Borradores temporales de Corral\n*\n")
+    for old in root.iterdir():
         try:
-            if time.time() - old.stat().st_mtime > SCRATCH_MAX_AGE:
+            if old.is_dir() and time.time() - old.stat().st_mtime > SCRATCH_MAX_AGE:
                 shutil.rmtree(old, ignore_errors=True)
         except OSError:
             pass
-    folder = SCRATCH_ROOT / f"{label}-{time.strftime('%Y%m%d-%H%M%S')}"
+    folder = root / f"{label}-{time.strftime('%Y%m%d-%H%M%S')}"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "borrador.R"
-    path.write_text("# Borrador temporal: se descarta al cerrar este layout.\n"
-                    "# Para conservarlo, Ctrl+S y elige dónde guardarlo (o pídeselo a Claude).\n\n",
-                    encoding="utf-8")
+    path.write_text(SCRATCH_HEADER, encoding="utf-8")
     index = read_json_file(SCRATCH_INDEX)
     index[workspace or "default"] = str(path)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -362,7 +378,10 @@ def cmd_script(args: argparse.Namespace) -> None:
         if target.exists() and not args.forzar:
             raise CorralError(f"{target} ya existe; usa --forzar para reemplazarlo")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
+        body = SCRATCH_HEADER_RE.sub("", text)
+        if body and not body.endswith("\n"):
+            body += "\n"
+        target.write_text(body, encoding="utf-8")
         print(f"borrador guardado en {target}")
         return
 
@@ -378,7 +397,8 @@ def cmd_script(args: argparse.Namespace) -> None:
     new = herdr("pane", "split", console, "--direction", "down", "--ratio", "0.45", "--no-focus")["pane"]["pane_id"]
     herdr("pane", "swap", "--source-pane", new, "--target-pane", console)
     herdr("pane", "rename", new, "corral:script")
-    herdr("pane", "run", new, editor_command(editor, args.file or scratch_script(current_workspace())))
+    project = plugin_context().get("focused_pane_cwd") or os.getcwd()
+    herdr("pane", "run", new, editor_command(editor, args.file or scratch_script(current_workspace(), project)))
 
 
 CORRAL_LABELS = ("corral:script", "corral:r", "corral:vars", "corral:shell")
@@ -408,7 +428,7 @@ def cmd_close(args: argparse.Namespace) -> None:
             pass
     note = f"{len(targets)} paneles cerrados"
     if scratch and Path(scratch).exists():
-        note += "; el borrador queda unos días en " + str(Path(scratch).parent)
+        note += "; el borrador queda unos días en " + str(Path(scratch).parent)  # in .corral/ when there's a project
     notify("Corral cerrado", note)
     print(note)
 

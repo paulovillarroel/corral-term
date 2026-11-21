@@ -52,7 +52,7 @@ Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <
 
 ## The user's script
 
-The Script pane above the console holds a temporary scratch file that is thrown away when the layout closes, unless saved. Its current text, unsaved edits included:
+The Script pane above the console holds a temporary scratch file that is thrown away when the layout closes, unless saved. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't edit, cite or clean them up. Its current text, unsaved edits included:
 
 ```bash
 corral script --leer

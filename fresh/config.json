@@ -37,6 +37,15 @@
       ],
       "enabled": true,
       "auto_start": true,
+      "root_markers": [
+        "DESCRIPTION",
+        "renv.lock",
+        ".here",
+        ".lintr",
+        "air.toml",
+        ".Rprofile",
+        ".git"
+      ],
       "except_features": [
         "format"
       ]

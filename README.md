@@ -88,7 +88,7 @@ Después borra la línea de Corral de `~/.Rprofile` y el bloque `# Corral` de `~
 
 ### Salir de Corral
 
-`ctrl+b shift+c` cierra el script, la consola y las variables, y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar queda unos días en `$XDG_RUNTIME_DIR/corral/borradores/` por si lo necesitas. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
+`ctrl+b shift+c` cierra el script, la consola y las variables, y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar queda unos días en la carpeta `.corral/` del proyecto por si lo necesitas. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
 
 ## Cuándo actúa Corral
 
@@ -107,7 +107,7 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 |---|---|
 | Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda (49 % del ancho) y, a la derecha, el script, la consola de R y las variables (el script y la consola se reparten el 73 % del alto, 57/43, y las variables el 27 % restante). El editor abre con el explorador de carpetas a la vista. Con `corral layout --shell` agrega una shell junto a las variables; `--ratio` cambia el ancho de Claude. |
 | Alternar script y consola | `ctrl+b t` rota entre **Script** (el editor ocupa casi todo y la consola muestra sus últimas líneas), **Consola** (al revés) y **Ambos**. El cursor pasa al panel que se agranda. También `corral toggle script\|consola\|ambos`. En un layout que ya tenías: `corral script`. |
-| Ver tus objetos y gráficos mientras trabajas | El panel de variables se actualiza después de cada comando, tuyo o de Claude, y sigue a la consola aunque reinicies R. Lista tus objetos, los últimos 12 gráficos con su título y los objetos gráficos guardados en variables (`ggplot`, `lattice`, `patchwork`). Enter sobre un data frame abre la tabla; sobre un gráfico lo muestra nítido (en herdr si tu terminal dibuja imágenes, si no en Mirador); sobre un objeto gráfico lo dibuja y lo abre en Mirador; sobre otro objeto corre `str()`. En un layout que ya tenías: `corral vars --split`. |
+| Ver tus objetos y gráficos mientras trabajas | El panel de variables se actualiza después de cada comando, tuyo o de Claude, y sigue a la consola aunque reinicies R. Lista tus objetos, incluidos los gráficos guardados en variables (`ggplot`, `lattice`, `patchwork`). Enter sobre un data frame abre la tabla; sobre un objeto gráfico lo dibuja y lo abre en Mirador; sobre otro objeto corre `str()`. El historial de dibujos no aparece aquí: está en Mirador (`ctrl+b f`). En un layout que ya tenías: `corral vars --split`. |
 | Correr código en R | Selecciona texto con el mouse en cualquier panel (por ejemplo, código que escribió Claude); herdr lo copia solo. Después `ctrl+b enter`. Si no hay selección, se envía lo que tengas en el portapapeles. |
 | Ver los gráficos | El primer gráfico de cada sesión abre Mirador solo, como ventana normal a la derecha de la pantalla y al frente. Después se actualiza sin robarte el foco. `ctrl+b f` lo trae al frente en el último gráfico. En una terminal que dibuje imágenes (ver abajo), `ctrl+b f` muestra el gráfico dentro de herdr. |
 | Ver las variables en grande | `ctrl+b d` las abre encima de la terminal. |
@@ -170,10 +170,12 @@ Atajos de Corral. Desde Warp, a través de herdr, solo llegan bien `Ctrl+letra` 
 | `Ctrl+Space` | Autocompletado. También aparece solo mientras escribes. |
 | `Ctrl+S` | Guarda y formatea con Air. En el borrador temporal, pregunta dónde guardarlo. |
 
-**El borrador es temporal.** Cada `ctrl+b a` abre un `borrador.R` nuevo y vacío en una carpeta temporal (`$XDG_RUNTIME_DIR/corral/borradores/`, que WSL vacía al reiniciar; Corral además borra los de más de dos días). Se pierde al cerrar el layout, salvo que lo guardes:
+**El borrador es temporal.** Cada `ctrl+b a` abre un `borrador.R` nuevo y vacío dentro del proyecto, en `.corral/<workspace>-<fecha>/`. Así Air, lintr y el servidor de lenguaje usan la configuración del proyecto (`air.toml`, `.lintr`, `DESCRIPTION`, `renv.lock`). Corral crea `.corral/.gitignore` con `*`, de modo que git no ve esos archivos y no hace falta tocar tu `.gitignore`. El explorador de archivos no muestra `.corral/` porque empieza con punto. Los borradores de más de dos días se borran al abrir uno nuevo en ese proyecto. Si abres el layout en tu carpeta personal o en una carpeta sin permiso de escritura, el borrador va a `$XDG_RUNTIME_DIR/corral/borradores/`, que WSL vacía al reiniciar.
 
-- `Ctrl+S` en el borrador abre *Guardar como* para elegir dónde dejarlo en tu proyecto. En cualquier otro archivo, `Ctrl+S` guarda normal.
-- O pídeselo a Claude: usa `corral script --guardar ruta.R`, que guarda también lo que no has guardado. `corral script --leer` muestra el contenido actual.
+Se pierde al cerrar el layout, salvo que lo guardes:
+
+- `Ctrl+S` en el borrador pide un nombre y lo guarda en el proyecto (la carpeta donde abriste el layout). Puedes escribir `analisis/modelo` o una ruta completa; si falta la extensión, agrega `.R`, y si el archivo existe, pregunta antes de reemplazarlo. El aviso de borrador de las dos primeras líneas no pasa al archivo guardado. Desde ahí el editor sigue con el archivo nuevo. En cualquier otro archivo, `Ctrl+S` guarda normal.
+- O pídeselo a Claude: usa `corral script --guardar ruta.R`, que guarda también lo que no has guardado y también quita el aviso. `corral script --leer` muestra el contenido actual.
 
 El borrador es un archivo real, y no un "sin nombre", porque el autocompletado solo funciona en archivos guardados. Los archivos nuevos sin nombre se abren como R, pero sin autocompletado hasta que los guardes.
 

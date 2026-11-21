@@ -6,13 +6,18 @@
 //   F5 (or Ctrl+Shift+Enter)  the whole file, with source(echo = TRUE)
 //   Ctrl+L (or Alt+-)         " <- "
 //   Ctrl+U (or Ctrl+Shift+M)  " |> "
-//   Ctrl+S                    save; in a temporary scratch file, "Save as"
+//   Ctrl+S                    save; in the temporary scratch file, ask for a name in the project
 //
 // Through Warp and herdr, Ctrl+Enter arrives as plain Enter and Alt chords get
 // split, so the first key of each pair is the one that works there.
 // Keys are bound in ~/.config/fresh/config.json (see corral-term/fresh/config.json).
 
 const editor = getEditor();
+
+// Corral scratch files: <project>/.corral/<name>/borrador.R, or the temp folder.
+function isScratch(path: string): boolean {
+  return /\/(\.corral|corral\/borradores)\/[^/]+\/borrador\.R$/.test(path || "");
+}
 const MAX_LINES = 400;
 
 // Code without strings and comments, enough to count brackets and see how a line ends.
@@ -145,7 +150,7 @@ registerHandler("corral_mirror_scratch", async function () {
     // windows' copies of the same file).
     const id = editor.getActiveBufferId();
     const path = editor.getBufferPath(id) || "";
-    if (!path.includes("/corral/borradores/") || !path.endsWith("borrador.R")) return;
+    if (!isScratch(path) || !path.endsWith("borrador.R")) return;
     const text = await editor.getBufferText(id);
     mirrorTicks = (mirrorTicks + 1) % 20;  // rewrite now and then even if unchanged
     if (mirrored[path] === text && mirrorTicks !== 0) return;
@@ -158,10 +163,53 @@ registerHandler("corral_mirror_scratch", async function () {
 });
 editor.setInterval(1500, "corral_mirror_scratch");
 
-// Ctrl+S: a Corral scratch file is temporary, so saving it means choosing a real place.
+// Ctrl+S: a Corral scratch file is temporary, so saving it means choosing a place
+// in the project. Fresh's own "Save as" would start in the scratch folder, so ask
+// for the name here, starting from the project folder.
 registerHandler("corral_save", async function () {
-  const path = editor.getBufferPath(editor.getActiveBufferId()) || "";
-  editor.executeAction(path.includes("/corral/borradores/") ? "save_as" : "save");
+  try {
+    const id = editor.getActiveBufferId();
+    const path = editor.getBufferPath(id) || "";
+    if (!isScratch(path)) {
+      editor.executeAction("save");
+      return;
+    }
+    const project = editor.getCwd();
+    const answer = await editor.prompt("Guardar en el proyecto: ", project + "/");
+    if (!answer || !answer.trim() || answer.trim() === project + "/") return;
+    let target = answer.trim();
+    if (!target.startsWith("/")) target = project + "/" + target;
+    if (!/\.[A-Za-z0-9]+$/.test(target)) target += ".R";
+    if (editor.fileExists(target)) {
+      const confirm = await editor.prompt(`${target} ya existe. ¿Reemplazarlo? (s/n): `, "");
+      if (!confirm || !/^s/i.test(confirm.trim())) {
+        editor.setStatus("Corral: no se guardó");
+        return;
+      }
+    }
+    // Drop the scratch notice at the top: it doesn't belong in the project file.
+    const text = await editor.getBufferText(id);
+    const notice = text.match(/^# Borrador temporal[^\n]*\n# [^\n]*\n\n?/);
+    if (notice) {
+      const bytes = unescape(encodeURIComponent(notice[0])).length;
+      await editor.replaceRange(id, 0, bytes, "");
+    }
+    // The save is confirmed later (Fresh can still refuse it, e.g. when the file
+    // is open in another Fresh): only claim success once the buffer moved there.
+    if (!editor.saveBufferToPath(id, target)) {
+      editor.setStatus("Corral: no pude guardar en " + target);
+      return;
+    }
+    for (let i = 0; i < 10; i++) {
+      await editor.delay(200);
+      if (editor.getBufferPath(id) === target) {
+        editor.setStatus("Corral: guardado en " + target);
+        return;
+      }
+    }
+  } catch (e) {
+    editor.setStatus("Corral: " + String(e));
+  }
 });
 
 registerHandler("corral_insert_assign", async function () {
@@ -216,7 +264,7 @@ const explorerShown: Record<string, boolean> = {};
 registerHandler("corral_show_explorer", async function () {
   try {
     const path = editor.getBufferPath(editor.getActiveBufferId()) || "";
-    if (!path.includes("/corral/borradores/") || explorerShown[path]) return;
+    if (!isScratch(path) || explorerShown[path]) return;
     explorerShown[path] = true;
     editor.executeAction("focus_file_explorer");
     await editor.delay(50);

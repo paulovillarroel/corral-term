@@ -289,7 +289,7 @@ def plots_viewer(session_dir: Path, images: str = "symbols", open_browser: Calla
 # Tabs of the variables viewer: (id, label, kinds shown, colour, icon per kind)
 TABS = [
     ("data", "Datos", ["data"]),
-    ("plots", "Gráficos", ["plotobj", "plot"]),
+    ("plots", "Gráficos", ["plotobj"]),  # plot objects only; the drawing history lives in Mirador
     ("values", "Valores", ["value"]),
     ("functions", "Funciones", ["function"]),
     ("other", "Otros", ["other"]),
@@ -538,7 +538,6 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         return ""
 
     load()
-    load_plots()
     tab = first_useful_tab()
     with Screen(mouse=True) as scr:
         last_check = 0.0
@@ -555,7 +554,7 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                         changed = load()
                         if palette_changed():
                             changed = True
-                        if load_plots() or changed:
+                        if changed:
                             if not tab_chosen and not visible():
                                 tab = first_useful_tab()
                             sel = min(sel, max(0, len(visible()) - 1))
