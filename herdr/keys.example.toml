@@ -9,6 +9,12 @@ command = "corral.send"
 description = "Corral: enviar selección o portapapeles a R"
 
 [[keys.command]]
+key = "prefix+shift+c"
+type = "plugin_action"
+command = "corral.close"
+description = "Corral: cerrar y volver a herdr normal"
+
+[[keys.command]]
 key = "prefix+t"
 type = "plugin_action"
 command = "corral.toggle"

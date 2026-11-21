@@ -28,6 +28,7 @@ from pathlib import Path
 
 VERSION = "0.1.0"
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT.parent / "lib"))
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "corral"
 SESSIONS_DIR = STATE_DIR / "sessions"
 INFO_FILE = STATE_DIR / "mirador.json"
@@ -310,6 +311,14 @@ class Mirador:
     def summary(self, tid: str) -> list[dict]:
         return duck(f"SUMMARIZE SELECT * FROM {table_source(self.table(tid)['path'])}")
 
+    def palette(self) -> dict | None:
+        try:
+            import corral_theme
+            corral_theme.sync()
+            return corral_theme.load()
+        except Exception:
+            return None
+
     def state(self) -> dict:
         with self.lock:
             # R deletes its temp files on exit; drop tables that went with it,
@@ -327,7 +336,26 @@ class Mirador:
             "sessions": self.sessions(),
             "tables": [{k: t[k] for k in ("id", "title", "session", "added")} for t in tables],
             "show_plot": self.show_plot,
+            "palette": self.palette(),
         }
+
+
+def themed_page() -> bytes:
+    """index.html with herdr's palette (written by `corral theme`) as CSS variables."""
+    page = (ROOT / "index.html").read_text(encoding="utf-8")
+    try:
+        import corral_theme
+        p = corral_theme.load()
+    except Exception:
+        p = None
+    if p:
+        css = {"--bg": p["bg"], "--panel": p["surface"], "--side": p["surface"], "--side-2": p["raised"],
+               "--line": p["border"], "--line-2": p["selection"], "--text": p["text"], "--muted": p["muted"],
+               "--dim": p["dim"], "--accent": p["accent"], "--green": p["green"], "--amber": p["yellow"],
+               "--red": p["red"], "--blue": p["blue"], "--violet": p["violet"]}
+        style = "<style>:root{" + ";".join(f"{k}:{v}" for k, v in css.items()) + "}</style>"
+        page = page.replace("</head>", style + "\n</head>", 1)
+    return page.encode("utf-8")
 
 
 # --------------------------------------------------------------------------- HTTP
@@ -386,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(403, "token inválido; abre Mirador con `corral mirador`")
         try:
             if url.path in ("/", "/index.html"):
-                return self._send(200, (ROOT / "index.html").read_bytes(), "text/html; charset=utf-8")
+                return self._send(200, themed_page(), "text/html; charset=utf-8")
             if url.path == "/api/ping":
                 # Only /api/state (the page polling) counts as an open window.
                 active = time.time() - self.app.last_client < ACTIVE_WINDOW_S

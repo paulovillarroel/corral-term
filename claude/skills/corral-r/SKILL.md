@@ -50,6 +50,22 @@ Exit codes:
 
 Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it in Mirador (it opens on the first plot of a session; `ctrl+b f` brings it to the front).
 
+## The user's script
+
+The Script pane above the console holds a temporary scratch file that is thrown away when the layout closes, unless saved. Its current text, unsaved edits included:
+
+```bash
+corral script --leer
+```
+
+When the user asks you to save it, write it into their project (it refuses to overwrite unless you add `--forzar`, so ask first if the file exists):
+
+```bash
+corral script --guardar analisis/modelo.R
+```
+
+Don't save the scratch file on your own initiative; it is temporary on purpose.
+
 ## Working in someone else's session
 
 - Everything you run is visible and persists. Use clear names for objects meant to stay, and `local({ ... })` for scratch work so you don't clutter their environment.

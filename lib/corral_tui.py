@@ -44,6 +44,25 @@ VIOLET = rgb(178, 148, 255)
 GREEN = rgb(79, 194, 124)
 SEL_BG = bg(34, 34, 34)
 
+
+def _use_palette() -> None:
+    """Colours from herdr's theme (see corral_theme.py), when Corral has written them."""
+    global ACCENT, TEXT, MUTED, DIM, BLUE, VIOLET, GREEN, SEL_BG
+    try:
+        import corral_theme
+        p = corral_theme.load()
+    except Exception:
+        p = None
+    if not p:
+        return
+    c = {k: corral_theme.rgb(v) for k, v in p.items() if isinstance(v, str) and v.startswith("#")}
+    ACCENT, TEXT, MUTED, DIM = rgb(*c["accent"]), rgb(*c["text"]), rgb(*c["muted"]), rgb(*c["dim"])
+    BLUE, VIOLET, GREEN = rgb(*c["blue"]), rgb(*c["violet"]), rgb(*c["green"])
+    SEL_BG = bg(*c["selection"])
+
+
+_use_palette()
+
 KEYS = {
     "\x1b[A": "up", "\x1bOA": "up", "\x1b[B": "down", "\x1bOB": "down",
     "\x1b[C": "right", "\x1bOC": "right", "\x1b[D": "left", "\x1bOD": "left",
@@ -275,8 +294,33 @@ TABS = [
     ("functions", "Funciones", ["function"]),
     ("other", "Otros", ["other"]),
 ]
-ICONS = {"data": (BLUE, "▦"), "plot": (ACCENT, "◔"), "plotobj": (ACCENT, "◇"),
-         "value": (DIM, "•"), "function": (VIOLET, "ƒ"), "other": (DIM, "◇")}
+def icons() -> dict:
+    """Icon colours from the current palette (it can change while a viewer is open)."""
+    return {"data": (BLUE, "▦"), "plot": (ACCENT, "◔"), "plotobj": (ACCENT, "◇"),
+            "value": (DIM, "•"), "function": (VIOLET, "ƒ"), "other": (DIM, "◇")}
+
+
+_palette_seen = 0.0
+
+
+def palette_changed() -> bool:
+    """Follow herdr: re-apply its theme if it changed, and reload ours. True if colours changed."""
+    global _palette_seen
+    try:
+        import corral_theme
+        corral_theme.sync()
+        mtime = corral_theme.palette_mtime()
+    except Exception:
+        return False
+    if mtime == _palette_seen:
+        return False
+    first = _palette_seen == 0.0
+    _palette_seen = mtime
+    _use_palette()
+    return not first
+
+
+palette_changed()  # remember the palette this viewer started with
 SUBTITLES = {"plotobj": "Objetos", "plot": "Historial"}
 MAX_PLOTS = 12
 
@@ -436,7 +480,7 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                     lines.append(("", None))
                 lines.append((f"{DIM}{SUBTITLES[kind].upper()}{RESET}", None))
             last_kind = kind
-            color, icon = ICONS.get(kind, (DIM, "•"))
+            color, icon = icons().get(kind, (DIM, "•"))
             preview = str(v.get("preview") or "")
             size = fmt_bytes(v.get("size"))
             meta_txt = (f"{v.get('class') or ''}{' · ' + size if size else ''}" if kind != "plot" else "") if wide else ""
@@ -509,6 +553,8 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                     last_check = time.time()
                     try:
                         changed = load()
+                        if palette_changed():
+                            changed = True
                         if load_plots() or changed:
                             if not tab_chosen and not visible():
                                 tab = first_useful_tab()

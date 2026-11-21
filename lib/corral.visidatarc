@@ -9,3 +9,36 @@ BaseSheet.addCommand(
     'vd.quit(*vd.sheets) if isinstance(sheet.source, Path) else vd.quit(sheet)',
     'cerrar la tabla (Corral); en otras vistas, volver atrás',
 )
+
+
+# Colours from herdr's theme: `corral theme` writes ~/.config/corral/palette.json
+# with xterm-256 indexes. Backgrounds stay the terminal's own.
+import json as _json, os as _os
+from pathlib import Path as _Path
+try:
+    _x = _json.loads((_Path(_os.environ.get("XDG_CONFIG_HOME") or _Path.home() / ".config")
+                      / "corral" / "palette.json").read_text())["x256"]
+except Exception:
+    _x = None
+if _x:
+    for _name, _value in {
+        "color_default_hdr": f"bold {_x['muted']}",
+        "color_current_hdr": f"bold {_x['accent']}",
+        "color_current_row": f"{_x['text']} on {_x['selection']}",
+        "color_key_col": f"{_x['accent']}",
+        "color_column_sep": f"{_x['dim']}",
+        "color_hidden_col": f"{_x['dim']}",
+        "color_selected_row": f"{_x['green']}",
+        "color_top_status": f"{_x['muted']}",
+        "color_active_status": f"{_x['accent']}",
+        "color_inactive_status": f"{_x['dim']}",
+        "color_error": f"{_x['red']}",
+        "color_warning": f"{_x['yellow']}",
+        "color_menu": f"{_x['text']} on {_x['surface']}",
+        "color_menu_active": f"{_x['bg']} on {_x['accent']}",
+        "color_note_type": f"{_x['dim']}",
+    }.items():
+        try:
+            options.set(_name, _value)
+        except Exception:
+            pass

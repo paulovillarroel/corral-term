@@ -44,6 +44,13 @@
   },
   "keybindings": [
     {
+      "key": "s",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "corral_save"
+    },
+    {
       "key": "r",
       "modifiers": [
         "ctrl"

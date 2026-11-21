@@ -347,8 +347,22 @@ async function poll() {
   }
 }
 
+const CSS_VARS = { "--bg": "bg", "--panel": "surface", "--side": "surface", "--side-2": "raised", "--line": "border",
+  "--line-2": "selection", "--text": "text", "--muted": "muted", "--dim": "dim", "--accent": "accent", "--green": "green",
+  "--amber": "yellow", "--red": "red", "--blue": "blue", "--violet": "violet" };
+let paletteKey = "";
+function applyPalette(p) {
+  // herdr's theme can change while the page is open; follow it.
+  if (!p) return;
+  const key = JSON.stringify(p.x256 || p.accent);
+  if (key === paletteKey) return;
+  paletteKey = key;
+  for (const [v, k] of Object.entries(CSS_VARS)) if (p[k]) document.documentElement.style.setProperty(v, p[k]);
+}
+
 async function onState(d) {
   $("#ver").textContent = "v" + d.version;
+  applyPalette(d.palette);
   // A plot chosen elsewhere (corral's variables pane), or #plot:<session>:<id> in the URL.
   const sp = d.show_plot;
   if (S.first) {

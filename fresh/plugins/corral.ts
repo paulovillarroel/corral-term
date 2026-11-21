@@ -6,6 +6,7 @@
 //   F5 (or Ctrl+Shift+Enter)  the whole file, with source(echo = TRUE)
 //   Ctrl+L (or Alt+-)         " <- "
 //   Ctrl+U (or Ctrl+Shift+M)  " |> "
+//   Ctrl+S                    save; in a temporary scratch file, "Save as"
 //
 // Through Warp and herdr, Ctrl+Enter arrives as plain Enter and Alt chords get
 // split, so the first key of each pair is the one that works there.
@@ -133,6 +134,36 @@ registerHandler("corral_run_file", async function () {
   }
 });
 
+// Scratch files: Fresh does not let outside programs read unsaved buffers, so
+// mirror each Corral scratch buffer to ".actual.R" next to it. `corral script
+// --guardar/--leer` (and Claude) read that copy.
+const mirrored: Record<string, string> = {};
+let mirrorTicks = 0;
+registerHandler("corral_mirror_scratch", async function () {
+  try {
+    // The active buffer is the one on screen (listBuffers can return other
+    // windows' copies of the same file).
+    const id = editor.getActiveBufferId();
+    const path = editor.getBufferPath(id) || "";
+    if (!path.includes("/corral/borradores/") || !path.endsWith("borrador.R")) return;
+    const text = await editor.getBufferText(id);
+    mirrorTicks = (mirrorTicks + 1) % 20;  // rewrite now and then even if unchanged
+    if (mirrored[path] === text && mirrorTicks !== 0) return;
+    mirrored[path] = text;
+    // writeFile only creates new files; replaceFile overwrites.
+    editor.replaceFile(path.replace(/borrador\.R$/, ".actual.R"), text);
+  } catch (e) {
+    // A failed copy only delays the next one.
+  }
+});
+editor.setInterval(1500, "corral_mirror_scratch");
+
+// Ctrl+S: a Corral scratch file is temporary, so saving it means choosing a real place.
+registerHandler("corral_save", async function () {
+  const path = editor.getBufferPath(editor.getActiveBufferId()) || "";
+  editor.executeAction(path.includes("/corral/borradores/") ? "save_as" : "save");
+});
+
 registerHandler("corral_insert_assign", async function () {
   editor.insertAtCursor(" <- ");
 });
@@ -141,7 +172,64 @@ registerHandler("corral_insert_pipe", async function () {
   editor.insertAtCursor(" |> ");
 });
 
+// The editor follows herdr's theme: `corral theme` writes themes/corral.json.
+try {
+  editor.applyTheme("corral");
+} catch (e) {
+  // No Corral theme yet: keep whatever theme is configured.
+}
+
+// Live: when herdr's config changes (you switched its theme), regenerate the
+// Corral palette; when the Corral theme file changes, reload it here.
+const homeDir = editor.getEnv("HOME") || "";
+const herdrConfig = editor.getEnv("HERDR_CONFIG_PATH")
+  || ((editor.getEnv("XDG_CONFIG_HOME") || homeDir + "/.config") + "/herdr/config.toml");
+let lastHerdrConfig: string | null = null;
+let lastCorralTheme: string | null = null;
+let syncing = false;
+registerHandler("corral_theme_sync", async function () {
+  if (syncing) return;
+  syncing = true;
+  try {
+    const herdr = editor.readFile(herdrConfig);
+    if (herdr !== null && lastHerdrConfig !== null && herdr !== lastHerdrConfig) {
+      await editor.spawnProcess("corral", ["theme"]);
+    }
+    if (herdr !== null) lastHerdrConfig = herdr;
+    const theme = editor.readFile(editor.getThemesDir() + "/corral.json");
+    if (theme !== null && lastCorralTheme !== null && theme !== lastCorralTheme) {
+      editor.reloadThemes();
+      editor.applyTheme("corral");
+    }
+    if (theme !== null) lastCorralTheme = theme;
+  } catch (e) {
+    // Try again on the next tick.
+  } finally {
+    syncing = false;
+  }
+});
+editor.setInterval(2000, "corral_theme_sync");
+
+// Open the folder view the first time a Corral scratch file shows up, then
+// give the focus back to the code.
+const explorerShown: Record<string, boolean> = {};
+registerHandler("corral_show_explorer", async function () {
+  try {
+    const path = editor.getBufferPath(editor.getActiveBufferId()) || "";
+    if (!path.includes("/corral/borradores/") || explorerShown[path]) return;
+    explorerShown[path] = true;
+    editor.executeAction("focus_file_explorer");
+    await editor.delay(50);
+    editor.executeAction("focus_editor");
+  } catch (e) {
+    // The folder view is a convenience; never break the editor over it.
+  }
+});
+editor.on("buffer_activated", "corral_show_explorer");
+editor.setInterval(1000, "corral_show_explorer");
+
 editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola de R", "corral_run_line", null);
 editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola de R", "corral_run_file", null);
+editor.registerCommand("Corral: guardar", "Guarda; en un borrador temporal, pregunta dónde", "corral_save", null);
 editor.registerCommand("Corral: insertar <-", "Inserta el operador de asignación", "corral_insert_assign", null);
 editor.registerCommand("Corral: insertar |>", "Inserta el pipe nativo", "corral_insert_pipe", null);
