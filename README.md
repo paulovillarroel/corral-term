@@ -1,10 +1,10 @@
 # Corral
 
-Corral junta en la terminal lo que hoy obliga a abrir Positron: escribir un script de R y ejecutarlo por partes, ver los gráficos, revisar las variables y mirar una tabla, todo al lado de los agentes. Está pensado para WSL con [herdr](https://herdr.dev), aunque el comando `corral` funciona en cualquier terminal.
+Corral junta en la terminal lo que hoy obliga a abrir Positron: escribir un script de R o de Python y ejecutarlo por partes, ver los gráficos, revisar las variables y mirar una tabla, todo al lado de los agentes. Está pensado para WSL con [herdr](https://herdr.dev), aunque el comando `corral` funciona en cualquier terminal.
 
 Todo ocurre dentro de herdr. Los visores aparecen encima de la terminal cuando los pides y se cierran con `q` o `Esc`, así que nada ocupa espacio mientras trabajas. Si quieres ver algo en grande, **Mirador** muestra lo mismo en el navegador.
 
-Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola es R normal; la conexión con el kernel Ark viene después.
+Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es R normal y la de Python es IPython en el entorno uv del proyecto; la conexión con el kernel Ark viene después.
 
 ## Piezas
 
@@ -15,11 +15,12 @@ Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola es R normal; l
 | `lib/corral_theme.py` | Toma el tema de herdr y lo aplica al editor, los visores, VisiData y Mirador. |
 | `herdr/` | Plugin de herdr: atajos, layout y popups. Solo llama a `bin/corral`. |
 | `r/corral.R` | Lado de R: registra la sesión, `View()` y gráficos con httpgd. |
+| `py/` | Lado de Python: la sesión de IPython publica sus variables, sirve las figuras de matplotlib con la misma interfaz que httpgd y agrega `View()`. |
 | `mirador/` | Mirador, la vista en el navegador: un servidor local (`server.py`) y una página (`index.html`). |
-| `claude/skills/corral-r/` | Skill para Claude Code: le enseña a trabajar en tu consola de R con `corral eval`. |
-| `fresh/` | Configuración y plugin del editor [Fresh](https://getfresh.dev) para escribir scripts de R. |
+| `claude/skills/corral-r/` | Skill para Claude Code: le enseña a trabajar en tus consolas de R y Python con `corral eval`. |
+| `fresh/` | Configuración y plugin del editor [Fresh](https://getfresh.dev) para escribir scripts de R y Python. |
 
-Todo lo que tiene estado vive en un panel de herdr (la sesión de R, los agentes). Los visores se pueden cerrar sin perder nada, porque leen de esas sesiones cada vez que se abren.
+Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, los agentes). Los visores se pueden cerrar sin perder nada, porque leen de esas sesiones cada vez que se abren.
 
 ## Instalación
 
@@ -69,7 +70,9 @@ Todo lo que tiene estado vive en un panel de herdr (la sesión de R, los agentes
    uv tool install visidata --with pyarrow
    ```
 
-8. Revisa que todo esté en orden:
+8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto y el autocompletado con `uv run --with python-lsp-server`; la primera vez uv descarga IPython y python-lsp-server a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff, con `uvx ruff`.
+
+9. Revisa que todo esté en orden:
 
    ```bash
    corral doctor
@@ -124,10 +127,11 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | `ctrl+b a` | Abrir el espacio de trabajo de Corral |
 | `ctrl+b shift+c` | Cerrar Corral: cierra script, consola y variables, y deja a Claude como panel normal |
 | `ctrl+b t` | Expandir el script o la consola (el panel donde estás); otra vez, ambos |
-| `ctrl+b enter` | Enviar a R la selección o el portapapeles |
+| `ctrl+b y` | La consola pasa de R a Python, o de Python a R (Python se abre la primera vez) |
+| `ctrl+b enter` | Enviar la selección o el portapapeles a la consola que se ve (R o Python) |
 | `ctrl+b f` | Ver el último gráfico en Mirador |
 | `ctrl+b d` | Ver las variables encima de la terminal |
-| `ctrl+b m` | Usar este panel como consola de R y activar Corral en él |
+| `ctrl+b m` | Usar este panel como consola (R o IPython, según lo que corre) y activar Corral en él |
 | `ctrl+b shift+m` | Abrir Mirador |
 
 ### Comandos
@@ -138,16 +142,17 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | `corral close` | Cierra los paneles de Corral de la pestaña (script, consola, variables) y deja el resto, Claude incluido. La sesión de R se cierra con su panel. |
 | `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. `--leer` muestra el borrador actual; `--guardar ruta.R` lo guarda (con `--forzar` reemplaza). |
 | `corral toggle [script\|consola\|ambos]` | Expande el script o la consola, o vuelve a mostrar ambos; sin argumento, expande el panel donde estás o vuelve a ambos. |
-| `corral console` | Marca el panel actual como consola de R y activa Corral si hay un R abierto. |
-| `corral send 'código'` | Envía código a la consola. También lee stdin, la selección o el portapapeles; `--source` ejecuta con `source()`. |
-| `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes). `--file`, `--timeout`, `--check`; `--reemplazar` hace que sus gráficos reemplacen a los de la petición anterior. |
-| `corral vars` | Variables encima de la terminal; `--split` abre el panel fijo, `--json` las imprime. |
+| `corral switch [r\|python]` | La consola del layout pasa a R o a Python; sin argumento, alterna. La otra sigue corriendo en la pestaña "corral (oculto)". |
+| `corral console` | Marca el panel actual como consola de R o de Python (según lo que corre en él) y activa Corral si hay un R o un IPython abierto. |
+| `corral send 'código'` | Envía código a la consola que se ve, o a la de `--lang r\|python`. También lee stdin, la selección o el portapapeles; `--source` lo ejecuta como archivo (`source()` en R, `%run -i` en Python). |
+| `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes); R por defecto, `--lang python` para Python. `--file`, `--timeout`, `--check`; `--reemplazar` hace que sus gráficos reemplacen a los de la petición anterior. |
+| `corral vars` | Variables de la consola que se ve, encima de la terminal; `--split` abre el panel fijo, `--json` las imprime (`--lang` elige R o Python). |
 | `corral plots` | Último gráfico (en Mirador en Windows). |
 | `corral view archivo` | Abre una tabla (parquet, csv, json) en VisiData. |
 | `corral mirador` | Abre Mirador; `--stop` lo detiene, `--url` muestra la dirección. |
 | `corral open [url]` | Abre una URL local en el navegador. |
 | `corral theme` | Aplica el tema de herdr al editor, los visores, VisiData y Mirador (`--mostrar` solo enseña la paleta). |
-| `corral config [clave] [valor]` | Lee o cambia la configuración: `images`, `mirador_window`, `mirador_size`. |
+| `corral config [clave] [valor]` | Lee o cambia la configuración: `images`, `mirador_window`, `mirador_size`, `python_console`, `r_console`. |
 | `corral doctor` | Revisa dependencias, plugin, Mirador y qué terminal detecta. |
 
 ### El script
@@ -185,15 +190,33 @@ Fresh mantiene un servicio de fondo con la configuración y los plugins cargados
 
 La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin en [`fresh/plugins/corral.ts`](fresh/plugins/corral.ts). Fresh viene con las búsquedas de actualizaciones y la telemetría desactivadas (`check_for_updates: false`).
 
-### Claude en tu consola de R
+### Python
 
-Con la skill `corral-r`, Claude Code ejecuta su código en tu consola en vez de abrir un R aparte. Ves cada comando aparecer en `corral:r` con una línea `# corral eval`, y los objetos, gráficos y tablas quedan en tu sesión. Claude recibe la salida y, si hizo un gráfico, una copia en PNG que puede mirar.
+R es la consola por defecto. En un proyecto con R y Python no hay que elegir al empezar: la consola cambia según lo que ejecutas.
+
+- Ctrl+R o F5 en un archivo `.py` muestran la consola de Python en el lugar de la de R. La primera vez la abren: IPython con `uv run --with ipython` en la carpeta del proyecto, así que usa el entorno del proyecto (su `.venv` y sus paquetes) sin agregarle IPython. Si la carpeta no es un proyecto de uv, uv usa el `.venv` que encuentre o un Python propio.
+- Ctrl+R o F5 en un archivo `.R` vuelven a R. `ctrl+b y` cambia a mano.
+- La consola que no se ve sigue corriendo en la pestaña "corral (oculto)", con sus variables. Si entras a esa pestaña puedes usarla igual.
+- El panel de variables, Mirador y `View()` siguen a la consola que se ve. El encabezado del panel dice "R 4.6.1" o "Python 3.14.3".
+
+En Python, Ctrl+R envía la instrucción completa bajo el cursor: una función con todo su cuerpo (aunque tenga líneas en blanco), un `if` con su `else`, una llamada repartida en varias líneas o una función con decoradores. El código llega a IPython como un bloque pegado, igual que en Positron, y se ve en `In [n]:`. Una selección se envía sin su sangría común. F5 ejecuta el archivo con `%run -i`, que deja las variables en la sesión. Ctrl+L y Ctrl+U (`<-`, `|>`) no hacen nada en un `.py`.
+
+Las figuras de matplotlib (y de seaborn o plotnine, que dibujan con matplotlib) van a Mirador al terminar cada ejecución, como en Jupyter; `plt.show()` las envía en ese momento. Una figura guardada en una variable aparece en la pestaña Gráficos del panel de variables, y Enter la muestra. Enter sobre un DataFrame de pandas o polars lo abre en VisiData, y `View(df)` en la consola hace lo mismo.
+
+En el editor, el autocompletado y la ayuda vienen de python-lsp-server, que corre en el entorno del proyecto y por eso conoce tus paquetes. Los diagnósticos son de Ruff con sus reglas por defecto (errores reales: nombres sin definir, imports sin usar, errores de sintaxis), y Ruff formatea al guardar, igual que Air en R. Si el proyecto tiene configuración de Ruff en `pyproject.toml` o `ruff.toml`, se usa esa.
+
+Para usar otro comando en la consola de Python (por ejemplo, con más paquetes), `corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/workspace/personal/corral-term/py/startup.py'`.
+
+### Claude en tus consolas de R y Python
+
+Con la skill `corral-r`, Claude Code ejecuta su código en tu consola en vez de abrir un R o un Python aparte. Para Python agrega `--lang python`; si la consola de Python no existe, la abre. Ves cada comando aparecer en `corral:r` con una línea `# corral eval`, y los objetos, gráficos y tablas quedan en tu sesión. Claude recibe la salida y, si hizo un gráfico, una copia en PNG que puede mirar.
 
 Lo mismo sirve desde cualquier terminal o script:
 
 ```bash
 corral eval 'summary(mtcars)'
 corral eval --file analisis.R
+corral eval --lang python 'df.describe()'
 corral vars --json
 ```
 
@@ -273,9 +296,11 @@ Opciones de R:
 - En Windows los gráficos no se ven nítidos dentro de herdr; van a Mirador (ver arriba).
 - Desde Warp, `Ctrl+Enter`, `Ctrl+Shift+…` y `Alt+…` no llegan al editor; por eso los atajos principales son `Ctrl+R`, `F5`, `Ctrl+L` y `Ctrl+U`.
 - Sin VisiData, las tablas se muestran con DuckDB y `less`: hasta 1000 filas, sin orden ni filtro interactivos.
-- Las tablas de `View()` se guardan en el directorio temporal de R y desaparecen al cerrar R.
+- Las tablas de `View()` se guardan en el directorio temporal de R (o de Python) y desaparecen al cerrar la consola.
+- La consola de Python necesita IPython; `ctrl+b m` sobre un `python` sin IPython marca el panel, pero no activa Corral.
+- Las figuras de Python se guardan al dibujarse (PNG y SVG) y Mirador las escala; no se vuelven a dibujar al cambiar el tamaño de la ventana, como sí hace httpgd en R.
 - Para objetos con más de un millón de elementos no se muestra el tamaño en memoria, porque calcularlo en cada comando sería lento.
-- Si el servidor de herdr se detiene (reinicio de Windows, `wsl --shutdown`), la sesión de R se pierde. herdr restaura los paneles, pero no la memoria de R.
+- Si el servidor de herdr se detiene (reinicio de Windows, `wsl --shutdown`), las sesiones de R y Python se pierden. herdr restaura los paneles, pero no su memoria.
 
 ## Próximos pasos
 

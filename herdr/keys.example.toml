@@ -18,7 +18,13 @@ description = "Corral: cerrar y volver a herdr normal"
 key = "prefix+t"
 type = "plugin_action"
 command = "corral.toggle"
-description = "Corral: alternar script y consola"
+description = "Corral: expandir script o consola"
+
+[[keys.command]]
+key = "prefix+y"
+type = "plugin_action"
+command = "corral.switch"
+description = "Corral: consola de R o de Python"
 
 [[keys.command]]
 key = "prefix+f"

@@ -346,7 +346,7 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
     keep_open: stay open after Enter (a permanent pane rather than a popup).
     """
     if session_dir is None and resolve is None:
-        return message_screen("No hay una sesión de R con Corral", "Abre R en un panel de herdr.")
+        return message_screen("No hay una sesión de Corral", "Abre R o Python con ctrl+b a.")
     sel, top, query, typing, status = 0, 0, "", False, ""
     rev, items, meta = None, [], {}
     plots: list[dict] = []
@@ -436,7 +436,9 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         wide = cols >= 70
         vs = visible()
         out("\x1b[2J\x1b[H")
-        where = " · ".join(x for x in [meta.get("pane_id"), "R " + str(meta.get("r_version", "")) if meta else "",
+        lang = ("Python " + str(meta.get("python_version", ""))) if meta.get("lang") == "python" else (
+            "R " + str(meta.get("r_version", "")))
+        where = " · ".join(x for x in [meta.get("pane_id"), lang if meta else "",
                                          str(meta.get("cwd", "")).replace(str(Path.home()), "~")] if x)
         # Objects in the environment only: drawings in the plot history are not objects.
         n_vars = sum(1 for v in items if matches(v))
@@ -467,7 +469,7 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         out(f"\x1b[4;{underline[0]}H{ACCENT}{'━' * (underline[1] - underline[0] + 1)}{RESET}")
 
         if rev is None:
-            msg = "Esperando una sesión de R con Corral en la consola…" if resolve else "Esta sesión no publica variables (¿falta jsonlite?)."
+            msg = "Esperando la sesión de la consola (R o Python)…" if resolve else "Esta sesión no publica variables (¿falta jsonlite?)."
             out(f"\x1b[6;3H{MUTED}{clip(msg, cols - 4)}{RESET}")
 
         lines: list[tuple[str, int | None]] = []  # (text, index into vs or None)
@@ -531,8 +533,13 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         if v.get("kind") == "plotobj" and show_object and session_dir:
             return f"{v['name']}: {show_object(session_dir, v['name'])}"
         if run_in_console and meta.get("pane_id"):
-            name = "`" + v["name"].replace("`", "\\`") + "`"
-            code = f"View({name})" if v.get("kind") == "data" else f"str({name})"
+            if meta.get("lang") == "python":
+                name = v["name"]
+                code = f"View({name})" if v.get("kind") == "data" else (
+                    f"{name}?" if v.get("kind") == "function" else name)
+            else:
+                name = "`" + v["name"].replace("`", "\\`") + "`"
+                code = f"View({name})" if v.get("kind") == "data" else f"str({name})"
             ok = run_in_console(meta["pane_id"], code)
             return f"{code} enviado a la consola" if ok else "no pude enviar a la consola"
         return ""

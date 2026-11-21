@@ -8,6 +8,10 @@
 //   Ctrl+U (or Ctrl+Shift+M)  " |> "
 //   Ctrl+S                    save; in the temporary scratch file, ask for a name in the project
 //
+// Code from a .py file goes to the Python console and code from a .R file to
+// the R console; corral brings the right one into view (and starts Python the
+// first time). Other files go to whichever console is showing.
+//
 // Through Warp and herdr, Ctrl+Enter arrives as plain Enter and Alt chords get
 // split, so the first key of each pair is the one that works there.
 // Keys are bound in ~/.config/fresh/config.json (see corral-term/fresh/config.json).
@@ -144,6 +148,84 @@ registerHandler("corral_indent", async function (args: { buffer_id: number; text
 });
 editor.on("after_insert", "corral_indent");
 
+// Which console a file's code goes to; null means the one showing.
+function langOf(path: string): string | null {
+  if (/\.py$/i.test(path)) return "python";
+  if (/\.(R|r|Rprofile)$/.test(path)) return "r";
+  return null;
+}
+
+function langArgs(buf: number): string[] {
+  const lang = langOf(editor.getBufferPath(buf) || "");
+  return lang ? ["--lang", lang] : [];
+}
+
+// Python: brackets and triple-quoted strings carried from one line to the next.
+function pyScan(raw: string, state: { depth: number; triple: string | null }): void {
+  let i = 0;
+  while (i < raw.length) {
+    if (state.triple) {
+      const end = raw.indexOf(state.triple, i);
+      if (end < 0) return;
+      i = end + 3;
+      state.triple = null;
+      continue;
+    }
+    const c = raw[i];
+    if (c === "#") return;
+    if (raw.startsWith('"""', i) || raw.startsWith("'''", i)) {
+      state.triple = raw.substr(i, 3);
+      i += 3;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < raw.length && raw[j] !== c) j += raw[j] === "\\" ? 2 : 1;
+      i = j + 1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") state.depth++;
+    else if (c === ")" || c === "]" || c === "}") state.depth = Math.max(0, state.depth - 1);
+    i++;
+  }
+}
+
+// [first, last] lines of the top-level Python statement that contains `line`:
+// a def, class, loop or with block with everything indented under it, a call
+// spread over several lines, a decorated function, an if with its elif/else.
+function pyStatementAt(lines: string[], line: number): [number, number] {
+  const starts: boolean[] = [];
+  const state = { depth: 0, triple: null as string | null };
+  let continued = false;
+  let decorated = false;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const blank = raw.trim() === "" || raw.trim().startsWith("#");
+    starts.push(!state.triple && state.depth === 0 && !continued && !decorated && !blank &&
+      !/^\s/.test(raw) && !/^[)\]}]/.test(raw) && !/^(else|elif|except|finally)\b/.test(raw));
+    pyScan(raw, state);
+    if (!blank) {
+      continued = !state.triple && /\\\s*$/.test(raw);
+      decorated = /^@/.test(raw);
+    }
+  }
+  let first = line;
+  while (first > 0 && !starts[first]) first--;
+  let next = line + 1;
+  while (next < lines.length && !starts[next]) next++;
+  let last = next - 1;
+  while (last > line && (lines[last].trim() === "" || /^#/.test(lines[last]))) last--;
+  return [first, last];
+}
+
+// A selection from inside a block, without its common indentation.
+function dedent(text: string): string {
+  const lines = text.split("\n");
+  const widths = lines.filter((l) => l.trim()).map((l) => l.length - l.replace(/^[ \t]+/, "").length);
+  const cut = widths.length ? Math.min(...widths) : 0;
+  return cut ? lines.map((l) => l.slice(Math.min(cut, l.length - l.replace(/^[ \t]+/, "").length))).join("\n") : text;
+}
+
 async function runCorral(args: string[]): Promise<boolean> {
   const res = await editor.spawnProcess("corral", args);
   if (res.exit_code !== 0) {
@@ -160,9 +242,12 @@ registerHandler("corral_run_line", async function () {
     const cur = editor.getPrimaryCursor();
     if (!cur) return;
 
+    const lang = langArgs(buf);
+    const python = lang[1] === "python";
     if (cur.selection && cur.selection.end > cur.selection.start) {
-      const text = await editor.getBufferText(buf, cur.selection.start, cur.selection.end);
-      if (text.trim() && (await runCorral(["send", "--", text])))
+      let text = await editor.getBufferText(buf, cur.selection.start, cur.selection.end);
+      if (python) text = dedent(text);
+      if (text.trim() && (await runCorral(["send", ...lang, "--", text])))
         editor.setStatus("Corral: selección enviada a la consola");
       return;
     }
@@ -174,9 +259,9 @@ registerHandler("corral_run_line", async function () {
     while (line < lines.length - 1 && isBlank(lines[line])) line++;
     if (isBlank(lines[line])) return;
 
-    const [first, last] = statementAt(lines, line);
+    const [first, last] = python ? pyStatementAt(lines, line) : statementAt(lines, line);
     const text = lines.slice(first, last + 1).join("\n");
-    const ok = await runCorral(["send", "--", text]);
+    const ok = await runCorral(["send", ...lang, "--", text]);
 
     let next = last + 1;
     while (next < lines.length && isBlank(lines[next])) next++;
@@ -198,7 +283,7 @@ registerHandler("corral_run_file", async function () {
     const text = await editor.getBufferText(buf);
     if (!text.trim()) return;
     const path = editor.getBufferPath(buf) || "script";
-    if (await runCorral(["send", "--source", "--name", path, "--", text]))
+    if (await runCorral(["send", ...langArgs(buf), "--source", "--name", path, "--", text]))
       editor.setStatus("Corral: archivo completo enviado a la consola");
   } catch (e) {
     editor.setStatus("Corral: " + String(e));
@@ -271,11 +356,14 @@ registerHandler("corral_save", async function () {
   }
 });
 
+// <- and |> are R's; in a Python file the keys do nothing.
 registerHandler("corral_insert_assign", async function () {
+  if (langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") === "python") return;
   editor.insertAtCursor(" <- ");
 });
 
 registerHandler("corral_insert_pipe", async function () {
+  if (langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") === "python") return;
   editor.insertAtCursor(" |> ");
 });
 

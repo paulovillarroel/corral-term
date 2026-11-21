@@ -482,7 +482,7 @@ function renderSessions() {
   const ws = new Map((S.data.workspaces || []).map((w) => [w.id, w.label]));
   const sel = $("#session");
   sel.classList.toggle("hidden", sessions.length < 2);
-  const html = sessions.map((s) => `<option value="${esc(s.id)}" ${s.id === S.session ? "selected" : ""}>${esc((ws.get(s.workspace_id) || "R") + " · " + (s.pane_id || s.id))}</option>`).join("");
+  const html = sessions.map((s) => `<option value="${esc(s.id)}" ${s.id === S.session ? "selected" : ""}>${esc((ws.get(s.workspace_id) || "Corral") + " · " + (s.lang === "python" ? "Python" : "R") + " · " + (s.pane_id || s.id))}</option>`).join("");
   if (sel.innerHTML !== html) sel.innerHTML = html;
 }
 $("#session").addEventListener("change", (e) => {
@@ -786,7 +786,7 @@ function renderStatus() {
   const s = currentSession();
   const d = S.data;
   const left = s
-    ? `<span class="acc">▸▸</span><span>R ${esc(s.r_version || "")}</span><span>${esc(home(s.cwd))}</span><span>${S.vars.length} objetos</span>`
+    ? `<span class="acc">▸▸</span><span>${s.lang === "python" ? "Python " + esc(s.python_version || "") : "R " + esc(s.r_version || "")}</span><span>${esc(home(s.cwd))}</span><span>${S.vars.length} objetos</span>`
     : `<span class="acc">▸▸</span><span>sin sesión de R</span>`;
   const plotsPort = s?.plots ? (S.plots.ids.length + " gráficos") : "httpgd apagado";
   $("#status").innerHTML = `${left}<span class="sp"></span><span>${plotsPort}</span>`;

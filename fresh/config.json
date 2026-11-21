@@ -28,6 +28,29 @@
         "increase_indent_pattern": "[\\{\\(\\[]\\s*$",
         "decrease_indent_pattern": "^\\s*[\\}\\)\\]]"
       }
+    },
+    "python": {
+      "extensions": [
+        "py",
+        "pyi"
+      ],
+      "grammar": "python",
+      "comment_prefix": "# ",
+      "auto_indent": true,
+      "tab_size": 4,
+      "use_tabs": false,
+      "formatter": {
+        "command": "uvx",
+        "args": [
+          "ruff",
+          "format",
+          "--stdin-filename",
+          "$FILE"
+        ],
+        "stdin": true,
+        "timeout_ms": 20000
+      },
+      "format_on_save": true
     }
   },
   "lsp": {
@@ -51,7 +74,54 @@
       "except_features": [
         "format"
       ]
-    }
+    },
+    "python": [
+      {
+        "name": "pylsp",
+        "command": "corral",
+        "args": [
+          "_lsp",
+          "python"
+        ],
+        "enabled": true,
+        "auto_start": true,
+        "root_markers": [
+          "pyproject.toml",
+          "uv.lock",
+          "setup.py",
+          "setup.cfg",
+          "requirements.txt",
+          ".git"
+        ],
+        "except_features": [
+          "diagnostics",
+          "format",
+          "code_action"
+        ]
+      },
+      {
+        "name": "ruff",
+        "command": "uvx",
+        "args": [
+          "ruff",
+          "server"
+        ],
+        "enabled": true,
+        "auto_start": true,
+        "root_markers": [
+          "pyproject.toml",
+          "uv.lock",
+          "setup.py",
+          "setup.cfg",
+          "requirements.txt",
+          ".git"
+        ],
+        "only_features": [
+          "diagnostics",
+          "code_action"
+        ]
+      }
+    ]
   },
   "keybindings": [
     {

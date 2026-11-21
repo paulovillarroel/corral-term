@@ -175,8 +175,11 @@ def cmd_layout(args: argparse.Namespace) -> None:
     # Only one of each per workspace: take the labels away from older panes.
     label = console_label("r")
     for pane in list_panes(ws):
-        if pane.get("label") in (label, "corral:vars", "corral:script"):
+        if pane.get("label") in (label, console_label("python"), "corral:vars", "corral:script"):
             herdr("pane", "rename", pane["pane_id"], "--clear")
+    saved, state = layout_state(ws)
+    state.clear()
+    save_layout_state(saved)
 
     # Right column: [script over console] over variables.
     vars_pane = split_vars_pane(right, ratio=0.73)
@@ -331,9 +334,139 @@ def split_between(node: dict, a: str, b: str, path: list[bool]) -> tuple[list[bo
 
 
 TOGGLE_NAMES = {"ambos": "Script y consola", "script": "Script", "consola": "Consola"}
-PARKED_TAB = {"script": "script (oculto)", "consola": "consola (oculta)"}
-EXPANDED_FILE = STATE_DIR / "expandido.json"
+LANG_NAMES = {"r": "R", "python": "Python"}
+PARKING_TAB = "corral (oculto)"
+OLD_PARKING_TABS = ("consola (oculta)", "script (oculto)")
+EXPANDED_FILE = STATE_DIR / "expandido.json"  # per workspace: the active console, and what ctrl+b t hid
 SCRIPT_SHARE = 0.57
+
+
+def layout_state(ws: str | None) -> tuple[dict, dict]:
+    """All workspaces' layout state, and this workspace's own (modify it, then save)."""
+    saved = read_json_file(EXPANDED_FILE)
+    return saved, saved.setdefault(ws or "default", {})
+
+
+def save_layout_state(saved: dict) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    EXPANDED_FILE.write_text(json.dumps(saved))
+
+
+def main_tab(panes: list[dict]) -> str | None:
+    """The tab of the Corral layout: where the variables pane (or the script) is."""
+    for label in ("corral:vars", "corral:script"):
+        for p in panes:
+            if p.get("label") == label:
+                return p.get("tab_id")
+    return None
+
+
+def active_lang(ws: str | None = None, panes: list[dict] | None = None) -> str:
+    """The language of the console in the layout's console spot: R unless you switched."""
+    ws = ws or current_workspace()
+    lang = layout_state(ws)[1].get("active", "r")
+    if lang != "r":
+        panes = panes if panes is not None else list_panes(ws)
+        if not any(p.get("label") == console_label(lang) for p in panes):
+            return "r"
+    return lang
+
+
+def hidden_tab(ws: str | None) -> tuple[str | None, str | None]:
+    """The workspace's tab for hidden panes, and one pane in it."""
+    if not ws:
+        return None, None
+    tabs = herdr("tab", "list", "--workspace", ws).get("tabs", [])
+    tab = next((t["tab_id"] for t in tabs if t.get("label") == PARKING_TAB), None)
+    pane = next((p["pane_id"] for p in list_panes(ws) if p.get("tab_id") == tab), None) if tab else None
+    return tab, pane
+
+
+def park(pane: str, ws: str | None) -> None:
+    """Move a pane out of sight, to the workspace's hidden tab, where it keeps running."""
+    tab, other = hidden_tab(ws)
+    if tab and other:
+        destination = {"type": "tab", "tab_id": tab, "split": "right", "target_pane_id": other}
+    else:
+        destination = {"type": "new_tab", "label": PARKING_TAB}
+        if ws:
+            destination["workspace_id"] = ws
+    herdr_socket("pane.move", {"pane_id": pane, "focus": False, "destination": destination})
+
+
+def console_command(lang: str) -> str:
+    cfg = corral_config()
+    if lang == "python":
+        return cfg.get("python_console") or (
+            "CORRAL=1 uv run --with ipython ipython --no-banner -i " + shlex.quote(str(REPO / "py" / "startup.py")))
+    return cfg.get("r_console") or "CORRAL=1 R --quiet --no-save"
+
+
+def start_console(lang: str, ws: str | None, cwd: str, near: str | None) -> str:
+    """A new console pane: under `near`, or in the hidden tab."""
+    if near:
+        pane = herdr("pane", "split", near, "--direction", "down", "--ratio", "0.5", "--cwd", cwd,
+                     "--no-focus")["pane"]["pane_id"]
+    else:
+        _, other = hidden_tab(ws)
+        if other:
+            pane = herdr("pane", "split", other, "--direction", "right", "--cwd", cwd, "--no-focus")["pane"]["pane_id"]
+        else:
+            pane = herdr("tab", "create", "--label", PARKING_TAB, "--cwd", cwd,
+                         *(["--workspace", ws] if ws else []))["root_pane"]["pane_id"]
+    herdr("pane", "rename", pane, console_label(lang))
+    herdr("pane", "run", pane, console_command(lang))
+    return pane
+
+
+def show_console(lang: str, start: bool = True, cwd: str | None = None) -> tuple[str | None, bool]:
+    """Put `lang`'s console in the layout's console spot, starting it if needed.
+
+    The console it replaces goes to the hidden tab and keeps running. Returns the
+    pane and whether it was just started.
+    """
+    ws = current_workspace()
+    panes = list_panes(ws)
+    by_label = {p.get("label"): p for p in panes if p.get("label")}
+    saved, state = layout_state(ws)
+    current = active_lang(ws, panes)
+    target = by_label.get(console_label(lang), {}).get("pane_id")
+    other = by_label.get(console_label(current), {}) if current != lang else {}
+    main = main_tab(panes)
+    visible = other.get("pane_id") if other and main and other.get("tab_id") == main else None
+    focused = current_pane()
+    started = False
+
+    if not target:
+        if not start:
+            return None, False
+        project = cwd or other.get("foreground_cwd") or other.get("cwd") or os.getcwd()
+        # Without a Corral layout, the new console just goes under the other one.
+        near = visible or (other.get("pane_id") if not main else None)
+        target = start_console(lang, ws, project, near=near)
+        started = True
+        if visible:
+            park(visible, ws)
+    elif visible:
+        herdr_socket("pane.move", {"pane_id": target, "focus": False, "destination": {
+            "type": "tab", "tab_id": main, "split": "down", "target_pane_id": visible, "ratio": 0.5}})
+        park(visible, ws)
+    # With the script expanded (ctrl+b t), the console stays hidden; ctrl+b t brings back this one.
+    if other and state.get("parked") == other.get("pane_id"):
+        state["parked"] = target
+    if visible and focused == visible:
+        herdr_socket("pane.focus", {"pane_id": target})
+    state["active"] = lang
+    save_layout_state(saved)
+    return target, started
+
+
+def cmd_switch(args: argparse.Namespace) -> None:
+    """The console spot shows R or Python (ctrl+b y); without a language, the other one."""
+    current = active_lang()
+    lang = args.lang or ("python" if current == "r" else "r")
+    _, started = show_console(lang)
+    notify("Consola", LANG_NAMES[lang] + (": iniciando (la primera vez uv prepara el entorno)" if started else ""))
 
 
 def script_split(script: str, console: str) -> tuple[str, list, bool, float] | None:
@@ -357,13 +490,11 @@ def cmd_toggle(args: argparse.Namespace) -> None:
     ws = current_workspace()
     panes = {p["pane_id"]: p for p in list_panes(ws)}
     by_label = {p.get("label"): pid for pid, p in panes.items()}
-    script, console = by_label.get("corral:script"), by_label.get(console_label("r"))
+    script, console = by_label.get("corral:script"), by_label.get(console_label(active_lang(ws, list(panes.values()))))
     if not script or not console:
         notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'")
         return
-    saved = read_json_file(EXPANDED_FILE)
-    key = ws or "default"
-    state = saved.get(key) or {}
+    saved, state = layout_state(ws)
 
     if panes[script].get("tab_id") == panes[console].get("tab_id"):
         current, parked = "ambos", None
@@ -404,7 +535,8 @@ def cmd_toggle(args: argparse.Namespace) -> None:
                                                         "ratio": share if found[2] else 1 - share})
         if focused in (script, console):  # the swap can move the focus; keep it where you were
             herdr_socket("pane.focus", {"pane_id": focused})
-        saved.pop(key, None)
+        state.pop("parked", None)
+        state.pop("share", None)
 
     if mode != "ambos":
         keep, hide = (script, console) if mode == "script" else (console, script)
@@ -412,15 +544,11 @@ def cmd_toggle(args: argparse.Namespace) -> None:
         share = found[3] if found else SCRIPT_SHARE
         if not 0.15 <= share <= 0.85:  # left over from the old 86/14 toggle
             share = SCRIPT_SHARE
-        destination = {"type": "new_tab", "label": PARKED_TAB["consola" if hide == console else "script"]}
-        if ws:
-            destination["workspace_id"] = ws
-        herdr_socket("pane.move", {"pane_id": hide, "focus": False, "destination": destination})
+        park(hide, ws)
         herdr_socket("pane.focus", {"pane_id": keep})
-        saved[key] = {"parked": hide, "share": share}
+        state.update(parked=hide, share=share)
 
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    EXPANDED_FILE.write_text(json.dumps(saved))
+    save_layout_state(saved)
     notify("Corral", TOGGLE_NAMES[mode] + (" (ctrl+b t para volver)" if mode != "ambos" else ""))
 
 
@@ -463,7 +591,7 @@ def cmd_script(args: argparse.Namespace) -> None:
     herdr("pane", "run", new, editor_command(editor, args.file or scratch_script(current_workspace(), project)))
 
 
-CORRAL_LABELS = ("corral:script", "corral:r", "corral:vars", "corral:shell")
+CORRAL_LABELS = ("corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell")
 
 
 def cmd_close(args: argparse.Namespace) -> None:
@@ -479,11 +607,14 @@ def cmd_close(args: argparse.Namespace) -> None:
     if tab:
         panes = [p for p in panes if p.get("tab_id") == tab]
     targets = [p for p in panes if p.get("label") in CORRAL_LABELS]
-    # A pane hidden by ctrl+b t lives in a tab of its own.
-    expanded = read_json_file(EXPANDED_FILE)
-    parked = (expanded.pop(current_workspace() or "default", None) or {}).get("parked")
-    targets += [p for p in list_panes(current_workspace())
-                if p["pane_id"] == parked and p.get("label") in CORRAL_LABELS and p not in targets]
+    # Panes hidden by ctrl+b t or by the R/Python switch live in a tab of their own.
+    ws = current_workspace()
+    tabs = herdr("tab", "list", "--workspace", ws).get("tabs", []) if ws else []
+    hidden = {t["tab_id"] for t in tabs if t.get("label") in (PARKING_TAB, *OLD_PARKING_TABS)}
+    targets += [p for p in list_panes(ws)
+                if p.get("tab_id") in hidden and p.get("label") in CORRAL_LABELS and p not in targets]
+    saved = read_json_file(EXPANDED_FILE)
+    parked = saved.pop(ws or "default", None) is not None
     if not targets:
         notify("Corral", "no hay paneles de Corral en esta pestaña")
         return
@@ -494,7 +625,7 @@ def cmd_close(args: argparse.Namespace) -> None:
         except CorralError:
             pass
     if parked:
-        EXPANDED_FILE.write_text(json.dumps(expanded))
+        save_layout_state(saved)
     note = f"{len(targets)} paneles cerrados"
     if scratch and Path(scratch).exists():
         note += "; el borrador queda unos días en " + str(Path(scratch).parent)  # in .corral/ when there's a project
@@ -503,26 +634,34 @@ def cmd_close(args: argparse.Namespace) -> None:
 
 
 def cmd_console(args: argparse.Namespace) -> None:
-    """Mark a pane (the current one by default) as the R console."""
+    """Mark a pane (the current one by default) as the R or Python console."""
     pane = args.pane or current_pane()
     if not pane:
         raise CorralError("no sé qué panel marcar; usa --pane")
-    label = console_label(args.lang)
+    try:
+        procs = herdr("pane", "process-info", "--pane", pane).get("process_info", {}).get("foreground_processes", [])
+    except CorralError:
+        procs = []
+    names = [str(p.get("name", "")) for p in procs]
+    is_python = any(n in ("ipython", "python", "python3") or n.startswith("python3.") for n in names)
+    lang = args.lang or ("python" if is_python else "r")
+    label = console_label(lang)
     for other in list_panes(current_workspace()):
         if other.get("label") == label and other["pane_id"] != pane:
             herdr("pane", "rename", other["pane_id"], "--clear")
     herdr("pane", "rename", pane, label)
-    # If R is already running there without Corral, switch it on.
+    # If R or IPython is already running there without Corral, switch it on.
     activated = False
-    try:
-        procs = herdr("pane", "process-info", "--pane", pane).get("process_info", {}).get("foreground_processes", [])
-        running_r = any(p.get("name") == "R" for p in procs)
-        has_session = any(s.get("pane_id") == pane for s in r_sessions())
-        if running_r and not has_session:
-            herdr("pane", "run", pane, 'if (exists("corral_activar")) corral_activar()')
-            activated = True
-    except CorralError:
-        pass
+    has_session = any(s.get("pane_id") == pane for s in r_sessions())
+    if not has_session and lang == "r" and any(n == "R" for n in names):
+        herdr("pane", "run", pane, 'if (exists("corral_activar")) corral_activar()')
+        activated = True
+    elif not has_session and lang == "python" and is_python:
+        herdr("pane", "run", pane, f'%run -i "{REPO / "py" / "startup.py"}"')
+        activated = True
+    saved, state = layout_state(current_workspace())
+    state["active"] = lang
+    save_layout_state(saved)
     notify("Consola marcada", f"{pane} es ahora {label}" + (" y Corral quedó activo" if activated else ""))
 
 
@@ -570,24 +709,49 @@ def cmd_send(args: argparse.Namespace) -> None:
     if not text.strip():
         notify("Nada que enviar", "Selecciona código (se copia solo) y vuelve a intentar")
         return
-    pane = find_console(args.lang)
+    lang = args.lang or active_lang()
+    pane, started = show_console(lang)
     if not pane:
-        notify("Sin consola", f"No hay panel {console_label(args.lang)}. Usa 'corral console' o 'corral layout'")
+        notify("Sin consola", f"No hay panel {console_label(lang)}. Usa 'corral layout' (ctrl+b a)")
         sys.exit(1)
+    if started:
+        wait_for_prompt(pane, 180, lang)
     if args.source:
-        # Long code (a whole script): source a temp file instead of pasting every line.
+        # A whole script: run a temp file instead of pasting every line.
         run_dir = STATE_DIR / "run"
         run_dir.mkdir(parents=True, exist_ok=True)
-        for old_file in run_dir.glob("*.R"):  # keep a day of history, no more
+        for old_file in [*run_dir.glob("*.R"), *run_dir.glob("*.py")]:  # keep a day of history, no more
             if time.time() - old_file.stat().st_mtime > 86400:
                 old_file.unlink(missing_ok=True)
-        tmp = run_dir / f"{time.strftime('%H%M%S')}-{secrets.token_hex(3)}.R"
-        tmp.write_text(text + "\n", encoding="utf-8")
+        stamp = f"{time.strftime('%H%M%S')}-{secrets.token_hex(3)}"
         label = Path(args.name).name if args.name else "script"
-        text = f'source("{tmp}", echo = TRUE, max.deparse.length = Inf, encoding = "UTF-8")  # {label}'
-    herdr("pane", "run", pane, text)
+        if lang == "python":
+            tmp = run_dir / f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]', '-', label)}"
+            tmp = tmp.with_suffix(".py")
+            tmp.write_text(text + "\n", encoding="utf-8")
+            text = f'%run -i "{tmp}"'
+        else:
+            tmp = run_dir / f"{stamp}.R"
+            tmp.write_text(text + "\n", encoding="utf-8")
+            text = f'source("{tmp}", echo = TRUE, max.deparse.length = Inf, encoding = "UTF-8")  # {label}'
+        herdr("pane", "run", pane, text)
+    elif lang == "python":
+        paste_python(pane, text)
+    else:
+        herdr("pane", "run", pane, text)
     lines = text.count("\n") + 1
     print(f"corral: enviado a {pane} desde {source} ({lines} línea{'s' if lines != 1 else ''})", file=sys.stderr)
+
+
+def paste_python(pane: str, code: str) -> None:
+    """Paste code into IPython as one block (bracketed paste), then run it."""
+    herdr_socket("pane.send_text", {"pane_id": pane, "text": "\x1b[200~" + code + "\x1b[201~"})
+    time.sleep(0.05)
+    keys = ["enter"]
+    last = code.rstrip("\n").splitlines()[-1] if code.strip() else ""
+    if last[:1] in (" ", "\t"):
+        keys.append("enter")  # the code ends inside a block: an empty line closes it
+    herdr_socket("pane.send_keys", {"pane_id": pane, "keys": keys})
 
 
 def cmd_view(args: argparse.Namespace) -> None:
@@ -694,12 +858,13 @@ def r_sessions() -> list[dict]:
         except (OSError, ValueError, KeyError):
             continue
         meta["dir"] = str(meta_file.parent)
+        meta.setdefault("lang", "r")
         sessions.append(meta)
     return sessions
 
 
 def pick_session() -> dict | None:
-    """The R session for this place: CORRAL_SESSION, the console pane, the workspace, the newest."""
+    """The session for this place: CORRAL_SESSION, the active console, the workspace, the newest."""
     sessions = r_sessions()
     if not sessions:
         return None
@@ -709,7 +874,7 @@ def pick_session() -> dict | None:
             return s
     if in_herdr():
         try:
-            console = find_console("r")
+            console = find_console(active_lang())
         except CorralError:
             console = None
         for s in sessions:
@@ -797,11 +962,11 @@ def cmd_vars(args: argparse.Namespace) -> None:
     """Variables of the R session of this workspace (a popup inside herdr, or JSON)."""
     if args.json:
         try:
-            session = console_session()[1]
+            session = console_session(args.lang)[1]
         except CorralError:
-            session = pick_session()
+            session = None if args.lang else pick_session()
         if not session:
-            raise CorralError("no hay sesiones de R con Corral")
+            raise CorralError(f"no hay una sesión de {LANG_NAMES.get(args.lang or 'r')} con Corral")
         return cmd_vars_json(session)
     if args.split:
         split_vars_pane()
@@ -894,12 +1059,12 @@ def run_in_pane(pane: str, code: str) -> bool:
 
 
 def resolve_session_dir() -> Path | None:
-    """Session of the console in this workspace; follows R restarts."""
+    """Session of the active console in this workspace; follows restarts and the R/Python switch."""
     try:
         return Path(console_session()[1]["dir"])
     except CorralError:
         try:
-            if find_console("r"):
+            if find_console(active_lang()):
                 return None  # this workspace has a console, but R isn't running in it yet
         except CorralError:
             pass
@@ -1000,8 +1165,11 @@ def show_plot_object(session_dir: Path, name: str) -> str:
 
     before = httpgd_state(session_dir)
     old = (before[2].get("hsize", 0), before[2].get("upid")) if before else (0, None)
-    quoted = "`" + name.replace("`", "\\`") + "`"
-    if not run_in_pane(pane, f"print({quoted})"):
+    if meta.get("lang") == "python":
+        code = f"_corral_show({name})"
+    else:
+        code = "print(`" + name.replace("`", "\\`") + "`)"
+    if not run_in_pane(pane, code):
         return "no pude enviar a la consola"
     end = time.time() + 10
     while time.time() < end:
@@ -1048,12 +1216,16 @@ def lintr_config_found(start: Path) -> bool:
     return (Path.home() / ".lintr").is_file() or (config_home / "R" / "lintr" / "config").is_file()
 
 
-def cmd_lsp(_: argparse.Namespace) -> None:
-    """R language server for the editor (completion, diagnostics).
+def cmd_lsp(args: argparse.Namespace) -> None:
+    """Language servers for the editor (completion, diagnostics).
 
-    lintr only reports real problems, like Positron, and leaves style to Air,
-    unless the project brings its own .lintr.
+    R: languageserver, with lintr reporting real problems only, like Positron
+    (style is Air's job), unless the project brings its own .lintr.
+    Python: python-lsp-server (completion, help, definitions) in the project's
+    environment through uv; Ruff gives the diagnostics as a second server.
     """
+    if args.lang == "python":
+        os.execvp("uv", ["uv", "run", "--quiet", "--with", "python-lsp-server", "pylsp"])
     code = "languageserver::run()"
     if not lintr_config_found(Path.cwd()):
         code = f"options(lintr.linter_file = {json.dumps(str(REPO / 'lib' / 'corral.lintr'))}); {code}"
@@ -1073,14 +1245,19 @@ def cmd_plot_ready(_: argparse.Namespace) -> None:
 # --------------------------------------------------------------------------- eval (for agents)
 
 
-def console_session(lang: str = "r") -> tuple[str, dict]:
-    """The console pane and the Corral R session running in it."""
+def console_session(lang: str | None = None) -> tuple[str, dict]:
+    """The console pane for `lang` (the active one by default) and the Corral session in it."""
+    lang = lang or active_lang()
     console = find_console(lang)
     if not console:
+        if lang == "python":
+            raise CorralError("no hay consola de Python: se abre sola al ejecutar código de Python, o con ctrl+b y")
         raise CorralError(f"no hay consola {console_label(lang)} en herdr; ábrela con ctrl+b a o márcala con ctrl+b m")
     for s in r_sessions():
         if s.get("pane_id") == console:
             return console, s
+    if lang == "python":
+        raise CorralError(f"la consola {console} no tiene Corral activo (¿IPython sigue arrancando?)")
     raise CorralError(f"la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activar() en ese R (ctrl+b m lo hace)")
 
 
@@ -1091,18 +1268,25 @@ def last_line(pane: str) -> str:
     return lines[-1] if lines else ""
 
 
-def wait_for_prompt(pane: str, timeout: float) -> None:
-    """Wait until the console shows an empty R prompt; refuse half-typed input."""
+def wait_for_prompt(pane: str, timeout: float, lang: str = "r") -> None:
+    """Wait until the console shows an empty prompt; refuse half-typed input."""
     deadline = time.time() + timeout
     while True:
         line = last_line(pane)
-        if re.fullmatch(r">\s*", line):
+        if lang == "python":
+            prompt = re.fullmatch(r"In \[\d+\]:\s*(.*)", line)
+            idle = bool(prompt) and not prompt.group(1).strip()
+            half = bool(prompt and prompt.group(1).strip()) or bool(re.match(r"\s*\.\.\.:", line))
+        else:
+            idle = bool(re.fullmatch(r">\s*", line))
+            half = line.startswith("+") or (line.startswith("> ") and bool(line[2:].strip()))
+        if idle:
             return
-        if line.startswith("+") or (line.startswith("> ") and line[2:].strip()):
+        if half:
             if time.time() > deadline:
                 raise CorralError("la consola tiene una línea a medio escribir; termínala o bórrala y vuelve a intentar")
         elif time.time() > deadline:
-            raise CorralError("la consola de R está ocupada; espera a que termine o usa --wait-idle")
+            raise CorralError(f"la consola de {LANG_NAMES.get(lang, lang)} está ocupada; espera a que termine o usa --wait-idle")
         time.sleep(0.25)
 
 
@@ -1122,11 +1306,13 @@ def httpgd_state(session_dir: Path) -> tuple[str, str, dict] | None:
 
 
 def cmd_eval(args: argparse.Namespace) -> None:
-    """Run R code in the shared console and print what it printed (for agents)."""
+    """Run R or Python code in the shared console and print what it printed (for agents)."""
+    lang = args.lang
     if args.check:
-        pane, session = console_session()
-        print(json.dumps({"console": pane, "session": session["id"], "r_version": session.get("r_version"),
-                          "cwd": session.get("cwd")}))
+        pane, session = console_session(lang)
+        print(json.dumps({"console": pane, "lang": lang, "session": session["id"],
+                          "version": session.get("python_version" if lang == "python" else "r_version"),
+                          "cwd": session.get("cwd"), "active": active_lang() == lang}))
         return
     if args.code:
         code = " ".join(args.code)
@@ -1139,7 +1325,10 @@ def cmd_eval(args: argparse.Namespace) -> None:
     if not code.strip():
         raise CorralError("no hay código que ejecutar")
 
-    pane, session = console_session()
+    pane, started = show_console(lang)
+    if started:
+        wait_for_prompt(pane, 180, lang)
+    pane, session = console_session(lang)
     sdir = Path(session["dir"])
     edir = sdir / "eval"
     edir.mkdir(parents=True, exist_ok=True)
@@ -1156,13 +1345,14 @@ def cmd_eval(args: argparse.Namespace) -> None:
                 raise CorralError("otra petición sigue corriendo en esta consola")
             time.sleep(0.2)
 
-    wait_for_prompt(pane, args.wait_idle)
+    wait_for_prompt(pane, args.wait_idle, lang)
     rid = time.strftime("%H%M%S") + "-" + secrets.token_hex(3)
-    (edir / f"{rid}.R").write_text(code if code.endswith("\n") else code + "\n", encoding="utf-8")
+    ext = ".py" if lang == "python" else ".R"
+    (edir / f"{rid}{ext}").write_text(code if code.endswith("\n") else code + "\n", encoding="utf-8")
     # If R only gets to it after the agent gave up, it must not run.
     (edir / f"{rid}.deadline").write_text(str(time.time() + args.timeout))
     before = httpgd_state(sdir)
-    herdr("pane", "run", pane, f'.corral_eval("{rid}")')
+    herdr("pane", "run", pane, f'_corral_eval("{rid}")' if lang == "python" else f'.corral_eval("{rid}")')
 
     result_file, out_file = edir / f"{rid}.json", edir / f"{rid}.out"
     end = time.time() + args.timeout
@@ -1251,7 +1441,7 @@ def cmd_vars_json(session: dict) -> None:
         data = json.loads((Path(session["dir"]) / "vars.json").read_text())
     except (OSError, ValueError):
         raise CorralError("esta sesión no publica variables (¿falta jsonlite?)")
-    print(json.dumps({"session": session["id"], "console": session.get("pane_id"),
+    print(json.dumps({"session": session["id"], "lang": session.get("lang", "r"), "console": session.get("pane_id"),
                       "vars": data.get("vars", [])}, ensure_ascii=False, indent=1))
 
 
@@ -1412,6 +1602,8 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         except CorralError as exc:
             check(False, "plugin enlazado", str(exc))
 
+    uv = shutil.which("uv")
+    check(bool(uv), "uv (consola de Python)", uv or "no está en el PATH; https://docs.astral.sh/uv/")
     rscript = shutil.which("Rscript")
     check(bool(rscript), "R", rscript or "no está en el PATH")
     if rscript:
@@ -1455,10 +1647,10 @@ def cmd_doctor(_: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="corral", description="Consola de R, tablas y gráficos junto a tus agentes.")
+    parser = argparse.ArgumentParser(prog="corral", description="Consolas de R y Python, tablas y gráficos junto a tus agentes.")
     parser.add_argument("--version", action="version", version=f"corral {VERSION}")
     sub = parser.add_subparsers(dest="command", required=True,
-                                metavar="{layout,close,send,eval,toggle,script,console,plots,vars,view,mirador,open,theme,config,doctor}")
+                                metavar="{layout,close,send,eval,toggle,switch,script,console,plots,vars,view,mirador,open,theme,config,doctor}")
 
     p = sub.add_parser("layout", help="abre una pestaña con agente, consola de R y shell")
     p.add_argument("--cwd")
@@ -1488,16 +1680,21 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"))
     p.set_defaults(func=cmd_script)
 
-    p = sub.add_parser("console", help="marca un panel como consola de R")
+    p = sub.add_parser("console", help="marca un panel como consola de R o Python (según lo que corre en él)")
     p.add_argument("--pane")
-    p.add_argument("--lang", default="r")
+    p.add_argument("--lang", choices=list(LANG_NAMES))
     p.set_defaults(func=cmd_console)
+
+    p = sub.add_parser("switch", help="la consola del layout pasa a R o a Python (ctrl+b y); sin valor, alterna")
+    p.add_argument("lang", nargs="?", choices=list(LANG_NAMES))
+    p.set_defaults(func=cmd_switch)
 
     p = sub.add_parser("send", help="envía código a la consola (argumentos, stdin, selección o portapapeles)")
     p.add_argument("text", nargs="*")
-    p.add_argument("--lang", default="r")
+    p.add_argument("--lang", choices=list(LANG_NAMES), help="r o python; por defecto, la consola activa")
     p.add_argument("--clipboard", action="store_true", help="usar el portapapeles si no hay otro texto")
-    p.add_argument("--source", action="store_true", help="ejecutar con source(echo = TRUE) en vez de pegar el código")
+    p.add_argument("--source", action="store_true",
+                   help="ejecutar como archivo: source(echo = TRUE) en R, %%run -i en Python")
     p.add_argument("--name", help="nombre del archivo, para mostrarlo en la consola")
     p.set_defaults(func=cmd_send)
 
@@ -1519,16 +1716,18 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--inline", action="store_true", help="abrir aquí aunque esté dentro de herdr")
     p.set_defaults(func=cmd_plots)
 
-    p = sub.add_parser("vars", help="variables de la sesión de R (popup dentro de herdr)")
+    p = sub.add_parser("vars", help="variables de la sesión activa (popup dentro de herdr)")
+    p.add_argument("--lang", choices=list(LANG_NAMES), help="con --json: r o python (por defecto, la consola activa)")
     p.add_argument("--inline", action="store_true", help="abrir aquí aunque esté dentro de herdr")
     p.add_argument("--json", action="store_true", help="imprimir las variables en JSON (para agentes)")
     p.add_argument("--split", action="store_true", help="abrir un panel fijo de variables bajo la consola")
     p.add_argument("--pane", action="store_true", help="correr el visor fijo en esta terminal (lo usa --split)")
     p.set_defaults(func=cmd_vars)
 
-    p = sub.add_parser("eval", help="ejecuta código en la consola de R compartida e imprime el resultado (para agentes)")
+    p = sub.add_parser("eval", help="ejecuta código en la consola de R o Python compartida e imprime el resultado (para agentes)")
     p.add_argument("code", nargs="*")
-    p.add_argument("--file", help="archivo .R a ejecutar")
+    p.add_argument("--lang", choices=list(LANG_NAMES), default="r", help="r (por defecto) o python")
+    p.add_argument("--file", help="archivo a ejecutar")
     p.add_argument("--timeout", type=float, default=300, help="segundos máximos de espera (300)")
     p.add_argument("--wait-idle", type=float, default=20, help="segundos esperando que la consola se desocupe (20)")
     p.add_argument("--max-chars", type=int, default=20000, help="recorta salidas más largas (20000)")
@@ -1541,9 +1740,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("url", nargs="?")
     p.set_defaults(func=cmd_open)
 
-    for name, func in (("_plots", cmd_plots_tui), ("_vars", cmd_vars_tui), ("_plot-ready", cmd_plot_ready),
-                       ("_lsp", cmd_lsp)):
+    for name, func in (("_plots", cmd_plots_tui), ("_vars", cmd_vars_tui), ("_plot-ready", cmd_plot_ready)):
         sub.add_parser(name, help=argparse.SUPPRESS).set_defaults(func=func)
+    p = sub.add_parser("_lsp", help=argparse.SUPPRESS)
+    p.add_argument("lang", nargs="?", choices=list(LANG_NAMES), default="r")
+    p.set_defaults(func=cmd_lsp)
 
     p = sub.add_parser("theme", help="aplica el tema de herdr al editor, los visores, VisiData y Mirador")
     p.add_argument("--mostrar", action="store_true", help="solo mostrar la paleta, sin aplicarla")
