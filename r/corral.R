@@ -145,6 +145,8 @@ local({
       pane_id = if (nzchar(pane_id)) pane_id else NULL,
       workspace_id = if (nzchar(Sys.getenv("HERDR_WORKSPACE_ID"))) Sys.getenv("HERDR_WORKSPACE_ID") else NULL,
       r_version = paste(R.version$major, R.version$minor, sep = "."),
+      # Under Ark: the kernel's connection file, so `corral _lsp r` can reach its language server.
+      ark_connection = if (nzchar(Sys.getenv("CORRAL_ARK_CONNECTION"))) Sys.getenv("CORRAL_ARK_CONNECTION") else NULL,
       cwd = getwd(), started = started
     ), file.path(session_dir, "meta.json"))
   }
@@ -326,8 +328,25 @@ local({
   }
 
   # grDevices only sets `device` when it is still unset, so this survives startup.
-  if (requireNamespace("httpgd", quietly = TRUE) && !isFALSE(getOption("corral.httpgd"))) {
-    options(device = start_httpgd)
+  use_httpgd <- function() {
+    if (requireNamespace("httpgd", quietly = TRUE) && !isFALSE(getOption("corral.httpgd"))) {
+      options(device = start_httpgd)
+    }
+    invisible()
+  }
+  use_httpgd()
+  # Under Ark (Positron's R kernel), keep these: after .Rprofile Ark points them
+  # at Positron's panes, which don't exist here, unless they are protected.
+  if (nzchar(Sys.getenv("CORRAL_ARK_CONNECTION"))) {
+    options(ark.protected_options = union(
+      getOption("ark.protected_options"),
+      c("device", "browser", "editor", "askpass", "viewer")
+    ))
+    # Ark shows help as HTML (?mean): open those pages in a browser window.
+    options(browser = function(url) {
+      try(system2(env$corral_bin(), c("open", shQuote(url)), wait = FALSE), silent = TRUE)
+      invisible()
+    })
   }
 
   attach_env(env)

@@ -192,7 +192,7 @@ def cmd_layout(args: argparse.Namespace) -> None:
     else:
         console = right
     herdr("pane", "rename", console, label)
-    herdr("pane", "run", console, args.console)
+    herdr("pane", "run", console, args.console or console_command("r"))
 
     if args.shell:
         shell = herdr(
@@ -394,12 +394,84 @@ def park(pane: str, ws: str | None) -> None:
     herdr_socket("pane.move", {"pane_id": pane, "focus": False, "destination": destination})
 
 
+ARK_VERSION = "0.1.252"  # the version Corral was tested with
+DATA_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "corral"
+ARK_DIR = DATA_DIR / "ark"
+JUPYTER_DIR = DATA_DIR / "jupyter"  # Corral's own kernel spec; your Jupyter setup stays as it is
+
+
+def ark_binary() -> Path | None:
+    """The newest Ark installed under ~/.local/share/corral/ark (or corral config ark_bin)."""
+    configured = corral_config().get("ark_bin")
+    if configured and Path(configured).is_file():
+        return Path(configured)
+    found = [d / "ark" for d in ARK_DIR.glob("*") if (d / "ark").is_file()]
+    key = lambda f: [int(x) if x.isdigit() else 0 for x in f.parent.name.split(".")]  # noqa: E731
+    return max(found, key=key) if found else None
+
+
+def r_flavor() -> str:
+    """How the R console runs: "ark" (Positron's kernel, the default when installed) or "r"."""
+    choice = corral_config().get("r_console") or "ark"
+    if choice == "ark" and ark_binary() and shutil.which("jupyter-console") and shutil.which("R"):
+        return "ark"
+    return "r"
+
+
+def ark_kernelspec() -> Path:
+    """Write Corral's kernel spec for Ark (R_HOME and R's library path, like the R script sets them)."""
+    ark = ark_binary()
+    probe = subprocess.run(["R", "--vanilla", "--no-echo", "-e",
+                            'cat(R.home(), Sys.getenv("LD_LIBRARY_PATH"), sep = "\\n")'],
+                           capture_output=True, text=True, timeout=30)
+    r_home, _, ld_path = probe.stdout.strip().partition("\n")
+    spec = {
+        "argv": [str(ark), "--connection_file", "{connection_file}", "--session-mode", "console",
+                 "--default-repos", "none", "--log", str(STATE_DIR / "ark.log")],
+        "display_name": "R (Ark, Corral)",
+        "language": "R",
+        "env": {"R_HOME": r_home, "LD_LIBRARY_PATH": ld_path or f"{r_home}/lib"},
+    }
+    folder = JUPYTER_DIR / "kernels" / "ark"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "kernel.json").write_text(json.dumps(spec, indent=1))
+    return JUPYTER_DIR
+
+
 def console_command(lang: str) -> str:
+    """What corral types in a console pane: a short command that clears the screen and starts it."""
+    corral = "corral" if shutil.which("corral") and Path(shutil.which("corral")).resolve() == SCRIPT else shlex.quote(str(SCRIPT))
+    return f"{corral} _console {lang}"
+
+
+def cmd_console_run(args: argparse.Namespace) -> None:
+    """Start a console in this pane (R, Ark or IPython), on a clean screen."""
+    sys.stdout.write("\033[H\033[2J\033[3J")  # the command corral typed goes away
+    sys.stdout.flush()
     cfg = corral_config()
-    if lang == "python":
-        return cfg.get("python_console") or (
-            "CORRAL=1 uv run --with ipython ipython --no-banner -i " + shlex.quote(str(REPO / "py" / "startup.py")))
-    return cfg.get("r_console") or "CORRAL=1 R --quiet --no-save"
+    env = dict(os.environ, CORRAL="1")
+    if args.lang == "python":
+        if cfg.get("python_console"):
+            os.execvpe("sh", ["sh", "-c", cfg["python_console"]], env)
+        os.execvpe("uv", ["uv", "run", "--with", "ipython", "ipython", "--no-banner", "-i",
+                          str(REPO / "py" / "startup.py")], env)
+    custom = cfg.get("r_console")
+    if custom and custom not in ("ark", "r"):
+        os.execvpe("sh", ["sh", "-c", custom], env)  # your own command
+    if r_flavor() == "ark":
+        # Ark through jupyter-console. The connection file goes where corral.R can
+        # announce it, so `corral _lsp r` can reach Ark's language server.
+        folder = STATE_DIR / "ark"
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob("kernel-*.json"):
+            if time.time() - old.stat().st_mtime > SCRATCH_MAX_AGE:
+                old.unlink(missing_ok=True)
+        conn = str(folder / f"kernel-{secrets.token_hex(4)}.json")
+        env.update(CORRAL_ARK_CONNECTION=conn, JUPYTER_PATH=str(ark_kernelspec()))
+        os.execvpe("jupyter-console", ["jupyter-console", "--kernel", "ark",
+                                       f"--ConnectionFileMixin.connection_file={conn}",
+                                       "--ZMQTerminalInteractiveShell.banner="], env)
+    os.execvpe("R", ["R", "--quiet", "--no-save"], env)
 
 
 def start_console(lang: str, ws: str | None, cwd: str, near: str | None) -> str:
@@ -664,8 +736,10 @@ def cmd_console(args: argparse.Namespace) -> None:
     except CorralError:
         procs = []
     names = [str(p.get("name", "")) for p in procs]
-    is_python = any(n in ("ipython", "python", "python3") or n.startswith("python3.") for n in names)
-    lang = args.lang or ("python" if is_python else "r")
+    known = next((s.get("lang", "r") for s in r_sessions() if s.get("pane_id") == pane), None)
+    is_ark = any(n.startswith("jupyter-consol") for n in names)
+    is_python = not is_ark and any(n in ("ipython", "python", "python3") or n.startswith("python3.") for n in names)
+    lang = args.lang or known or ("python" if is_python else "r")
     label = console_label(lang)
     for other in list_panes(current_workspace()):
         if other.get("label") == label and other["pane_id"] != pane:
@@ -674,7 +748,7 @@ def cmd_console(args: argparse.Namespace) -> None:
     # If R or IPython is already running there without Corral, switch it on.
     activated = False
     has_session = any(s.get("pane_id") == pane for s in r_sessions())
-    if not has_session and lang == "r" and any(n == "R" for n in names):
+    if not has_session and lang == "r" and (is_ark or any(n == "R" for n in names)):
         herdr("pane", "run", pane, 'if (exists("corral_activar")) corral_activar()')
         activated = True
     elif not has_session and lang == "python" and is_python:
@@ -758,7 +832,7 @@ def cmd_send(args: argparse.Namespace) -> None:
             tmp.write_text(text + "\n", encoding="utf-8")
             text = f'source("{tmp}", echo = TRUE, max.deparse.length = Inf, encoding = "UTF-8")  # {label}'
         herdr("pane", "run", pane, text)
-    elif lang == "python":
+    elif lang == "python" or jupyter_prompt(pane):
         paste_python(pane, text)
     else:
         herdr("pane", "run", pane, text)
@@ -766,8 +840,16 @@ def cmd_send(args: argparse.Namespace) -> None:
     print(f"corral: enviado a {pane} desde {source} ({lines} línea{'s' if lines != 1 else ''})", file=sys.stderr)
 
 
+def jupyter_prompt(pane: str) -> bool:
+    """Is this console a Jupyter-style one (IPython, or R through Ark's jupyter-console)?"""
+    for s in r_sessions():
+        if s.get("pane_id") == pane:
+            return s.get("lang") == "python" or bool(s.get("ark_connection"))
+    return bool(re.match(r"(In \[\d+\]:|\s+\.\.\.:)", last_line(pane)))
+
+
 def paste_python(pane: str, code: str) -> None:
-    """Paste code into IPython as one block (bracketed paste), then run it."""
+    """Paste code into IPython or Ark's console as one block (bracketed paste), then run it."""
     herdr_socket("pane.send_text", {"pane_id": pane, "text": "\x1b[200~" + code + "\x1b[201~"})
     time.sleep(0.05)
     keys = ["enter"]
@@ -1239,6 +1321,46 @@ def lintr_config_found(start: Path) -> bool:
     return (Path.home() / ".lintr").is_file() or (config_home / "R" / "lintr" / "config").is_file()
 
 
+def cmd_ark(args: argparse.Namespace) -> None:
+    """Ark, Positron's R kernel, as Corral's R console: status, or install a version."""
+    if args.instalar:
+        version = args.instalar
+        url = f"https://github.com/posit-dev/ark/releases/download/{version}/ark-{version}-linux-x64.zip"
+        target = ARK_DIR / version
+        target.mkdir(parents=True, exist_ok=True)
+        print(f"descargando {url}")
+        import io
+        import zipfile
+        with urllib.request.urlopen(url, timeout=120) as r:
+            zipfile.ZipFile(io.BytesIO(r.read())).extractall(target)
+        (target / "ark").chmod(0o755)
+        print(f"Ark {version} instalado en {target}")
+    ark = ark_binary()
+    console = shutil.which("jupyter-console")
+    print(f"Ark:             {ark or 'no instalado (corral ark --instalar ' + ARK_VERSION + ')'}")
+    print(f"jupyter-console: {console or 'no instalado (uv tool install jupyter-console)'}")
+    print(f"consola de R:    {r_flavor()}  (corral config r_console ark|r)")
+    if ark and console:
+        print(f"kernel:          {ark_kernelspec() / 'kernels' / 'ark' / 'kernel.json'}")
+
+
+def ark_connection() -> str | None:
+    """Connection file of the R console's Ark kernel: this workspace's, or one in this folder."""
+    try:
+        session = console_session("r")[1]
+        if session.get("ark_connection") and Path(session["ark_connection"]).exists():
+            return session["ark_connection"]
+    except CorralError:
+        pass
+    here = Path.cwd().resolve()
+    for s in sorted(r_sessions(), key=lambda s: -(s.get("started") or 0)):
+        conn = s.get("ark_connection")
+        if conn and Path(conn).exists() and (here == Path(s.get("cwd", "/")).resolve()
+                                             or Path(s.get("cwd", "/")).resolve() in here.parents):
+            return conn
+    return None
+
+
 def cmd_lsp(args: argparse.Namespace) -> None:
     """Language servers for the editor (completion, diagnostics).
 
@@ -1249,6 +1371,21 @@ def cmd_lsp(args: argparse.Namespace) -> None:
     """
     if args.lang == "python":
         os.execvp("uv", ["uv", "run", "--quiet", "--with", "python-lsp-server", "pylsp"])
+    # R under Ark: Ark's own language server (it knows the live session), through
+    # a small bridge. The editor may start before the console: wait for it.
+    ark = ark_connection()
+    if not ark and r_flavor() == "ark":
+        end = time.time() + 60
+        while not ark and time.time() < end:
+            time.sleep(1)
+            ark = ark_connection()
+    if ark:
+        bridge = str(REPO / "py" / "ark_lsp.py")
+        console = shutil.which("jupyter-console")
+        tool_python = Path(console).resolve().parent / "python" if console else None
+        if tool_python and tool_python.exists():
+            os.execv(str(tool_python), [str(tool_python), bridge, ark])
+        os.execvp("uv", ["uv", "run", "--quiet", "--no-project", "--with", "jupyter-client", "python", bridge, ark])
     code = "languageserver::run()"
     if not lintr_config_found(Path.cwd()):
         code = f"options(lintr.linter_file = {json.dumps(str(REPO / 'lib' / 'corral.lintr'))}); {code}"
@@ -1296,8 +1433,8 @@ def wait_for_prompt(pane: str, timeout: float, lang: str = "r") -> None:
     deadline = time.time() + timeout
     while True:
         line = last_line(pane)
-        if lang == "python":
-            prompt = re.fullmatch(r"In \[\d+\]:\s*(.*)", line)
+        prompt = re.fullmatch(r"In \[\d+\]:\s*(.*)", line)  # IPython, or R through Ark
+        if prompt or re.match(r"\s*\.\.\.:", line) or lang == "python":
             idle = bool(prompt) and not prompt.group(1).strip()
             half = bool(prompt and prompt.group(1).strip()) or bool(re.match(r"\s*\.\.\.:", line))
         else:
@@ -1629,6 +1766,11 @@ def cmd_doctor(_: argparse.Namespace) -> None:
 
     uv = shutil.which("uv")
     check(bool(uv), "uv (consola de Python)", uv or "no está en el PATH; https://docs.astral.sh/uv/")
+    ark = ark_binary()
+    check(bool(ark), "Ark (consola de R)", str(ark) if ark else f"corral ark --instalar  (sin Ark, la consola es R normal)")
+    console = shutil.which("jupyter-console")
+    check(bool(console), "jupyter-console (para Ark)", console or "uv tool install jupyter-console")
+    check(True, "consola de R", "Ark" if r_flavor() == "ark" else "R normal (corral config r_console)")
     rscript = shutil.which("Rscript")
     check(bool(rscript), "R", rscript or "no está en el PATH")
     if rscript:
@@ -1675,14 +1817,14 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="corral", description="Consolas de R y Python, tablas y gráficos junto a tus agentes.")
     parser.add_argument("--version", action="version", version=f"corral {VERSION}")
     sub = parser.add_subparsers(dest="command", required=True,
-                                metavar="{layout,close,send,eval,toggle,switch,script,console,plots,vars,view,mirador,open,theme,config,doctor}")
+                                metavar="{layout,close,send,eval,toggle,switch,script,console,plots,vars,view,mirador,open,ark,theme,config,doctor}")
 
     p = sub.add_parser("layout", help="abre una pestaña con agente, consola de R y shell")
     p.add_argument("--cwd")
     p.add_argument("--label", default="corral")
     p.add_argument("--agent", default=os.environ.get("CORRAL_AGENT", "claude"), help="comando del panel izquierdo ('' para dejar shell)")
-    p.add_argument("--console", default=os.environ.get("CORRAL_R", "CORRAL=1 R --quiet --no-save"),
-                   help="comando de la consola; CORRAL=1 activa Corral en ese R")
+    p.add_argument("--console", default=os.environ.get("CORRAL_R"),
+                   help="comando de la consola de R (por defecto Ark si está instalado; si no, R)")
     p.add_argument("--ratio", type=float, default=0.516, help="fracción del ancho para el panel del agente")
     p.add_argument("--shell", action="store_true", help="agregar una shell junto al panel de variables")
     p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"), help="editor del panel de script ('' sin script)")
@@ -1767,6 +1909,15 @@ def main(argv: list[str] | None = None) -> None:
 
     for name, func in (("_plots", cmd_plots_tui), ("_vars", cmd_vars_tui), ("_plot-ready", cmd_plot_ready)):
         sub.add_parser(name, help=argparse.SUPPRESS).set_defaults(func=func)
+    p = sub.add_parser("ark", help="Ark (el kernel de R de Positron) como consola de R: estado o instalación")
+    p.add_argument("--instalar", nargs="?", const=ARK_VERSION, metavar="VERSION",
+                   help=f"descargar e instalar Ark (por defecto {ARK_VERSION}, la versión probada)")
+    p.set_defaults(func=cmd_ark)
+
+    p = sub.add_parser("_console", help=argparse.SUPPRESS)
+    p.add_argument("lang", choices=list(LANG_NAMES))
+    p.set_defaults(func=cmd_console_run)
+
     p = sub.add_parser("_lsp", help=argparse.SUPPRESS)
     p.add_argument("lang", nargs="?", choices=list(LANG_NAMES), default="r")
     p.set_defaults(func=cmd_lsp)
