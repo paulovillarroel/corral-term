@@ -1,0 +1,84 @@
+# Corral: thin herdr adapter. Every action calls ../bin/corral, which holds the logic.
+# Runtime commands run with the plugin directory as their working directory.
+
+id = "corral"
+name = "Corral"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "Consola de R, tablas y gráficos junto a tus agentes"
+platforms = ["linux"]
+
+[[actions]]
+id = "layout"
+title = "Corral: abrir espacio de trabajo"
+contexts = ["global", "workspace"]
+command = ["python3", "../bin/corral", "layout"]
+
+[[actions]]
+id = "send"
+title = "Corral: enviar selección a la consola de R"
+contexts = ["selection", "pane"]
+command = ["python3", "../bin/corral", "send"]
+
+[[actions]]
+id = "console"
+title = "Corral: usar este panel como consola de R"
+contexts = ["pane"]
+command = ["python3", "../bin/corral", "console"]
+
+[[actions]]
+id = "plots"
+title = "Corral: ver gráficos de la sesión de R"
+contexts = ["global", "workspace"]
+command = ["python3", "../bin/corral", "plots"]
+
+[[actions]]
+id = "vars"
+title = "Corral: ver variables de la sesión de R"
+contexts = ["global", "workspace"]
+command = ["python3", "../bin/corral", "vars"]
+
+[[actions]]
+id = "mirador"
+title = "Corral: abrir Mirador (agentes, variables, gráficos y tablas)"
+contexts = ["global"]
+command = ["python3", "../bin/corral", "mirador", "--open"]
+
+[[actions]]
+id = "open-url"
+title = "Corral: abrir enlace local en el navegador"
+contexts = ["global"]
+command = ["python3", "../bin/corral", "plots"]
+
+# Viewers open on demand over the terminal and close with q or Esc.
+[[panes]]
+id = "plots"
+title = "Corral: gráficos"
+placement = "popup"
+width = "96%"
+height = "94%"
+command = ["python3", "../bin/corral", "_plots"]
+
+[[panes]]
+id = "vars"
+title = "Corral: variables"
+placement = "popup"
+width = "72%"
+height = "80%"
+command = ["python3", "../bin/corral", "_vars"]
+
+# `corral view` (View() in R) opens this one with CORRAL_FILE set.
+[[panes]]
+id = "table"
+title = "Corral: tabla"
+placement = "popup"
+width = "95%"
+height = "90%"
+command = ["python3", "../bin/corral", "_table"]
+
+# Ctrl+click on local URLs (`quarto preview`, httpgd, Shiny) opens them in the browser.
+[[link_handlers]]
+id = "local-url"
+title = "Abrir en el navegador"
+pattern = '^https?://(127\.0\.0\.1|localhost):\d+(/.*)?$'
+action = "open-url"

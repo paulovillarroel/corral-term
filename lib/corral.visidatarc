@@ -1,0 +1,11 @@
+# VisiData settings for Corral's table popup (loaded with `vd --config`).
+#
+# q on the table itself closes the whole viewer, even if other views were
+# opened from it (for example with Enter on a row). On any other view
+# (frequencies, summaries, a row) q goes back one step, as usual.
+
+BaseSheet.addCommand(
+    'q', 'corral-quit',
+    'vd.quit(*vd.sheets) if isinstance(sheet.source, Path) else vd.quit(sheet)',
+    'cerrar la tabla (Corral); en otras vistas, volver atrás',
+)

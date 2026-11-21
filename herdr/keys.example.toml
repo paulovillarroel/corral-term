@@ -1,0 +1,39 @@
+# Atajos sugeridos para ~/.config/herdr/config.toml (prefijo por defecto: ctrl+b).
+# Ninguno choca con los atajos por defecto de herdr 0.9.5.
+# Después de pegarlos: herdr server reload-config
+
+[[keys.command]]
+key = "prefix+enter"
+type = "plugin_action"
+command = "corral.send"
+description = "Corral: enviar selección o portapapeles a R"
+
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "corral.plots"
+description = "Corral: ver gráficos"
+
+[[keys.command]]
+key = "prefix+d"
+type = "plugin_action"
+command = "corral.vars"
+description = "Corral: ver variables de R"
+
+[[keys.command]]
+key = "prefix+a"
+type = "plugin_action"
+command = "corral.layout"
+description = "Corral: abrir espacio de trabajo"
+
+[[keys.command]]
+key = "prefix+m"
+type = "plugin_action"
+command = "corral.console"
+description = "Corral: marcar panel como consola de R"
+
+[[keys.command]]
+key = "prefix+shift+m"
+type = "plugin_action"
+command = "corral.mirador"
+description = "Corral: abrir Mirador en el navegador"

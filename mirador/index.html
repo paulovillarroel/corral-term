@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mirador</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #0b0b0b;
+    --side: #151515;
+    --side-2: #1f1f1f;
+    --line: #232323;
+    --line-2: #303030;
+    --text: #e9e9e9;
+    --muted: #9b9b9b;
+    --dim: #5f5f5f;
+    --accent: #e07b53;
+    --green: #4fc27c;
+    --amber: #e3b341;
+    --red: #f06a6a;
+    --blue: #79a8ff;
+    --violet: #b294ff;
+    --ui: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Code", "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.4 var(--ui); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  ::selection { background: #3a3a3a; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  * { scrollbar-width: thin; scrollbar-color: #2c2c2c transparent; }
+
+  .app { display: grid; grid-template-columns: 284px minmax(0, 1fr); height: 100vh; }
+  .app.collapsed { grid-template-columns: minmax(0, 1fr); }
+  .app.collapsed > .sidebar { display: none; }
+  .sidetoggle { flex: none; width: 40px; border: 0; border-right: 1px solid var(--line); background: none; color: var(--dim); display: flex; align-items: center; justify-content: center; }
+  .sidetoggle:hover { color: var(--text); }
+  .sidetoggle.on { color: var(--blue); }
+  /* Narrow window (Mirador beside the terminal): the variables already live in herdr,
+     so the plot gets the whole width. */
+  @media (max-width: 900px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .app > .sidebar { display: none !important; }
+    .status .sp ~ span { display: none; }
+  }
+
+  /* ---------------------------------------------------------------- sidebar */
+  .sidebar { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 14px 14px 10px; }
+  .mark { width: 18px; height: 18px; flex: none; }
+  .brand b { font-weight: 600; letter-spacing: .1px; }
+  .brand .ver { color: var(--dim); font: 11px var(--mono); }
+  .conn { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .conn.on { background: var(--green); box-shadow: 0 0 0 3px rgba(79,194,124,.12); }
+  .conn.off { background: var(--red); }
+
+  .search { margin: 0 10px 8px; display: flex; align-items: center; gap: 8px; background: var(--side-2); border: 1px solid transparent; border-radius: 9px; padding: 6px 10px; }
+  .search:focus-within { border-color: var(--line-2); }
+  .search svg { color: var(--dim); flex: none; }
+  .search input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; padding: 0; }
+  .search input::placeholder { color: var(--dim); }
+  kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; }
+
+  .block { display: flex; flex-direction: column; min-height: 0; }
+  .block.agents { max-height: 48%; }
+  .block.grow { flex: 1; }
+  .block-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; color: var(--muted); font-size: 11.5px; letter-spacing: .3px; }
+  .block-head .title { text-transform: uppercase; font-weight: 600; }
+  .block-head select { margin-left: auto; max-width: 150px; background: var(--side-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 2px 6px; font-size: 11.5px; color: var(--text); }
+
+  .pills { display: flex; gap: 4px; padding: 2px 10px 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); padding: 4px 10px; border-radius: 7px; font-size: 12px; }
+  .pill:hover { color: var(--text); }
+  .pill.on { background: var(--side-2); color: var(--text); }
+  .pill .n { color: var(--dim); font: 11px var(--mono); }
+  .pill.on .n { color: var(--muted); }
+
+  .list { overflow-y: auto; padding: 0 6px 10px; min-height: 0; }
+  .group { color: var(--dim); font-size: 11.5px; padding: 10px 8px 4px; display: flex; gap: 6px; align-items: center; }
+  .group .gn { color: var(--dim); font: 10.5px var(--mono); margin-left: auto; }
+
+  .row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+  .row:hover { background: rgba(255,255,255,.035); }
+  .row.focused { background: var(--side-2); }
+  .row .glyph { font-size: 14px; line-height: 18px; text-align: center; }
+  .row .main { min-width: 0; }
+  .row .l1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .l2 { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .age { color: var(--dim); font: 11px var(--mono); padding-top: 2px; }
+  .st-working { color: var(--muted); }
+  .st-blocked { color: var(--amber); }
+  .st-done { color: var(--green); }
+  .st-idle { color: var(--muted); }
+  .st-unknown { color: var(--dim); }
+  .spin { display: inline-block; width: 8px; height: 8px; border: 1.5px solid var(--dim); border-top-color: var(--text); border-radius: 50%; animation: spin .9s linear infinite; margin-right: 6px; vertical-align: -0.5px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .var { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 4px 8px; border-radius: 6px; font: 12.5px/1.6 var(--mono); }
+  .var:hover { background: rgba(255,255,255,.035); }
+  .var.data { cursor: pointer; }
+  .var .vn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .var .vp { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; text-align: right; }
+  .var.data .vn::before { content: "▦"; color: var(--blue); margin-right: 7px; font-size: 11px; }
+  .var.function .vn::before { content: "ƒ"; color: var(--violet); margin-right: 7px; }
+  .var.value .vn::before { content: "•"; color: var(--dim); margin-right: 7px; }
+  .var.other .vn::before { content: "◇"; color: var(--dim); margin-right: 7px; font-size: 11px; }
+
+  .empty-note { color: var(--dim); font-size: 12px; padding: 10px 10px; line-height: 1.5; }
+  .empty-note code { font: 11.5px var(--mono); color: var(--muted); }
+
+  .side-foot { border-top: 1px solid var(--line); padding: 9px 14px; display: flex; gap: 12px; align-items: center; color: var(--dim); font: 11px var(--mono); }
+  .side-foot .sp { margin-left: auto; }
+
+  /* ---------------------------------------------------------------- main */
+  .mainpane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+  .tabs { display: flex; align-items: stretch; height: 40px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; flex: none; }
+  .tab { display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--muted); border-right: 1px solid var(--line); white-space: nowrap; cursor: pointer; position: relative; max-width: 240px; }
+  .tab:hover { color: var(--text); }
+  .tab.on { color: var(--text); background: var(--bg); }
+  .tab.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--bg); }
+  .tab .ti { font-size: 12px; }
+  .tab .tl { overflow: hidden; text-overflow: ellipsis; }
+  .tab .x { border: 0; background: none; color: var(--dim); padding: 0 2px; font-size: 14px; line-height: 1; visibility: hidden; }
+  .tab:hover .x, .tab.on .x { visibility: visible; }
+  .tab .x:hover { color: var(--text); }
+
+  .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .hidden { display: none !important; }
+
+  .toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none; }
+  .toolbar .label { color: var(--muted); font: 12px var(--mono); margin: 0 6px; }
+  .toolbar .sp { flex: 1; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--line-2); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 12px; text-decoration: none; }
+  .btn:hover { color: var(--text); border-color: #444; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .btn.icon { padding: 3px 7px; }
+  .btn.on { color: var(--text); background: var(--side-2); }
+
+  .stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px; position: relative; }
+  .stage img { max-width: 100%; max-height: 100%; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px var(--line); }
+  .blank { text-align: center; color: var(--dim); line-height: 1.7; }
+  .blank .big { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+  .blank code { font: 12px var(--mono); color: var(--accent); background: #140d0a; padding: 2px 6px; border-radius: 5px; }
+
+  .strip { flex: none; display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); overflow-x: auto; background: var(--panel); }
+  .thumb { flex: none; width: 108px; height: 72px; border-radius: 6px; overflow: hidden; background: #fff; border: 2px solid transparent; cursor: pointer; opacity: .65; padding: 0; }
+  .thumb:hover { opacity: 1; }
+  .thumb.on { border-color: var(--accent); opacity: 1; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  .thead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none; }
+  .thead .tt { font: 13px var(--mono); }
+  .thead .dims { color: var(--muted); font: 12px var(--mono); }
+  .thead .sp { flex: 1; }
+  .thead .search { margin: 0; width: 240px; padding: 4px 9px; }
+
+  .tbody { flex: 1; min-height: 0; display: flex; }
+  .grid { flex: 1; overflow: auto; min-width: 0; }
+  table { border-collapse: separate; border-spacing: 0; font: 12.5px/1.5 var(--mono); }
+  th, td { padding: 4px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+  th { position: sticky; top: 0; background: var(--panel); text-align: left; font-weight: 500; cursor: pointer; user-select: none; z-index: 1; border-bottom-color: var(--line-2); }
+  th:hover { background: #121212; }
+  th .ty { display: block; color: var(--dim); font-size: 10.5px; font-weight: 400; }
+  th .ar { color: var(--accent); margin-left: 4px; }
+  td.num, th.num { text-align: right; }
+  td.idx, th.idx { color: var(--dim); text-align: right; position: sticky; left: 0; background: var(--bg); border-right: 1px solid var(--line); }
+  th.idx { background: var(--panel); z-index: 2; cursor: default; }
+  tr:hover td { background: #0d0d0d; }
+  tr:hover td.idx { background: #0d0d0d; }
+  .na { color: var(--dim); font-style: italic; }
+  .loadmore { color: var(--dim); font: 12px var(--mono); padding: 10px 12px; }
+
+  .drawer { width: 320px; flex: none; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); padding: 8px 10px 16px; }
+  .card { border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; margin-top: 8px; font: 12px/1.6 var(--mono); }
+  .card .cn { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .card .cn b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .cn span { color: var(--dim); }
+  .card dl { display: grid; grid-template-columns: auto 1fr; gap: 0 12px; margin: 0; }
+  .card dt { color: var(--dim); }
+  .card dd { margin: 0; text-align: right; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; margin: 6px 0 2px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--amber); }
+
+  .status { flex: none; height: 28px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; overflow: hidden; }
+  .status .acc { color: var(--accent); }
+  .status .sp { flex: 1; }
+  .status .ok { color: var(--green); }
+
+  .toast { position: fixed; right: 16px; bottom: 40px; background: var(--side-2); border: 1px solid var(--line-2); color: var(--text); padding: 8px 12px; border-radius: 9px; font-size: 12.5px; opacity: 0; transform: translateY(6px); transition: .18s ease; pointer-events: none; max-width: 420px; }
+  .toast.show { opacity: 1; transform: none; }
+  .toast code { font: 12px var(--mono); color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="app collapsed">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 13a9 9 0 0 1 18 0" stroke="#e07b53" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 13a5 5 0 0 1 10 0" stroke="#e9e9e9" stroke-width="2" stroke-linecap="round" opacity=".75"/>
+        <circle cx="12" cy="13" r="1.7" fill="#e9e9e9"/>
+        <path d="M3 18h18" stroke="#5f5f5f" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <b>Mirador</b><span class="ver" id="ver"></span>
+      <span class="conn" id="conn" title="Conexión con Mirador"></span>
+    </div>
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Buscar objetos" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </label>
+
+    <section class="block grow">
+      <div class="block-head"><span class="title">Sesión R</span><select id="session" aria-label="Sesión de R"></select></div>
+      <div class="list" id="vars"></div>
+    </section>
+
+    <footer class="side-foot" id="sidefoot"></footer>
+  </aside>
+
+  <main class="mainpane">
+    <div class="tabs">
+      <button class="sidetoggle" id="sidetoggle" title="Mostrar u ocultar variables (v)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+      <nav class="tabs" id="tabs" style="border:0;flex:1"></nav>
+    </div>
+
+    <section class="view" id="view-plots">
+      <div class="toolbar">
+        <button class="btn icon" id="prev" title="Anterior (←)">‹</button>
+        <button class="btn icon" id="next" title="Siguiente (→)">›</button>
+        <span class="label" id="plotlabel"></span>
+        <span class="sp"></span>
+        <a class="btn" id="dlsvg" download>SVG</a>
+        <a class="btn" id="dlpng" download>PNG</a>
+        <button class="btn" id="delplot" title="Borrar este gráfico">Borrar</button>
+      </div>
+      <div class="stage" id="stage"></div>
+      <div class="strip hidden" id="strip"></div>
+    </section>
+
+    <section class="view hidden" id="view-table">
+      <div class="thead">
+        <span class="tt" id="ttitle"></span>
+        <span class="dims" id="tdims"></span>
+        <span class="sp"></span>
+        <label class="search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="tq" placeholder="Filtrar filas" autocomplete="off" spellcheck="false">
+        </label>
+        <button class="btn" id="tsum">Resumen</button>
+      </div>
+      <div class="tbody">
+        <div class="grid" id="grid"></div>
+        <aside class="drawer hidden" id="drawer"></aside>
+      </div>
+    </section>
+
+    <footer class="status" id="status"></footer>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+const enc = encodeURIComponent;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const store = {
+  get(k, d) { try { return localStorage.getItem("mirador." + k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("mirador." + k, v); } catch {} },
+};
+
+async function api(path, body) {
+  const opts = { headers: { "X-Corral-Token": TOKEN } };
+  if (body !== undefined) {
+    opts.method = "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+const KIND = {
+  claude: ["Claude Code", "✻", "#e07b53"], codex: ["Codex", "◎", "#d6d6d6"], gemini: ["Gemini", "✦", "#79a8ff"],
+  opencode: ["OpenCode", "◇", "#d6d6d6"], cursor: ["Cursor", "▲", "#d6d6d6"], copilot: ["Copilot", "◉", "#b294ff"],
+  amp: ["Amp", "⚡", "#e3b341"], pi: ["Pi", "π", "#d6d6d6"], grok: ["Grok", "✕", "#d6d6d6"],
+};
+const STATUS = {
+  working: ["Trabajando", "st-working", 1], blocked: ["Esperando", "st-blocked", 0], done: ["Listo", "st-done", 2],
+  idle: ["En espera", "st-idle", 3], unknown: ["—", "st-unknown", 4],
+};
+const kindInfo = (k) => KIND[k] || [k ? k[0].toUpperCase() + k.slice(1) : "Agente", "●", "#9b9b9b"];
+
+const S = {
+  data: null, first: true, q: "", filter: store.get("filter", "all"),
+  session: store.get("session", ""), varsRev: null, vars: [],
+  tab: "plots", seenTables: new Set(),
+  plots: { sid: null, upid: null, ids: [], current: null, follow: true, thumbsKey: "" },
+  table: null,
+};
+
+// ------------------------------------------------------------------ helpers
+function ago(ts, now) {
+  const s = Math.max(0, Math.round(now - ts));
+  if (s < 10) return "ahora";
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
+const home = (p) => String(p || "").replace(/^\/home\/[^/]+/, "~");
+let toastTimer;
+function toast(html) {
+  const t = $("#toast");
+  t.innerHTML = html;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+const matches = (...xs) => !S.q || xs.some((x) => String(x || "").toLowerCase().includes(S.q));
+const currentSession = () => (S.data?.sessions || []).find((s) => s.id === S.session) || null;
+
+// ------------------------------------------------------------------ polling
+async function poll() {
+  try {
+    const d = await api("/api/state");
+    S.data = d;
+    $("#conn").className = "conn on";
+    await onState(d);
+  } catch (e) {
+    $("#conn").className = "conn off";
+    $("#status").innerHTML = `<span style="color:var(--red)">Sin conexión con Mirador</span><span class="sp"></span><span>corral mirador</span>`;
+  } finally {
+    setTimeout(poll, 1500);
+  }
+}
+
+async function onState(d) {
+  $("#ver").textContent = "v" + d.version;
+  // A plot chosen elsewhere (corral's variables pane), or #plot:<session>:<id> in the URL.
+  const sp = d.show_plot;
+  if (S.first) {
+    S.showSeq = sp ? sp.seq : 0;
+    if (location.hash.startsWith("#plot:")) {
+      const [, sid, id] = location.hash.split(":");
+      S.session = sid; S.pendingPlot = id;
+    }
+  } else if (sp && sp.seq !== S.showSeq) {
+    S.showSeq = sp.seq;
+    S.session = sp.session; S.pendingPlot = sp.id;
+    store.set("session", S.session);
+  }
+  const sessions = d.sessions || [];
+  if (!sessions.some((s) => s.id === S.session)) {
+    const latest = [...sessions].sort((a, b) => (b.started || 0) - (a.started || 0))[0];
+    S.session = latest ? latest.id : "";
+  }
+  renderAgents();
+  renderSessions();
+  const s = currentSession();
+  if (s && s.vars_rev !== S.varsRev) {
+    S.varsRev = s.vars_rev;
+    try { S.vars = (await api(`/api/vars?session=${enc(s.id)}`)).vars || []; } catch { S.vars = []; }
+  } else if (!s) {
+    S.vars = []; S.varsRev = null;
+  }
+  renderVars();
+
+  const upid = s?.plots?.upid ?? null;
+  if ((s?.id ?? null) !== S.plots.sid || upid !== S.plots.upid) await loadPlots(s);
+  if (S.pendingPlot && S.plots.sid === S.session && S.plots.ids.includes(S.pendingPlot)) {
+    S.plots.current = S.pendingPlot;
+    S.plots.follow = S.pendingPlot === S.plots.ids[S.plots.ids.length - 1];
+    S.pendingPlot = null;
+    switchTab("plots");
+  }
+
+  for (const t of d.tables || []) {
+    if (!S.seenTables.has(t.id)) {
+      S.seenTables.add(t.id);
+      if (!S.first) openTable(t.id);
+    }
+  }
+  if (S.tab.startsWith("table:") && !(d.tables || []).some((t) => "table:" + t.id === S.tab)) switchTab("plots");
+  renderTabs();
+  renderStatus();
+  if (S.first && location.hash.startsWith("#table:")) {
+    const [, id, extra] = location.hash.split(":");
+    openTable(id);
+    if (extra === "summary") $("#tsum").click();
+  }
+  S.first = false;
+}
+
+// ------------------------------------------------------------------ agents
+function renderAgents() {
+  // Agents live in herdr's own sidebar; Mirador only shows them if the page has the block.
+  if (!$("#agents")) return;
+  const d = S.data;
+  const agents = d.agents || [];
+  const count = (st) => agents.filter((a) => a.status === st).length;
+  const pills = [["all", "Todos", agents.length], ["blocked", "Esperando", count("blocked")], ["working", "Trabajando", count("working")]];
+  $("#pills").innerHTML = pills.map(([k, label, n]) =>
+    `<button class="pill ${S.filter === k ? "on" : ""}" data-f="${k}">${k === "working" ? '<span class="spin" style="margin:0"></span>' : k === "blocked" ? '<span style="color:var(--amber)">●</span>' : ""}${label} <span class="n">${n}</span></button>`).join("");
+
+  if (!d.available) {
+    $("#agents").innerHTML = `<div class="empty-note">herdr no responde. Mirador muestra los agentes cuando herdr está corriendo.</div>`;
+    return;
+  }
+  const shown = agents.filter((a) => (S.filter === "all" || a.status === S.filter) && matches(a.name, a.title, a.workspace, kindInfo(a.kind)[0]));
+  if (!shown.length) {
+    $("#agents").innerHTML = `<div class="empty-note">${agents.length ? "Ningún agente con ese filtro." : "No hay agentes corriendo en herdr."}</div>`;
+    return;
+  }
+  const groups = new Map();
+  for (const a of shown) {
+    const g = a.workspace || "sin workspace";
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(a);
+  }
+  let html = "";
+  for (const [g, list] of groups) {
+    list.sort((a, b) => (STATUS[a.status] || STATUS.unknown)[2] - (STATUS[b.status] || STATUS.unknown)[2] || a.name.localeCompare(b.name));
+    html += `<div class="group">${esc(g)}<span class="gn">${list.length}</span></div>`;
+    for (const a of list) {
+      const [kname, glyph, color] = kindInfo(a.kind);
+      const [slabel, scls] = STATUS[a.status] || STATUS.unknown;
+      const l1 = a.title && a.title !== kname ? a.title : (a.name && a.name !== a.kind ? a.name : kname);
+      const spin = a.status === "working" ? '<span class="spin"></span>' : "";
+      html += `<div class="row ${a.focused ? "focused" : ""}" data-pane="${esc(a.pane_id)}" title="${esc(a.pane_id)}">
+        <span class="glyph" style="color:${color}">${glyph}</span>
+        <span class="main"><div class="l1">${esc(l1)}</div><div class="l2"><span class="${scls}">${spin}${slabel}</span> · ${esc(kname)}</div></span>
+        <span class="age">${ago(a.since, d.now)}</span></div>`;
+    }
+  }
+  $("#agents").innerHTML = html;
+}
+
+$("#pills")?.addEventListener("click", (e) => {
+  const b = e.target.closest(".pill");
+  if (!b) return;
+  S.filter = b.dataset.f;
+  store.set("filter", S.filter);
+  renderAgents();
+});
+$("#agents")?.addEventListener("click", async (e) => {
+  const row = e.target.closest(".row");
+  if (!row) return;
+  try { await api("/api/agents/focus", { pane_id: row.dataset.pane }); toast(`Foco en <code>${esc(row.dataset.pane)}</code> en herdr`); }
+  catch (err) { toast(esc(err.message)); }
+});
+
+// ------------------------------------------------------------------ R session
+function renderSessions() {
+  const sessions = S.data.sessions || [];
+  const ws = new Map((S.data.workspaces || []).map((w) => [w.id, w.label]));
+  const sel = $("#session");
+  sel.classList.toggle("hidden", sessions.length < 2);
+  const html = sessions.map((s) => `<option value="${esc(s.id)}" ${s.id === S.session ? "selected" : ""}>${esc((ws.get(s.workspace_id) || "R") + " · " + (s.pane_id || s.id))}</option>`).join("");
+  if (sel.innerHTML !== html) sel.innerHTML = html;
+}
+$("#session").addEventListener("change", (e) => {
+  S.session = e.target.value;
+  store.set("session", S.session);
+  S.varsRev = null;
+  if (S.data) onState(S.data);
+});
+
+const VAR_GROUPS = [["data", "Datos"], ["value", "Valores"], ["function", "Funciones"], ["other", "Otros"]];
+function renderVars() {
+  const s = currentSession();
+  if (!s) {
+    $("#vars").innerHTML = `<div class="empty-note">No hay sesiones de R conectadas. Abre R en un panel de herdr con <code>corral.R</code> en tu <code>.Rprofile</code>.</div>`;
+    return;
+  }
+  const vars = S.vars.filter((v) => matches(v.name, v.class));
+  if (!S.vars.length) {
+    $("#vars").innerHTML = `<div class="empty-note">El entorno global está vacío.</div>`;
+    return;
+  }
+  let html = "";
+  for (const [k, label] of VAR_GROUPS) {
+    const list = vars.filter((v) => v.kind === k);
+    if (!list.length) continue;
+    html += `<div class="group">${label}<span class="gn">${list.length}</span></div>`;
+    for (const v of list) {
+      const tip = [v.class, v.size ? fmtBytes(v.size) : ""].filter(Boolean).join(" · ");
+      html += `<div class="var ${esc(k)}" data-name="${esc(v.name)}" title="${esc(tip)}"><span class="vn">${esc(v.name)}</span><span class="vp">${esc(v.preview || v.class)}</span></div>`;
+    }
+  }
+  $("#vars").innerHTML = html || `<div class="empty-note">Ningún objeto coincide.</div>`;
+}
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  const u = ["KB", "MB", "GB"]; let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return n.toFixed(n < 10 ? 1 : 0) + " " + u[i];
+}
+$("#vars").addEventListener("click", async (e) => {
+  const row = e.target.closest(".var.data");
+  if (!row) return;
+  try {
+    const r = await api("/api/view-var", { session: S.session, name: row.dataset.name });
+    toast(`<code>${esc(r.code)}</code> enviado a la consola`);
+  } catch (err) { toast(esc(err.message)); }
+});
+
+// ------------------------------------------------------------------ tabs
+function renderTabs() {
+  const tables = S.data?.tables || [];
+  let html = `<div class="tab ${S.tab === "plots" ? "on" : ""}" data-tab="plots"><span class="ti" style="color:var(--accent)">◔</span><span class="tl">Gráficos</span></div>`;
+  for (const t of tables) {
+    const id = "table:" + t.id;
+    html += `<div class="tab ${S.tab === id ? "on" : ""}" data-tab="${esc(id)}"><span class="ti" style="color:var(--blue)">▦</span><span class="tl">${esc(t.title)}</span><button class="x" data-close="${esc(t.id)}" title="Cerrar">×</button></div>`;
+  }
+  if ($("#tabs").innerHTML !== html) $("#tabs").innerHTML = html;
+}
+$("#tabs").addEventListener("click", async (e) => {
+  const x = e.target.closest(".x");
+  if (x) {
+    e.stopPropagation();
+    await api("/api/tables/close", { id: x.dataset.close }).catch(() => {});
+    if (S.tab === "table:" + x.dataset.close) switchTab("plots");
+    S.data.tables = (S.data.tables || []).filter((t) => t.id !== x.dataset.close);
+    renderTabs();
+    return;
+  }
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  if (tab.dataset.tab === "plots") switchTab("plots");
+  else openTable(tab.dataset.tab.slice(6));
+});
+function switchTab(tab) {
+  S.tab = tab;
+  $("#view-plots").classList.toggle("hidden", tab !== "plots");
+  $("#view-table").classList.toggle("hidden", tab === "plots");
+  renderTabs();
+  if (tab === "plots") renderPlot();
+}
+
+// ------------------------------------------------------------------ plots
+async function loadPlots(s) {
+  const grew = (ids) => ids.length > S.plots.ids.length;
+  if (!s || !s.plots) {
+    S.plots = { sid: s?.id ?? null, upid: null, ids: [], current: null, follow: true, thumbsKey: "" };
+    renderPlot(); return;
+  }
+  let ids = [];
+  try { ids = ((await api(`/api/plots?session=${enc(s.id)}`)).plots || []).map((p) => p.id); } catch {}
+  const sameSession = S.plots.sid === s.id;
+  const isNew = sameSession && grew(ids);
+  S.plots.sid = s.id;
+  S.plots.upid = s.plots.upid;
+  S.plots.ids = ids;
+  if (!sameSession || S.plots.follow || !ids.includes(S.plots.current)) S.plots.current = ids[ids.length - 1] ?? null;
+  if (isNew && !S.first && S.tab !== "plots") switchTab("plots");
+  renderPlot();
+}
+
+function plotUrl(id, w, h, extra = "") {
+  return `/api/plot?session=${enc(S.plots.sid)}&id=${enc(id)}&width=${w}&height=${h}&token=${enc(TOKEN)}&v=${S.plots.upid}${extra}`;
+}
+
+let stageSize = [0, 0];
+function renderPlot() {
+  const { ids, current } = S.plots;
+  const i = ids.indexOf(current);
+  $("#prev").disabled = i <= 0;
+  $("#next").disabled = i < 0 || i >= ids.length - 1;
+  $("#delplot").disabled = i < 0;
+  $("#plotlabel").textContent = ids.length ? `${i + 1} / ${ids.length}` : "";
+  const stage = $("#stage");
+  if (i < 0) {
+    const s = currentSession();
+    stage.innerHTML = `<div class="blank"><div class="big">Todavía no hay gráficos</div>${s ? "Dibuja algo en R, por ejemplo" : "Abre R en un panel de herdr y dibuja algo, por ejemplo"} <code>plot(1:10)</code></div>`;
+    $("#strip").classList.add("hidden");
+    for (const a of ["#dlsvg", "#dlpng"]) $(a).removeAttribute("href");
+    return;
+  }
+  const w = Math.max(240, Math.floor(stage.clientWidth - 32));
+  const h = Math.max(180, Math.floor(stage.clientHeight - 32));
+  stageSize = [w, h];
+  const src = plotUrl(current, w, h, "&renderer=svg");
+  let img = stage.querySelector("img");
+  if (!img) { stage.innerHTML = ""; img = document.createElement("img"); img.alt = "Gráfico"; stage.appendChild(img); }
+  if (img.getAttribute("src") !== src) img.src = src;
+  $("#dlsvg").href = plotUrl(current, w, h, "&renderer=svg&download=1");
+  $("#dlpng").href = plotUrl(current, w * 2, h * 2, "&renderer=png&zoom=2&download=1");
+  renderThumbs();
+}
+
+function renderThumbs() {
+  const { ids, current, upid } = S.plots;
+  const strip = $("#strip");
+  strip.classList.toggle("hidden", ids.length < 2);
+  const key = ids.join(",") + "|" + upid;
+  if (key !== S.plots.thumbsKey) {
+    S.plots.thumbsKey = key;
+    strip.innerHTML = ids.slice(-40).map((id) => `<button class="thumb" data-id="${esc(id)}" title="Gráfico ${ids.indexOf(id) + 1}"><img loading="lazy" alt="" src="${plotUrl(id, 324, 216, "&renderer=svg")}"></button>`).join("");
+  }
+  for (const b of strip.querySelectorAll(".thumb")) b.classList.toggle("on", b.dataset.id === current);
+  strip.querySelector(".thumb.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function stepPlot(delta) {
+  const { ids, current } = S.plots;
+  const i = ids.indexOf(current) + delta;
+  if (i < 0 || i >= ids.length) return;
+  S.plots.current = ids[i];
+  S.plots.follow = i === ids.length - 1;
+  renderPlot();
+}
+$("#prev").addEventListener("click", () => stepPlot(-1));
+$("#next").addEventListener("click", () => stepPlot(1));
+$("#strip").addEventListener("click", (e) => {
+  const b = e.target.closest(".thumb");
+  if (!b) return;
+  S.plots.current = b.dataset.id;
+  S.plots.follow = b.dataset.id === S.plots.ids[S.plots.ids.length - 1];
+  renderPlot();
+});
+$("#delplot").addEventListener("click", async () => {
+  const i = S.plots.ids.indexOf(S.plots.current);
+  if (i < 0) return;
+  await api("/api/plots/remove", { session: S.plots.sid, index: i }).catch((e) => toast(esc(e.message)));
+  S.plots.follow = true;
+  S.plots.upid = null;
+});
+let resizeTimer;
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (S.tab === "plots") renderPlot(); }, 180);
+}).observe($("#stage"));
+
+// ------------------------------------------------------------------ tables
+const NUMERIC = /^(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|FLOAT|DOUBLE|REAL|DECIMAL)/i;
+function shortType(t) {
+  const T = String(t).toUpperCase();
+  if (/^(DOUBLE|FLOAT|REAL)/.test(T)) return "dbl";
+  if (/^DECIMAL/.test(T)) return "dec";
+  if (/INT/.test(T)) return "int";
+  if (/^VARCHAR|^TEXT|^STRING/.test(T)) return "chr";
+  if (/^BOOL/.test(T)) return "lgl";
+  if (/^DATE$/.test(T)) return "date";
+  if (/^TIMESTAMP/.test(T)) return "dttm";
+  if (/^ENUM/.test(T)) return "fct";
+  return T.toLowerCase();
+}
+function fmtCell(v, type) {
+  if (v === null || v === undefined) return '<span class="na">NA</span>';
+  if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+  if (typeof v === "number" && /^(DOUBLE|FLOAT|REAL)/i.test(type) && !Number.isInteger(v)) return esc(String(+v.toPrecision(7)));
+  if (typeof v === "object") return esc(JSON.stringify(v));
+  return esc(v);
+}
+
+function openTable(id) {
+  const t = (S.data?.tables || []).find((x) => x.id === id);
+  if (!t) return;
+  S.tab = "table:" + id;
+  S.table = { id, title: t.title, cols: [], rows: [], total: 0, sort: "", desc: false, q: "", loading: false, done: false, summary: null, showSummary: false, seq: 0 };
+  $("#tq").value = "";
+  $("#drawer").classList.add("hidden");
+  $("#tsum").classList.remove("on");
+  switchTab(S.tab);
+  $("#ttitle").textContent = t.title;
+  $("#tdims").textContent = "";
+  $("#grid").innerHTML = `<div class="loadmore">Cargando…</div>`;
+  loadRows(true);
+}
+
+async function loadRows(reset) {
+  const T = S.table;
+  if (!T || T.loading || (!reset && T.done)) return;
+  T.loading = true;
+  const seq = ++T.seq;
+  const offset = reset ? 0 : T.rows.length;
+  try {
+    const r = await api(`/api/table/rows?id=${enc(T.id)}&offset=${offset}&limit=200&sort=${enc(T.sort)}&desc=${T.desc ? 1 : 0}&q=${enc(T.q)}`);
+    if (S.table !== T || seq !== T.seq) return;
+    T.cols = r.columns;
+    T.rows = reset ? r.rows : T.rows.concat(r.rows);
+    T.total = r.total;
+    T.done = T.rows.length >= T.total;
+    renderGrid(reset);
+  } catch (err) {
+    $("#grid").innerHTML = `<div class="loadmore" style="color:var(--red)">${esc(err.message)}</div>`;
+  } finally {
+    T.loading = false;
+  }
+}
+
+function renderGrid(reset) {
+  const T = S.table;
+  $("#tdims").textContent = `${T.total.toLocaleString("es-CL")} filas × ${T.cols.length} columnas${T.q ? " (filtradas)" : ""}`;
+  const head = `<tr><th class="idx">#</th>${T.cols.map((c) => {
+    const ar = T.sort === c.name ? `<span class="ar">${T.desc ? "↓" : "↑"}</span>` : "";
+    return `<th class="${NUMERIC.test(c.type) ? "num" : ""}" data-col="${esc(c.name)}" title="${esc(c.type)}">${esc(c.name)}${ar}<span class="ty">${esc(shortType(c.type))}</span></th>`;
+  }).join("")}</tr>`;
+  const body = T.rows.map((row, i) => `<tr><td class="idx">${i + 1}</td>${T.cols.map((c) => `<td class="${NUMERIC.test(c.type) ? "num" : ""}">${fmtCell(row[c.name], c.type)}</td>`).join("")}</tr>`).join("");
+  const grid = $("#grid");
+  const top = grid.scrollTop, left = grid.scrollLeft;
+  grid.innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>${T.done ? "" : '<div class="loadmore">Desplázate para cargar más…</div>'}`;
+  if (!reset) { grid.scrollTop = top; grid.scrollLeft = left; }
+  else grid.scrollTop = 0;
+}
+
+$("#grid").addEventListener("scroll", () => {
+  const g = $("#grid");
+  if (g.scrollTop + g.clientHeight > g.scrollHeight - 300) loadRows(false);
+});
+$("#grid").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-col]");
+  if (!th || !S.table) return;
+  const col = th.dataset.col;
+  if (S.table.sort === col) {
+    if (S.table.desc) { S.table.sort = ""; S.table.desc = false; } else S.table.desc = true;
+  } else { S.table.sort = col; S.table.desc = false; }
+  S.table.done = false;
+  loadRows(true);
+});
+let tqTimer;
+$("#tq").addEventListener("input", (e) => {
+  clearTimeout(tqTimer);
+  tqTimer = setTimeout(() => { if (!S.table) return; S.table.q = e.target.value; S.table.done = false; loadRows(true); }, 280);
+});
+$("#tsum").addEventListener("click", async () => {
+  const T = S.table;
+  if (!T) return;
+  T.showSummary = !T.showSummary;
+  $("#tsum").classList.toggle("on", T.showSummary);
+  const drawer = $("#drawer");
+  drawer.classList.toggle("hidden", !T.showSummary);
+  if (!T.showSummary) return;
+  if (!T.summary) {
+    drawer.innerHTML = `<div class="loadmore">Calculando…</div>`;
+    try { T.summary = (await api(`/api/table/summary?id=${enc(T.id)}`)).columns; }
+    catch (err) { drawer.innerHTML = `<div class="loadmore" style="color:var(--red)">${esc(err.message)}</div>`; return; }
+  }
+  if (S.table !== T) return;
+  drawer.innerHTML = T.summary.map((c) => {
+    const nulls = Number(c.null_percentage) || 0;
+    const num = NUMERIC.test(c.column_type);
+    const r = (v) => (v === null || v === undefined ? "—" : typeof v === "number" ? String(+v.toPrecision(5)) : (isNaN(+v) || v === "" ? esc(v) : String(+Number(v).toPrecision(5))));
+    const rows = [
+      ["n", Number(c.count).toLocaleString("es-CL")],
+      ["únicos", "≈ " + Math.min(Number(c.approx_unique), Number(c.count)).toLocaleString("es-CL")],
+      ["NA", nulls.toFixed(1) + "%"],
+      ["mín", r(c.min)], ["máx", r(c.max)],
+      ...(num ? [["media", r(c.avg)], ["de", r(c.std)], ["p25 · p50 · p75", `${r(c.q25)} · ${r(c.q50)} · ${r(c.q75)}`]] : []),
+    ];
+    return `<div class="card"><div class="cn"><b title="${esc(c.column_name)}">${esc(c.column_name)}</b><span>${esc(shortType(c.column_type))}</span></div>
+      <div class="bar" title="${nulls.toFixed(1)}% NA"><i style="width:${Math.min(100, nulls)}%"></i></div>
+      <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd title="${esc(v)}">${v}</dd>`).join("")}</dl></div>`;
+  }).join("");
+});
+
+// ------------------------------------------------------------------ status
+function renderStatus() {
+  const s = currentSession();
+  const d = S.data;
+  const left = s
+    ? `<span class="acc">▸▸</span><span>R ${esc(s.r_version || "")}</span><span>${esc(home(s.cwd))}</span><span>${S.vars.length} objetos</span>`
+    : `<span class="acc">▸▸</span><span>sin sesión de R</span>`;
+  const plotsPort = s?.plots ? (S.plots.ids.length + " gráficos") : "httpgd apagado";
+  $("#status").innerHTML = `${left}<span class="sp"></span><span>${plotsPort}</span>`;
+  $("#sidefoot").innerHTML = `<span>${(d.sessions || []).length} sesiones R</span><span>${(d.tables || []).length} tablas</span><span class="sp">corral</span>`;
+}
+
+// ------------------------------------------------------------------ keys
+function setSidebar(open) {
+  $(".app").classList.toggle("collapsed", !open);
+  $("#sidetoggle").classList.toggle("on", open);
+  store.set("sidebar", open ? "open" : "closed");
+  if (S.tab === "plots") setTimeout(renderPlot, 50);
+}
+setSidebar(store.get("sidebar", "closed") === "open");
+$("#sidetoggle").addEventListener("click", () => setSidebar($(".app").classList.contains("collapsed")));
+
+document.addEventListener("keydown", (e) => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "");
+  if (e.key === "/" && !typing) { e.preventDefault(); setSidebar(true); $("#q").focus(); return; }
+  if (e.key === "v" && !typing) { setSidebar($(".app").classList.contains("collapsed")); return; }
+  if (e.key === "Escape" && typing) { document.activeElement.blur(); return; }
+  if (typing || S.tab !== "plots") return;
+  if (e.key === "ArrowLeft") stepPlot(-1);
+  if (e.key === "ArrowRight") stepPlot(1);
+});
+$("#q").addEventListener("input", (e) => {
+  S.q = e.target.value.trim().toLowerCase();
+  if (S.data) { renderAgents(); renderVars(); }
+});
+
+poll();
+</script>
+</body>
+</html>
