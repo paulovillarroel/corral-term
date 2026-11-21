@@ -181,7 +181,7 @@ def cmd_layout(args: argparse.Namespace) -> None:
         console = herdr("pane", "split", right, "--direction", "down", "--ratio", "0.55", "--cwd", cwd,
                         "--no-focus")["pane"]["pane_id"]
         herdr("pane", "rename", right, "corral:script")
-        herdr("pane", "run", right, editor)
+        herdr("pane", "run", right, f"{editor} {shlex.quote(str(scratch_script(ws)))}")
     else:
         console = right
     herdr("pane", "rename", console, label)
@@ -197,6 +197,25 @@ def cmd_layout(args: argparse.Namespace) -> None:
         herdr("pane", "run", left, args.agent)
     print(json.dumps({"tab": tab["tab"]["tab_id"], "agent": left, "console": console,
                       "script": right if editor else None, "vars": vars_pane}))
+
+
+def scratch_script(workspace: str | None) -> Path:
+    """A real .R file for the script pane: the editor only offers completion on saved files."""
+    label = "corral"
+    try:
+        for w in herdr("workspace", "list").get("workspaces", []):
+            if w.get("workspace_id") == workspace:
+                label = w.get("label") or label
+    except CorralError:
+        pass
+    label = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or "corral"
+    folder = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "corral" / "borradores"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{label}.R"
+    if not path.exists():
+        path.write_text("# Borrador de Corral para este workspace. Se guarda solo entre sesiones;\n"
+                        "# para dejarlo en tu proyecto: Archivo > Guardar como.\n\n", encoding="utf-8")
+    return path
 
 
 def herdr_socket(method: str, params: dict) -> dict:
@@ -292,7 +311,8 @@ def cmd_script(args: argparse.Namespace) -> None:
     new = herdr("pane", "split", console, "--direction", "down", "--ratio", "0.45", "--no-focus")["pane"]["pane_id"]
     herdr("pane", "swap", "--source-pane", new, "--target-pane", console)
     herdr("pane", "rename", new, "corral:script")
-    herdr("pane", "run", new, editor + (" " + shlex.quote(args.file) if args.file else ""))
+    target = args.file or str(scratch_script(current_workspace()))
+    herdr("pane", "run", new, f"{editor} {shlex.quote(target)}")
 
 
 def cmd_console(args: argparse.Namespace) -> None:
@@ -305,7 +325,18 @@ def cmd_console(args: argparse.Namespace) -> None:
         if other.get("label") == label and other["pane_id"] != pane:
             herdr("pane", "rename", other["pane_id"], "--clear")
     herdr("pane", "rename", pane, label)
-    notify("Consola marcada", f"{pane} es ahora {label}")
+    # If R is already running there without Corral, switch it on.
+    activated = False
+    try:
+        procs = herdr("pane", "process-info", "--pane", pane).get("process_info", {}).get("foreground_processes", [])
+        running_r = any(p.get("name") == "R" for p in procs)
+        has_session = any(s.get("pane_id") == pane for s in r_sessions())
+        if running_r and not has_session:
+            herdr("pane", "run", pane, 'if (exists("corral_activar")) corral_activar()')
+            activated = True
+    except CorralError:
+        pass
+    notify("Consola marcada", f"{pane} es ahora {label}" + (" y Corral quedó activo" if activated else ""))
 
 
 def read_clipboard() -> str:
@@ -322,7 +353,8 @@ def read_clipboard() -> str:
     for argv in candidates:
         try:
             proc = subprocess.run(argv, capture_output=True, text=True, timeout=5,
-                                  cwd="/mnt/c" if argv[0].endswith(".exe") else None)
+                                  cwd="/mnt/c" if argv[0].endswith(".exe") else None,
+                                  env=windows_env() if argv[0].endswith(".exe") else None)
         except (OSError, subprocess.TimeoutExpired):
             continue
         if proc.returncode == 0 and proc.stdout.strip():
@@ -568,7 +600,8 @@ def cmd_vars(args: argparse.Namespace) -> None:
         return
     if args.pane:
         tui().vars_viewer(resolve_session_dir(), run_in_console=run_in_pane,
-                          resolve=resolve_session_dir, keep_open=True, open_plot=open_plot)
+                          resolve=resolve_session_dir, keep_open=True, open_plot=open_plot,
+                          show_object=show_plot_object)
         return
     open_viewer("vars", args.inline)
 
@@ -718,17 +751,69 @@ def bring_to_front(title: str, wait: float = 8, find_only: bool = False, backgro
     argv = ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
     if background:
         subprocess.Popen(argv, cwd="/mnt/c", stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+                         stderr=subprocess.DEVNULL, start_new_session=True, env=windows_env())
         return None
-    proc = subprocess.run(argv, cwd="/mnt/c", capture_output=True, timeout=wait + 20)
+    proc = subprocess.run(argv, cwd="/mnt/c", capture_output=True, timeout=wait + 20, env=windows_env())
     return (proc.stdout + proc.stderr).decode("utf-8", "replace").strip()
+
+
+def httpgd_ids(session_dir: Path) -> list[str]:
+    state = httpgd_state(session_dir)
+    if not state:
+        return []
+    base, token, _ = state
+    try:
+        with urllib.request.urlopen(f"{base}/plots?token={token}", timeout=3) as r:
+            return [p["id"] for p in json.loads(r.read()).get("plots", [])]
+    except (OSError, ValueError):
+        return []
+
+
+def show_plot_object(session_dir: Path, name: str) -> str:
+    """Show a plot object (ggplot, lattice, ...): reuse its drawing if it has one, else draw it."""
+    try:
+        meta = json.loads((session_dir / "meta.json").read_text())
+        variables = json.loads((session_dir / "vars.json").read_text()).get("vars", [])
+    except (OSError, ValueError):
+        meta, variables = {}, []
+    pane = meta.get("pane_id")
+    if not pane:
+        return "la sesión no está en un panel de herdr"
+    fingerprint = next((v.get("hash") for v in variables if v.get("name") == name), None)
+    map_file = session_dir / "plotobj-map.json"
+    try:
+        drawn = json.loads(map_file.read_text())
+    except (OSError, ValueError):
+        drawn = {}
+
+    if fingerprint and drawn.get(fingerprint) in httpgd_ids(session_dir):
+        open_plot(session_dir, drawn[fingerprint])
+        return "ya estaba dibujado; abierto en Mirador"
+
+    before = httpgd_state(session_dir)
+    old = (before[2].get("hsize", 0), before[2].get("upid")) if before else (0, None)
+    quoted = "`" + name.replace("`", "\\`") + "`"
+    if not run_in_pane(pane, f"print({quoted})"):
+        return "no pude enviar a la consola"
+    end = time.time() + 10
+    while time.time() < end:
+        time.sleep(0.25)
+        state = httpgd_state(session_dir)
+        if state and (state[2].get("hsize", 0), state[2].get("upid")) != old and state[2].get("hsize", 0) > 0:
+            ids = httpgd_ids(session_dir)
+            if fingerprint and ids:
+                drawn[fingerprint] = ids[-1]
+                map_file.write_text(json.dumps(drawn))
+            show_latest_plot(session_dir)
+            return "dibujado y abierto en Mirador"
+    return "R no dibujó nada (¿sigue ocupado?)"
 
 
 def cmd_vars_tui(_: argparse.Namespace) -> None:
     d = os.environ.get("CORRAL_SESSION_DIR")
     if not d:
         return no_session_screen()
-    tui().vars_viewer(Path(d), run_in_console=run_in_pane, open_plot=open_plot)
+    tui().vars_viewer(Path(d), run_in_console=run_in_pane, open_plot=open_plot, show_object=show_plot_object)
 
 
 def split_vars_pane(console: str | None = None, ratio: float = 0.62) -> str:
@@ -767,7 +852,7 @@ def console_session(lang: str = "r") -> tuple[str, dict]:
     for s in r_sessions():
         if s.get("pane_id") == console:
             return console, s
-    raise CorralError(f"la consola {console} no tiene R con Corral corriendo; inicia R en ese panel")
+    raise CorralError(f"la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activar() en ese R (ctrl+b m lo hace)")
 
 
 def last_line(pane: str) -> str:
@@ -990,6 +1075,28 @@ def cmd_mirador(args: argparse.Namespace) -> None:
         open_mirador_window(info)
 
 
+def windows_env() -> dict:
+    """Environment for launching Windows programs from WSL.
+
+    WSL starts .exe files through the interop socket named in WSL_INTEROP. A
+    long-lived process (the herdr server and its panes) keeps the socket of the
+    terminal that started it, which disappears when that terminal closes. Fall
+    back to a socket that is still alive.
+    """
+    env = dict(os.environ)
+    current = env.get("WSL_INTEROP")
+    if current and Path(current).exists():
+        return env
+    candidates = [Path("/run/WSL/1_interop")] + sorted(Path("/run/WSL").glob("*_interop"),
+                                                       key=lambda p: p.stat().st_mtime if p.exists() else 0,
+                                                       reverse=True)
+    for c in candidates:
+        if c.exists():
+            env["WSL_INTEROP"] = str(c)
+            break
+    return env
+
+
 def browser_argv(url: str) -> list[str] | None:
     """Command that opens `url`, or None when it should only be printed.
 
@@ -1021,7 +1128,7 @@ def open_app_window(url: str) -> None:
     cwd = "/mnt/c" if argv[0].startswith("/mnt/") else None
     subprocess.Popen(
         argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, start_new_session=True,
+        stderr=subprocess.DEVNULL, start_new_session=True, env=windows_env(),
     )
 
 
@@ -1086,7 +1193,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--cwd")
     p.add_argument("--label", default="corral")
     p.add_argument("--agent", default=os.environ.get("CORRAL_AGENT", "claude"), help="comando del panel izquierdo ('' para dejar shell)")
-    p.add_argument("--console", default=os.environ.get("CORRAL_R", "R --quiet --no-save"))
+    p.add_argument("--console", default=os.environ.get("CORRAL_R", "CORRAL=1 R --quiet --no-save"),
+                   help="comando de la consola; CORRAL=1 activa Corral en ese R")
     p.add_argument("--ratio", type=float, default=0.55, help="fracción del ancho para el panel del agente")
     p.add_argument("--shell", action="store_true", help="agregar una shell junto al panel de variables")
     p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"), help="editor del panel de script ('' sin script)")

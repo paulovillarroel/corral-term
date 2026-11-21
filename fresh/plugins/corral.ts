@@ -1,12 +1,14 @@
 // Corral for Fresh: run R code from the editor in the shared console (pane corral:r).
 //
-//   Ctrl+Enter / Alt+Enter   selection, or the whole statement under the cursor
-//                            (multi-line pipes and ggplot chains included), then
-//                            move to the next statement
-//   Ctrl+Shift+Enter         the whole file, with source(echo = TRUE)
-//   Alt+-                    " <- "
-//   Ctrl+Shift+M             " |> "
+//   Ctrl+R (or Ctrl+Enter)    selection, or the whole statement under the cursor
+//                             (multi-line pipes and ggplot chains included), then
+//                             move to the next statement
+//   F5 (or Ctrl+Shift+Enter)  the whole file, with source(echo = TRUE)
+//   Ctrl+L (or Alt+-)         " <- "
+//   Ctrl+U (or Ctrl+Shift+M)  " |> "
 //
+// Through Warp and herdr, Ctrl+Enter arrives as plain Enter and Alt chords get
+// split, so the first key of each pair is the one that works there.
 // Keys are bound in ~/.config/fresh/config.json (see corral-term/fresh/config.json).
 
 const editor = getEditor();
@@ -131,13 +133,15 @@ registerHandler("corral_run_file", async function () {
   }
 });
 
-registerHandler("corral_insert_assign", function () {
+registerHandler("corral_insert_assign", async function () {
   editor.insertAtCursor(" <- ");
 });
 
-registerHandler("corral_insert_pipe", function () {
+registerHandler("corral_insert_pipe", async function () {
   editor.insertAtCursor(" |> ");
 });
 
 editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola de R", "corral_run_line", null);
 editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola de R", "corral_run_file", null);
+editor.registerCommand("Corral: insertar <-", "Inserta el operador de asignación", "corral_insert_assign", null);
+editor.registerCommand("Corral: insertar |>", "Inserta el pipe nativo", "corral_insert_pipe", null);

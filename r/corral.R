@@ -3,7 +3,12 @@
 # Add to ~/.Rprofile:
 #   if (interactive()) try(source("~/workspace/personal/corral-term/r/corral.R"))
 #
-# What it does in an interactive terminal session (not in RStudio or Positron):
+# Corral only acts in R sessions that ask for it: the console that `corral layout`
+# (ctrl+b a) starts, which sets CORRAL=1, or any session where you run
+# corral_activar() (ctrl+b m does it for you). Every other R behaves as usual.
+# options(corral.always = TRUE) in .Rprofile turns it on everywhere.
+#
+# What it does in an active session (never in RStudio or Positron):
 #   * Registers this session for Mirador and, after every top-level command,
 #     writes a light description of the global environment (needs jsonlite).
 #   * View(x) writes x to a temporary parquet file and opens it with `corral view`
@@ -16,7 +21,42 @@ local({
   if (!interactive()) return(invisible())
   if (nzchar(Sys.getenv("RSTUDIO")) || nzchar(Sys.getenv("POSITRON"))) return(invisible())
 
+  # This file, found through the `corral` command (bin/corral -> ../r/corral.R).
+  this_file <- local({
+    bin <- Sys.which("corral")
+    if (nzchar(bin)) file.path(dirname(dirname(normalizePath(bin))), "r", "corral.R") else NA_character_
+  })
+
+  # Attach right above utils so our functions mask utils ones (View). During
+  # .Rprofile only base is attached, so wait for utils when needed.
+  attach_env <- function(e) {
+    attach_now <- function(...) {
+      if ("corral" %in% search()) detach("corral", character.only = TRUE)
+      attach(e, name = "corral", warn.conflicts = FALSE)
+    }
+    if ("package:utils" %in% search()) attach_now()
+    else setHook(packageEvent("utils", "attach"), attach_now)
+  }
+
+  enabled <- nzchar(Sys.getenv("CORRAL")) || isTRUE(getOption("corral.always"))
+  if (!enabled) {
+    stub <- new.env()
+    stub$corral_activar <- function() {
+      if (is.na(this_file) || !file.exists(this_file)) stop("no encuentro corral.R (¿`corral` está en el PATH?)", call. = FALSE)
+      Sys.setenv(CORRAL = "1")
+      source(this_file)
+      message("Corral activado en esta sesión de R.")
+      invisible(TRUE)
+    }
+    attach_env(stub)
+    return(invisible())
+  }
+
   env <- new.env()
+  env$corral_activar <- function() {
+    message("Corral ya está activo en esta sesión.")
+    invisible(TRUE)
+  }
 
   state_dir <- file.path(
     Sys.getenv("XDG_STATE_HOME", file.path(path.expand("~"), ".local", "state")),
@@ -60,8 +100,21 @@ local({
     sprintf("%s [%d]", abbr, length(x))
   }
 
+  plot_classes <- c("ggplot", "gg", "trellis", "recordedplot", "grob", "gtable", "patchwork")
+
+  plot_preview <- function(x) {
+    what <- if (inherits(x, "patchwork")) "patchwork"
+      else if (inherits(x, c("ggplot", "gg"))) "ggplot"
+      else if (inherits(x, "trellis")) "lattice"
+      else if (inherits(x, "recordedplot")) "gráfico base"
+      else class(x)[1]
+    title <- tryCatch(x$labels$title, error = function(e) NULL)
+    if (is.character(title) && length(title) == 1L && nzchar(title)) paste(what, "\u00b7", title) else what
+  }
+
   describe <- function(name, x) {
-    kind <- if (is.data.frame(x) || is.matrix(x)) "data"
+    kind <- if (inherits(x, plot_classes)) "plotobj"
+      else if (is.data.frame(x) || is.matrix(x)) "data"
       else if (is.function(x)) "function"
       else if (is.atomic(x) || is.factor(x)) "value"
       else "other"
@@ -69,14 +122,20 @@ local({
     preview <- tryCatch(switch(kind,
       data = paste(dim(x), collapse = " × "),
       `function` = paste0("function(", paste(names(formals(x)), collapse = ", "), ")"),
+      plotobj = plot_preview(x),
       value = value_preview(x),
       other = if (is.list(x) && !is.object(x)) sprintf("list [%d]", length(x)) else paste(class(x), collapse = "/")
     ), error = function(e) class(x)[1])
     # object.size() walks every element; skip it for very large objects.
-    size <- if (is.environment(x) || isTRUE(n > 1e6)) NA_real_
+    # Plot objects carry their data and environments: sizing them on every command is slow.
+    size <- if (is.environment(x) || kind == "plotobj" || isTRUE(n > 1e6)) NA_real_
       else tryCatch(as.numeric(utils::object.size(x)), error = function(e) NA_real_)
+    # A fingerprint lets Corral reuse a drawing instead of printing the same plot again.
+    hash <- if (kind == "plotobj" && requireNamespace("rlang", quietly = TRUE)) {
+      tryCatch(rlang::hash(x), error = function(e) NULL)
+    }
     list(name = name, kind = kind, class = class(x)[1],
-         preview = substr(trimws(paste(preview, collapse = " ")), 1, 80), size = size)
+         preview = substr(trimws(paste(preview, collapse = " ")), 1, 80), size = size, hash = hash)
   }
 
   write_meta <- function() {
@@ -240,14 +299,7 @@ local({
     options(device = start_httpgd)
   }
 
-  # Attach right above utils so our View() masks utils::View(). During
-  # .Rprofile only base is attached, so wait for utils when needed.
-  attach_corral <- function(...) {
-    if ("corral" %in% search()) detach("corral", character.only = TRUE)
-    attach(env, name = "corral", warn.conflicts = FALSE)
-  }
-  if ("package:utils" %in% search()) attach_corral()
-  else setHook(packageEvent("utils", "attach"), attach_corral)
+  attach_env(env)
 
   invisible()
 })

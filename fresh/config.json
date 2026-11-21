@@ -3,14 +3,22 @@
   "active_keybinding_map": "vscode",
   "languages": {
     "r": {
-      "extensions": ["R", "r", "Rprofile"],
+      "extensions": [
+        "R",
+        "r",
+        "Rprofile"
+      ],
       "grammar": "R",
       "comment_prefix": "# ",
       "tab_size": 2,
       "use_tabs": false,
       "formatter": {
         "command": "air",
-        "args": ["format", "--stdin-file-path", "$FILE"],
+        "args": [
+          "format",
+          "--stdin-file-path",
+          "$FILE"
+        ],
         "stdin": true,
         "timeout_ms": 10000
       },
@@ -21,19 +29,110 @@
     "r": {
       "name": "languageserver",
       "command": "R",
-      "args": ["--no-echo", "--no-restore", "-e", "languageserver::run()"],
+      "args": [
+        "--no-echo",
+        "--no-restore",
+        "-e",
+        "languageserver::run()"
+      ],
       "enabled": true,
       "auto_start": true,
-      "except_features": ["format"]
+      "except_features": [
+        "format"
+      ]
     }
   },
   "keybindings": [
-    { "key": "Enter", "modifiers": ["ctrl"], "action": "corral_run_line" },
-    { "key": "Enter", "modifiers": ["alt"], "action": "corral_run_line" },
-    { "key": "Enter", "modifiers": ["ctrl", "shift"], "action": "corral_run_file" },
-    { "key": "minus", "modifiers": ["alt"], "action": "corral_insert_assign" },
-    { "key": "m", "modifiers": ["ctrl", "shift"], "action": "corral_insert_pipe" },
-    { "key": "c", "modifiers": ["ctrl", "shift"], "action": "toggle_comment" },
-    { "key": "space", "modifiers": ["ctrl"], "action": "lsp_completion" }
-  ]
+    {
+      "key": "r",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "corral_run_line"
+    },
+    {
+      "key": "Enter",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "corral_run_line"
+    },
+    {
+      "key": "Enter",
+      "modifiers": [
+        "alt"
+      ],
+      "action": "corral_run_line"
+    },
+    {
+      "key": "F5",
+      "action": "corral_run_file"
+    },
+    {
+      "key": "Enter",
+      "modifiers": [
+        "ctrl",
+        "shift"
+      ],
+      "action": "corral_run_file"
+    },
+    {
+      "key": "l",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "corral_insert_assign"
+    },
+    {
+      "key": "minus",
+      "modifiers": [
+        "alt"
+      ],
+      "action": "corral_insert_assign"
+    },
+    {
+      "key": "u",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "corral_insert_pipe"
+    },
+    {
+      "key": "m",
+      "modifiers": [
+        "ctrl",
+        "shift"
+      ],
+      "action": "corral_insert_pipe"
+    },
+    {
+      "key": "7",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "toggle_comment"
+    },
+    {
+      "key": "c",
+      "modifiers": [
+        "ctrl",
+        "shift"
+      ],
+      "action": "toggle_comment"
+    },
+    {
+      "key": "space",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "lsp_completion"
+    }
+  ],
+  "default_language": "r",
+  "editor": {
+    "completion_popup_auto_show": true,
+    "quick_suggestions": true,
+    "quick_suggestions_delay_ms": 200,
+    "suggest_on_trigger_characters": true
+  }
 }

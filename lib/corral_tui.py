@@ -66,8 +66,9 @@ def clip(s: str, width: int) -> str:
 class Screen:
     """Alternate screen, no echo, keys one at a time; restores the terminal on exit."""
 
-    def __init__(self, kitty: bool = False) -> None:
+    def __init__(self, kitty: bool = False, mouse: bool = False) -> None:
         self.kitty = kitty
+        self.mouse = mouse
 
     def __enter__(self) -> "Screen":
         self.fd = sys.stdin.fileno()
@@ -75,11 +76,12 @@ class Screen:
         tty.setcbreak(self.fd)
         self.resized = True
         signal.signal(signal.SIGWINCH, self._on_resize)
-        out("\x1b[?1049h\x1b[?25l")
+        out("\x1b[?1049h\x1b[?25l" + ("\x1b[?1000h\x1b[?1006h" if self.mouse else ""))
         return self
 
     def __exit__(self, *exc) -> None:
-        out(("\x1b_Ga=d,q=2\x1b\\" if self.kitty else "") + "\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l")
+        out(("\x1b[?1006l\x1b[?1000l" if self.mouse else "") + ("\x1b_Ga=d,q=2\x1b\\" if self.kitty else "")
+            + "\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l")
         termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
 
     def _on_resize(self, *_):
@@ -102,6 +104,16 @@ class Screen:
         if not ready:
             return None
         data = os.read(self.fd, 64).decode("utf-8", "replace")
+        if data.startswith("\x1b[<"):  # SGR mouse: ESC [ < button ; x ; y M|m
+            try:
+                b, x, y = data[3:-1].split(";")
+                if data.endswith("M"):
+                    return f"mouse:{int(b)}:{int(x)}:{int(y)}"
+            except ValueError:
+                pass
+            return None
+        if data == "\x1b[Z":
+            return "backtab"
         return KEYS.get(data, data if len(data) == 1 else None)
 
 
@@ -255,8 +267,17 @@ def plots_viewer(session_dir: Path, images: str = "symbols", open_browser: Calla
 
 # --------------------------------------------------------------------------- variables
 
-GROUPS = [("data", "DATOS", BLUE, "▦"), ("plot", "GRÁFICOS", ACCENT, "◔"), ("value", "VALORES", DIM, "•"),
-          ("function", "FUNCIONES", VIOLET, "ƒ"), ("other", "OTROS", DIM, "◇")]
+# Tabs of the variables viewer: (id, label, kinds shown, colour, icon per kind)
+TABS = [
+    ("data", "Datos", ["data"]),
+    ("plots", "Gráficos", ["plotobj", "plot"]),
+    ("values", "Valores", ["value"]),
+    ("functions", "Funciones", ["function"]),
+    ("other", "Otros", ["other"]),
+]
+ICONS = {"data": (BLUE, "▦"), "plot": (ACCENT, "◔"), "plotobj": (ACCENT, "◇"),
+         "value": (DIM, "•"), "function": (VIOLET, "ƒ"), "other": (DIM, "◇")}
+SUBTITLES = {"plotobj": "Objetos", "plot": "Historial"}
 MAX_PLOTS = 12
 
 
@@ -272,7 +293,8 @@ def fmt_bytes(n) -> str:
 
 def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], bool] | None,
                 resolve: Callable[[], Path | None] | None = None, keep_open: bool = False,
-                open_plot: Callable[[Path, str], str] | None = None) -> int:
+                open_plot: Callable[[Path, str], str] | None = None,
+                show_object: Callable[[Path, str], str] | None = None) -> int:
     """List the objects of an R session; refreshes as they change.
 
     run_in_console(pane_id, code) runs code in the session's console.
@@ -346,72 +368,133 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
             items = []
         return True
 
-    def visible() -> list[dict]:
+    tab = 0
+    tab_chosen = False  # once the user picks a tab, new objects never move them
+
+    def matches(v: dict) -> bool:
         q = query.lower()
-        shown = [v for v in items + plots if not q or q in v["name"].lower() or q in str(v.get("class", "")).lower()]
-        order = {g[0]: i for i, g in enumerate(GROUPS)}
-        return sorted(shown, key=lambda v: (order.get(v.get("kind"), 9), v.get("order", 0), v["name"].lower()))
+        return not q or q in v["name"].lower() or q in str(v.get("class", "")).lower()
+
+    def in_tab(i: int) -> list[dict]:
+        kinds = TABS[i][2]
+        shown = [v for v in items + plots if v.get("kind") in kinds and matches(v)]
+        return sorted(shown, key=lambda v: (kinds.index(v["kind"]), v.get("order", 0), v["name"].lower()))
+
+    def visible() -> list[dict]:
+        return in_tab(tab)
+
+    tab_spans: list[tuple[int, int]] = []  # columns of each tab label, for mouse clicks
+    LIST_TOP = 5
 
     def render(scr: Screen) -> None:
-        nonlocal top
+        nonlocal top, tab_spans
         cols, rows, _, _ = scr.size()
         wide = cols >= 70
         vs = visible()
         out("\x1b[2J\x1b[H")
         where = " · ".join(x for x in [meta.get("pane_id"), "R " + str(meta.get("r_version", "")) if meta else "",
                                          str(meta.get("cwd", "")).replace(str(Path.home()), "~")] if x)
-        n_vars = sum(1 for v in vs if v.get("kind") != "plot")
-        count = f"{n_vars} objetos" + (f" · {len(plots)} gráficos" if plots else "") if not query else f"{len(vs)} de {len(items) + len(plots)}"
-        title = f"{ACCENT}▸▸{RESET} {TEXT}{BOLD}Variables{RESET}"
-        out(f"\x1b[1;2H{title}  {DIM}{clip(where, max(0, cols - len(count) - 19))}{RESET}")
+        n_vars = sum(1 for v in items if matches(v))
+        count = f"{n_vars} objetos" + (f" · {len(plots)} gráficos" if plots else "")
+        out(f"\x1b[1;2H{ACCENT}▸▸{RESET} {TEXT}{BOLD}Variables{RESET}  {DIM}{clip(where, max(0, cols - len(count) - 19))}{RESET}")
         out(f"\x1b[1;{max(1, cols - len(count))}H{MUTED}{count}{RESET}")
+
+        # Tab bar
+        x = 2
+        tab_spans = []
+        bar = ""
+        for i, (_, label, _kinds) in enumerate(TABS):
+            n = len(in_tab(i))
+            text = f" {label} {n} "
+            if i == tab:
+                piece = f"{SEL_BG}{ACCENT}{BOLD}{text}{RESET}"
+            elif n == 0:
+                piece = f"{DIM}{text}{RESET}"
+            else:
+                piece = f"{MUTED}{text}{RESET}"
+            tab_spans.append((x, x + len(text) - 1))
+            bar += piece + " "
+            x += len(text) + 1
+        out(f"\x1b[3;2H{bar}")
+        underline = tab_spans[tab]
+        out(f"\x1b[4;1H{DIM}{'─' * cols}{RESET}")
+        out(f"\x1b[4;{underline[0]}H{ACCENT}{'━' * (underline[1] - underline[0] + 1)}{RESET}")
 
         if rev is None:
             msg = "Esperando una sesión de R con Corral en la consola…" if resolve else "Esta sesión no publica variables (¿falta jsonlite?)."
-            out(f"\x1b[3;3H{MUTED}{clip(msg, cols - 4)}{RESET}")
-        lines: list[tuple[str, int | None]] = []  # (text, index into vs or None)
-        for kind, label, color, icon in GROUPS:
-            group = [(i, v) for i, v in enumerate(vs) if v.get("kind") == kind]
-            if not group:
-                continue
-            lines.append((f"{DIM}{label}{RESET}", None))
-            for i, v in group:
-                preview = str(v.get("preview") or "")
-                size = fmt_bytes(v.get("size"))
-                meta_txt = (f"{v.get('class') or ''}{' · ' + size if size else ''}" if kind != "plot" else "") if wide else ""
-                right = clip(preview, max(8, cols // 3))
-                name = clip(v["name"], max(6, cols - len(right) - len(meta_txt) - 10))
-                pad = cols - 6 - len(name) - len(right) - (len(meta_txt) + 2 if meta_txt else 0) - 1
-                tail = f"  {DIM}{meta_txt}{RESET}" if meta_txt else ""
-                body = f"{color}{icon}{RESET} {TEXT}{BOLD}{name}{RESET}{' ' * max(1, pad)}{MUTED}{right}{RESET}{tail}"
-                lines.append((body, i))
-            lines.append(("", None))
+            out(f"\x1b[6;3H{MUTED}{clip(msg, cols - 4)}{RESET}")
 
-        area = rows - 4
+        lines: list[tuple[str, int | None]] = []  # (text, index into vs or None)
+        last_kind = None
+        multi = len({v["kind"] for v in vs}) > 1
+        for i, v in enumerate(vs):
+            kind = v.get("kind")
+            if multi and kind != last_kind and kind in SUBTITLES:
+                if lines:
+                    lines.append(("", None))
+                lines.append((f"{DIM}{SUBTITLES[kind].upper()}{RESET}", None))
+            last_kind = kind
+            color, icon = ICONS.get(kind, (DIM, "•"))
+            preview = str(v.get("preview") or "")
+            size = fmt_bytes(v.get("size"))
+            meta_txt = (f"{v.get('class') or ''}{' · ' + size if size else ''}" if kind != "plot" else "") if wide else ""
+            right = clip(preview, max(8, cols // 3))
+            name = clip(v["name"], max(6, cols - len(right) - len(meta_txt) - 10))
+            pad = cols - 6 - len(name) - len(right) - (len(meta_txt) + 2 if meta_txt else 0) - 1
+            tail = f"  {DIM}{meta_txt}{RESET}" if meta_txt else ""
+            body = f"{color}{icon}{RESET} {TEXT}{BOLD}{name}{RESET}{' ' * max(1, pad)}{MUTED}{right}{RESET}{tail}"
+            lines.append((body, i))
+
+        area = rows - LIST_TOP - 1
         sel_line = next((n for n, (_, i) in enumerate(lines) if i == sel), 0)
         if sel_line < top:
             top = max(0, sel_line - 1)
         elif sel_line >= top + area:
             top = sel_line - area + 1
+        row_items.clear()
         for row, (text, i) in enumerate(lines[top: top + area]):
-            y = row + 3
+            y = row + LIST_TOP + 1
+            row_items[y] = i
             if i is not None and i == sel:
                 out(f"\x1b[{y};1H{SEL_BG}\x1b[2K {ACCENT}▸{RESET}{SEL_BG} {text}{SEL_BG}\x1b[K{RESET}")
             else:
                 out(f"\x1b[{y};1H   {text}")
         if rev is not None and not vs:
-            out(f"\x1b[4;4H{MUTED}{'Ningún objeto coincide.' if query else 'El entorno global está vacío.'}{RESET}")
+            empty = "Ningún objeto coincide." if query else f"No hay {TABS[tab][1].lower()} en la sesión."
+            out(f"\x1b[{LIST_TOP + 2};4H{MUTED}{empty}{RESET}")
 
         current = vs[sel] if 0 <= sel < len(vs) else None
         kind = current.get("kind") if current else None
-        action = {"data": "Enter tabla", "plot": "Enter ver gráfico"}.get(kind, "Enter str()")
+        action = {"data": "Enter tabla", "plot": "Enter ver", "plotobj": "Enter dibujar"}.get(kind, "Enter str()")
         hint = (f"/{query}▏  Enter o Esc para terminar" if typing
-                else status or f"↑↓ mover · {action} · / buscar" + ("" if keep_open else " · q salir"))
+                else status or f"←/→ pestañas · ↑↓ mover · {action} · / buscar" + ("" if keep_open else " · q salir"))
         out(f"\x1b[{rows};1H\x1b[2K {DIM}{clip(hint, cols - 2)}{RESET}")
+
+    row_items: dict[int, int | None] = {}
+
+    def first_useful_tab() -> int:
+        for i in range(len(TABS)):
+            if in_tab(i):
+                return i
+        return 0
+
+    def act(v: dict) -> str:
+        """Enter on an item. Returns a status message."""
+        if v.get("kind") == "plot" and open_plot and session_dir:
+            return f"{v['name']}: abierto en {open_plot(session_dir, v['plot_id'])}"
+        if v.get("kind") == "plotobj" and show_object and session_dir:
+            return f"{v['name']}: {show_object(session_dir, v['name'])}"
+        if run_in_console and meta.get("pane_id"):
+            name = "`" + v["name"].replace("`", "\\`") + "`"
+            code = f"View({name})" if v.get("kind") == "data" else f"str({name})"
+            ok = run_in_console(meta["pane_id"], code)
+            return f"{code} enviado a la consola" if ok else "no pude enviar a la consola"
+        return ""
 
     load()
     load_plots()
-    with Screen() as scr:
+    tab = first_useful_tab()
+    with Screen(mouse=True) as scr:
         last_check = 0.0
         while True:
             if scr.resized:
@@ -425,6 +508,8 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                     try:
                         changed = load()
                         if load_plots() or changed:
+                            if not tab_chosen and not visible():
+                                tab = first_useful_tab()
                             sel = min(sel, max(0, len(visible()) - 1))
                             render(scr)
                     except OSError:
@@ -441,10 +526,38 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                 sel = 0
                 render(scr)
                 continue
+            if key.startswith("mouse:"):
+                _, button, mx, my = key.split(":")
+                button, mx, my = int(button), int(mx), int(my)
+                if button == 64:      # wheel up
+                    sel = max(sel - 3, 0)
+                elif button == 65:    # wheel down
+                    sel = min(sel + 3, len(vs) - 1)
+                elif button == 0 and my == 3:
+                    for i, (a, b) in enumerate(tab_spans):
+                        if a <= mx <= b:
+                            tab, sel, top, tab_chosen = i, 0, 0, True
+                elif button == 0 and row_items.get(my) is not None:
+                    clicked = row_items[my]
+                    if clicked == sel and 0 <= sel < len(vs):
+                        status = "…"
+                        render(scr)
+                        status = act(vs[sel])
+                        if not keep_open:
+                            return 0
+                    sel = clicked
+                render(scr)
+                continue
             if key in ("q", "quit") or (key == "esc" and not keep_open):
                 return 0
             if key == "esc":
                 query = ""
+            elif key in ("right", "l", "\t"):
+                tab, sel, top, tab_chosen = (tab + 1) % len(TABS), 0, 0, True
+            elif key in ("left", "h", "backtab"):
+                tab, sel, top, tab_chosen = (tab - 1) % len(TABS), 0, 0, True
+            elif key in "12345" and len(key) == 1:
+                tab, sel, top, tab_chosen = int(key) - 1, 0, 0, True
             elif key in ("down", "j"):
                 sel = min(sel + 1, len(vs) - 1)
             elif key in ("up", "k"):
@@ -455,19 +568,10 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                 sel = max(sel - 10, 0)
             elif key == "/":
                 typing, query, sel = True, "", 0
-            elif key == "enter" and 0 <= sel < len(vs) and vs[sel].get("kind") == "plot" and open_plot and session_dir:
-                status = "abriendo el gráfico…"
+            elif key == "enter" and 0 <= sel < len(vs):
+                status = "…"
                 render(scr)
-                where = open_plot(session_dir, vs[sel]["plot_id"])
+                status = act(vs[sel])
                 if not keep_open:
                     return 0
-                status = f"{vs[sel]['name']}: abierto en {where}"
-            elif key == "enter" and 0 <= sel < len(vs) and run_in_console and meta.get("pane_id"):
-                v = vs[sel]
-                name = "`" + v["name"].replace("`", "\\`") + "`"
-                code = f"View({name})" if v.get("kind") == "data" else f"str({name})"
-                ok = run_in_console(meta["pane_id"], code)
-                if not keep_open:
-                    return 0
-                status = f"{code} enviado a la consola" if ok else "no pude enviar a la consola"
             render(scr)
