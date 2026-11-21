@@ -13,7 +13,7 @@ The user works in herdr with an R console in a pane labeled `corral:r`. `corral 
 test "${HERDR_ENV:-}" = 1 && corral eval --check
 ```
 
-Exit 0 prints the console and session as JSON. Anything else means there is no console: tell the user they can open one with `ctrl+b a` (workspace layout) or mark an R pane with `ctrl+b m`. Fall back to `Rscript` only if they agree.
+Exit 0 prints the console and session as JSON. Anything else means there is no console, or R runs there without Corral active (Corral is opt-in per R session). Tell the user they can open one with `ctrl+b a` (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activar()` in that R). Fall back to `Rscript` only if they agree.
 
 ## Look before you run
 
@@ -48,7 +48,7 @@ Exit codes:
 
 ## Plots
 
-Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it with `ctrl+b f`.
+Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it in Mirador (it opens on the first plot of a session; `ctrl+b f` brings it to the front).
 
 ## Working in someone else's session
 

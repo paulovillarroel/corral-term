@@ -394,8 +394,9 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         out("\x1b[2J\x1b[H")
         where = " · ".join(x for x in [meta.get("pane_id"), "R " + str(meta.get("r_version", "")) if meta else "",
                                          str(meta.get("cwd", "")).replace(str(Path.home()), "~")] if x)
+        # Objects in the environment only: drawings in the plot history are not objects.
         n_vars = sum(1 for v in items if matches(v))
-        count = f"{n_vars} objetos" + (f" · {len(plots)} gráficos" if plots else "")
+        count = f"{n_vars} objeto{'s' if n_vars != 1 else ''}"
         out(f"\x1b[1;2H{ACCENT}▸▸{RESET} {TEXT}{BOLD}Variables{RESET}  {DIM}{clip(where, max(0, cols - len(count) - 19))}{RESET}")
         out(f"\x1b[1;{max(1, cols - len(count))}H{MUTED}{count}{RESET}")
 
@@ -404,11 +405,12 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         tab_spans = []
         bar = ""
         for i, (_, label, _kinds) in enumerate(TABS):
-            n = len(in_tab(i))
+            shown = in_tab(i)
+            n = sum(1 for v in shown if v.get("kind") != "plot")  # count objects, not history
             text = f" {label} {n} "
             if i == tab:
                 piece = f"{SEL_BG}{ACCENT}{BOLD}{text}{RESET}"
-            elif n == 0:
+            elif not shown:
                 piece = f"{DIM}{text}{RESET}"
             else:
                 piece = f"{MUTED}{text}{RESET}"

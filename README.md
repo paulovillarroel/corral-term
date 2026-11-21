@@ -4,7 +4,7 @@ Corral junta en la terminal lo que hoy obliga a abrir Positron: escribir un scri
 
 Todo ocurre dentro de herdr. Los visores aparecen encima de la terminal cuando los pides y se cierran con `q` o `Esc`, así que nada ocupa espacio mientras trabajas. Si quieres ver algo en grande, **Mirador** muestra lo mismo en el navegador.
 
-Estado: versión 0.1.0. La consola es R normal; la conexión con el kernel Ark viene después.
+Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola es R normal; la conexión con el kernel Ark viene después.
 
 ## Piezas
 
@@ -62,13 +62,28 @@ Todo lo que tiene estado vive en un panel de herdr (la sesión de R, los agentes
    ln -s ~/workspace/personal/corral-term/fresh/plugins/corral.ts ~/.config/fresh/plugins/corral.ts
    ```
 
-7. Revisa que todo esté en orden:
+7. VisiData, para explorar tablas con orden, filtros y resúmenes:
+
+   ```bash
+   uv tool install visidata --with pyarrow
+   ```
+
+8. Revisa que todo esté en orden:
 
    ```bash
    corral doctor
    ```
 
-En R necesitas `httpgd` (gráficos), `jsonlite` (variables) y `arrow` o `nanoparquet` (tablas). En el sistema, `chafa` para dibujar gráficos en la terminal y DuckDB para las tablas.
+En R necesitas `httpgd` (gráficos), `jsonlite` (variables), `arrow` o `nanoparquet` (tablas), `languageserver` (autocompletado) y `rlang` (para no dibujar dos veces el mismo objeto gráfico). En el sistema, DuckDB y VisiData para las tablas, y `chafa` solo si usas una terminal que dibuje imágenes.
+
+### Desinstalar
+
+```bash
+herdr plugin unlink corral
+rm ~/.local/bin/corral ~/.claude/skills/corral-r ~/.config/fresh/plugins/corral.ts
+```
+
+Después borra la línea de Corral de `~/.Rprofile` y el bloque `# Corral` de `~/.config/herdr/config.toml`.
 
 ## Cuándo actúa Corral
 
@@ -97,7 +112,35 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | Abrir Mirador | `ctrl+b shift+m`, o `corral mirador`. |
 | Abrir `quarto preview` | `ctrl+click` sobre la URL `http://localhost:...` en herdr. |
 
-Desde la terminal: `corral send 'código'`, `... | corral send`, `corral plots`, `corral vars`, `corral view archivo.parquet`.
+### Atajos de herdr
+
+| Atajo | Acción |
+|---|---|
+| `ctrl+b a` | Abrir el espacio de trabajo de Corral |
+| `ctrl+b t` | Alternar Script, Consola y Ambos |
+| `ctrl+b enter` | Enviar a R la selección o el portapapeles |
+| `ctrl+b f` | Ver el último gráfico en Mirador |
+| `ctrl+b d` | Ver las variables encima de la terminal |
+| `ctrl+b m` | Usar este panel como consola de R y activar Corral en él |
+| `ctrl+b shift+m` | Abrir Mirador |
+
+### Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `corral layout` | Abre el espacio de trabajo (`--shell` agrega una shell, `--editor ''` sin script, `--agent ''` sin Claude). |
+| `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. |
+| `corral toggle [script\|consola\|ambos]` | Reparte el espacio entre script y consola; sin argumento, rota. |
+| `corral console` | Marca el panel actual como consola de R y activa Corral si hay un R abierto. |
+| `corral send 'código'` | Envía código a la consola. También lee stdin, la selección o el portapapeles; `--source` ejecuta con `source()`. |
+| `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes). `--file`, `--timeout`, `--check`. |
+| `corral vars` | Variables encima de la terminal; `--split` abre el panel fijo, `--json` las imprime. |
+| `corral plots` | Último gráfico (en Mirador en Windows). |
+| `corral view archivo` | Abre una tabla (parquet, csv, json) en VisiData. |
+| `corral mirador` | Abre Mirador; `--stop` lo detiene, `--url` muestra la dirección. |
+| `corral open [url]` | Abre una URL local en el navegador. |
+| `corral config [clave] [valor]` | Lee o cambia la configuración: `images`, `mirador_window`, `mirador_size`. |
+| `corral doctor` | Revisa dependencias, plugin, Mirador y qué terminal detecta. |
 
 ### El script
 
@@ -141,14 +184,13 @@ Si la consola está ocupada, `corral eval` espera hasta 20 segundos (`--wait-idl
 
 ### Gráficos en la terminal
 
-En Windows, los gráficos no se pueden ver nítidos dentro de herdr: las terminales nativas (Warp, WezTerm, Windows Terminal) se conectan con WSL a través de ConPTY, que descarta las secuencias de imágenes, y herdr solo deja pasar el protocolo de Kitty. Por eso en Windows los gráficos van a Mirador. Si algún día usas una terminal que sí los dibuje:
+En Windows, los gráficos no se pueden ver nítidos dentro de herdr. herdr solo deja pasar imágenes con el protocolo de Kitty, y las terminales nativas de Windows (Warp, WezTerm, Windows Terminal) se conectan con WSL a través de ConPTY, que descarta esas secuencias. Lo probamos: WezTerm en Windows no dibujó ni Kitty ni Sixel. Por eso en Windows los gráficos van a Mirador.
 
-- Aprieta `o` en el visor y se abren en el navegador.
-- O abre herdr en una terminal que soporte el protocolo de imágenes de Kitty, como WezTerm. herdr solo deja pasar ese protocolo; ni Windows Terminal ni Warp lo dibujan. Corral revisa en qué terminal está abierta cada ventana de herdr y usa imágenes nítidas cuando puede (`corral doctor` muestra qué detectó). Para forzarlo: `corral config images kitty`. En [`wezterm/wezterm.lua`](wezterm/wezterm.lua) hay una configuración de WezTerm que abre WSL directamente; cópiala a `C:\Users\<usuario>\.wezterm.lua`.
+En Linux o macOS, con una terminal que dibuje Kitty (kitty, WezTerm, Ghostty), `ctrl+b f` muestra los gráficos dentro de herdr. Corral detecta en qué terminal está abierta cada ventana de herdr (`corral doctor` lo muestra); para forzarlo, `corral config images kitty`. [`wezterm/wezterm.lua`](wezterm/wezterm.lua) queda como referencia de configuración para WezTerm con WSL.
 
 ## Mirador
 
-El visor de gráficos en el navegador: los gráficos al tamaño de la ventana con historial, ← y →, y descarga en SVG o PNG; además, los objetos de la sesión de R y las tablas con orden, filtro y un resumen por columna. Cuando la ventana es angosta, oculta la barra lateral y deja todo el espacio al gráfico.
+El visor de gráficos en el navegador: los gráficos al tamaño de la ventana con historial, ← y →, y descarga en SVG o PNG; además, las tablas con orden, filtro y un resumen por columna. La barra lateral con los objetos de R viene cerrada; se abre con el ícono de la esquina o con la tecla `v`, y Mirador recuerda tu elección. En ventanas angostas siempre se oculta.
 
 Corral abre cada ventana nueva de Mirador sin maximizar, a la derecha de la pantalla, y la trae al frente. Para cambiarlo:
 
@@ -182,6 +224,18 @@ Opciones de R:
 | `options(corral.open_plots = FALSE)` | El primer gráfico no avisa ni abre nada. |
 | `options(corral.httpgd = FALSE)` | Deja el dispositivo gráfico por defecto de R. |
 | `options(corral.vars = FALSE)` | No publica las variables. |
+| `options(corral.always = TRUE)` | Activa Corral en todos los R, no solo en la consola del layout. Va antes de la línea de Corral en `.Rprofile`. |
+
+## Problemas comunes
+
+| Síntoma | Qué hacer |
+|---|---|
+| El panel de variables dice "Esperando una sesión de R" o queda vacío | Ese R no tiene Corral activo. En el panel de la consola, `ctrl+b m`, o `corral_activar()` en R. |
+| Los atajos del script no hacen nada | Fresh sigue con una versión anterior cargada: `Ctrl+Q`, `fresh --cmd daemon kill orchestrator` y vuelve a abrir `fresh`. |
+| No aparece el autocompletado | El archivo tiene que estar guardado como `.R` y el estado de Fresh debe decir `LSP (on)`. Si la carpeta no es de confianza, márcala desde el estado (`Confiable`). |
+| Mirador no se abre | `corral doctor` muestra si está corriendo y qué navegador usa. `corral mirador --url` da la dirección para abrirla a mano. |
+| `ctrl+b enter` dice "Nada que enviar" | Selecciona el código con el mouse (herdr lo copia) o cópialo con `Ctrl+C` antes. |
+| Claude abre su propio R en vez de usar tu consola | `corral eval --check` debe responder con la consola. Si falla, activa Corral en ese R con `ctrl+b m`. |
 
 ## Límites conocidos
 
