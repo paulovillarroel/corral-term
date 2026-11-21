@@ -461,11 +461,32 @@ def show_console(lang: str, start: bool = True, cwd: str | None = None) -> tuple
     return target, started
 
 
+SHELLS = ("bash", "zsh", "fish", "sh", "dash")
+
+
+def ensure_running(pane: str, lang: str) -> bool:
+    """If the console was quit (q() or exit) and only its shell is left, start it again."""
+    if any(s.get("pane_id") == pane for s in r_sessions()):
+        return False
+    try:
+        procs = herdr("pane", "process-info", "--pane", pane).get("process_info", {}).get("foreground_processes", [])
+    except CorralError:
+        return False
+    names = [str(p.get("name", "")) for p in procs]
+    # Only a shell waiting at an empty prompt: a command just typed there is still starting.
+    if names and all(n in SHELLS for n in names) and re.search(r"[$#%❯]\s*$", last_line(pane)):
+        herdr("pane", "run", pane, console_command(lang))
+        return True
+    return False
+
+
 def cmd_switch(args: argparse.Namespace) -> None:
     """The console spot shows R or Python (ctrl+b y); without a language, the other one."""
     current = active_lang()
     lang = args.lang or ("python" if current == "r" else "r")
-    _, started = show_console(lang)
+    pane, started = show_console(lang)
+    if pane and not started:
+        started = ensure_running(pane, lang)
     notify("Consola", LANG_NAMES[lang] + (": iniciando (la primera vez uv prepara el entorno)" if started else ""))
 
 
@@ -714,6 +735,8 @@ def cmd_send(args: argparse.Namespace) -> None:
     if not pane:
         notify("Sin consola", f"No hay panel {console_label(lang)}. Usa 'corral layout' (ctrl+b a)")
         sys.exit(1)
+    if not started:  # just opened: it is still starting, not quit
+        started = ensure_running(pane, lang)
     if started:
         wait_for_prompt(pane, 180, lang)
     if args.source:
@@ -1326,6 +1349,8 @@ def cmd_eval(args: argparse.Namespace) -> None:
         raise CorralError("no hay código que ejecutar")
 
     pane, started = show_console(lang)
+    if not started:  # just opened: it is still starting, not quit
+        started = ensure_running(pane, lang)
     if started:
         wait_for_prompt(pane, 180, lang)
     pane, session = console_session(lang)

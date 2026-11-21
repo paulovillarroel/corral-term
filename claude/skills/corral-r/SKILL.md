@@ -58,7 +58,7 @@ Exit codes:
 
 ## Plots
 
-Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it in Mirador (it opens on the first plot of a session; `ctrl+b f` brings it to the front). In Python, matplotlib figures (and plotnine or seaborn, which draw with it) go to Mirador at the end of each request; don't call `plt.savefig` to show them.
+Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it in Mirador (it opens on the first plot of a session; `ctrl+b f` brings it to the front). In Python, matplotlib figures (and plotnine or seaborn, which draw with it) go to Mirador at the end of each request; don't call `plt.savefig` to show them. The current figure stays open between requests, so later code can add to it and Mirador redraws the same plot: start each new plot with `plt.subplots()` or `plt.figure()`.
 
 Every drawing stays in the user's plot history. When you redraw to fix a plot your previous `corral eval` drew (labels overlapping, wrong scale, a typo), add `--reemplazar`: the new version replaces your draft, so the user sees one plot instead of near-identical copies.
 

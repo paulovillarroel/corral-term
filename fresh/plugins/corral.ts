@@ -451,8 +451,8 @@ registerHandler("corral_after_save", async function (args: { path: string; buffe
 editor.on("after_file_save", "corral_after_save");
 editor.setInterval(1000, "corral_show_explorer");
 
-editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola de R", "corral_run_line", null);
-editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola de R", "corral_run_file", null);
+editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola (R o Python, según el archivo)", "corral_run_line", null);
+editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola (R o Python, según el archivo)", "corral_run_file", null);
 editor.registerCommand("Corral: guardar", "Guarda; en un borrador temporal, pregunta dónde", "corral_save", null);
 editor.registerCommand("Corral: insertar <-", "Inserta el operador de asignación", "corral_insert_assign", null);
 editor.registerCommand("Corral: insertar |>", "Inserta el pipe nativo", "corral_insert_pipe", null);

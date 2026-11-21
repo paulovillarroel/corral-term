@@ -151,6 +151,15 @@ def describe(name: str, x) -> dict:
             "size": size if kind != "plotobj" else None, "hash": fingerprint}
 
 
+def has_content(fig) -> bool:
+    """Something drawn: a figure that only has empty axes (plt.subplots()) waits for data."""
+    try:
+        return bool(fig.images or fig.texts or getattr(fig, "_suptitle", None)
+                    or any(ax.has_data() for ax in fig.axes))
+    except Exception:
+        return bool(getattr(fig, "axes", None))
+
+
 def figure_of(x):
     """The matplotlib figure for a plot object, and whether we created it."""
     mod = type(x).__module__
@@ -188,7 +197,8 @@ class PlotServer:
     def state(self) -> dict:
         return {"upid": self.upid, "hsize": len(self.pages), "active": True}
 
-    def add(self, fig) -> str:
+    @staticmethod
+    def render(fig) -> tuple[bytes, bytes | None]:
         png = io.BytesIO()
         fig.savefig(png, format="png", dpi=144, bbox_inches="tight", facecolor=fig.get_facecolor())
         svg = io.BytesIO()
@@ -197,15 +207,40 @@ class PlotServer:
             svg_bytes = svg.getvalue() if svg.tell() < 4_000_000 else None  # huge scatter plots: PNG only
         except Exception:
             svg_bytes = None
+        # savefig leaves the figure marked as changed; only real changes should redraw it.
+        fig.stale = False
+        return png.getvalue(), svg_bytes
+
+    def add(self, fig) -> str:
+        png, svg = self.render(fig)
         with self.lock:
             pid = str(self.next_id)
             self.next_id += 1
-            self.pages.append({"id": pid, "png": png.getvalue(), "svg": svg_bytes})
+            self.pages.append({"id": pid, "png": png, "svg": svg})
             self.upid += 1
             first = len(self.pages) == 1 and self.next_id == 1
         if first:
             self.session.first_plot()
         return pid
+
+    def update(self, pid: str, fig) -> bool:
+        """Draw a figure again over its page (like adding to a plot in R's httpgd)."""
+        png, svg = self.render(fig)
+        with self.lock:
+            for page in self.pages:
+                if page["id"] == pid:
+                    page.update(png=png, svg=svg)
+                    self.upid += 1
+                    return True
+        return False
+
+    def has(self, pid: str | None) -> bool:
+        with self.lock:
+            return pid is not None and any(p["id"] == pid for p in self.pages)
+
+    def number(self, pid: str) -> int:
+        with self.lock:
+            return next((i + 1 for i, p in enumerate(self.pages) if p["id"] == pid), 0)
 
     def find(self, query: dict) -> int | None:
         with self.lock:
@@ -347,13 +382,13 @@ class Session:
     def after_cell(self, result=None) -> None:
         try:
             self.flush_figures()
-            # Variables holding a figure drawn in this cell: Enter on them shows that drawing.
+            # Variables holding a figure that has a page: Enter on them shows that drawing.
             drawn = {}
             for name, value in list(self.shell.user_ns.items()):
                 if name.startswith("_") or not is_plot(value) or type(value).__module__.startswith("plotnine"):
                     continue
-                pid = self.rendered.get(id(getattr(value, "figure", None) or value))
-                if pid is not None:
+                pid = getattr(getattr(value, "figure", None) or value, "_corral_page", None)
+                if self.plots.has(pid):
                     drawn[str(id(value))] = pid
             value = getattr(result, "result", None)
             if value is not None and is_plot(value) and len(self.plots.pages) > self.pages_before:
@@ -369,23 +404,41 @@ class Session:
 
     # ---- figures
 
-    def add_figure(self, fig) -> str | None:
-        if id(fig) in self.rendered:
-            return None
-        pid = self.plots.add(fig)
+    def add_figure(self, fig, force: bool = False) -> str | None:
+        """Show a figure in Mirador: a new page the first time, the same page when it changed.
+
+        The page is remembered on the figure itself, so adding a title or a legend
+        in a later line redraws that plot instead of making another one.
+        """
+        if id(fig) in self.rendered and not force:
+            return self.rendered[id(fig)]
+        pid = getattr(fig, "_corral_page", None)
+        if self.plots.has(pid):
+            if force or fig.stale:
+                self.plots.update(pid, fig)
+        else:
+            pid = self.plots.add(fig)
+            fig._corral_page = pid
         self.rendered[id(fig)] = pid
         return pid
 
-    def flush_figures(self) -> None:
-        """Send the open pyplot figures to Mirador and close them (like Jupyter's inline plots)."""
+    def flush_figures(self, close_all: bool = False) -> None:
+        """Send the open pyplot figures that have something drawn to Mirador.
+
+        The current figure stays open, so the next lines can keep adding to it
+        (like Positron); older ones are closed. plt.show() closes them all.
+        """
         plt = sys.modules.get("matplotlib.pyplot")
         if plt is None:
             return
-        for num in list(plt.get_fignums()):
-            fig = plt.figure(num)
-            if fig.axes or fig.texts or fig.images:
+        from matplotlib._pylab_helpers import Gcf
+        active = Gcf.get_active()
+        for manager in list(Gcf.get_all_fig_managers()):
+            fig = manager.canvas.figure
+            if has_content(fig):
                 self.add_figure(fig)
-            plt.close(fig)
+            if close_all or manager is not active:
+                plt.close(fig)
 
     def remember(self, pairs: dict[str, str]) -> None:
         """Which drawing each plot object made (by id), so the variables pane can show it again."""
@@ -476,7 +529,7 @@ def show_plot(obj) -> None:
     session = _require()
     fig, created = figure_of(obj)
     session.rendered.pop(id(fig), None)
-    pid = session.add_figure(fig)
+    pid = session.add_figure(fig, force=True)
     if pid is not None:
         session.remember({str(id(obj)): pid})
     if created:
@@ -558,8 +611,9 @@ def corral_eval(rid: str) -> None:
 
 
 def flush_figures() -> None:
+    """plt.show(): the figures go to Mirador and are closed."""
     if _session:
-        _session.flush_figures()
+        _session.flush_figures(close_all=True)
 
 
 def _require() -> Session:
@@ -602,7 +656,8 @@ def activate(shell=None) -> None:
     # A figure as the last value of a cell goes to Mirador; the console says which.
     def figure_text(fig, p, cycle):
         pid = _session.add_figure(fig)
-        p.text(f"<Figure en Mirador{' (gráfico ' + str(int(pid) + 1) + ')' if pid is not None else ''}>")
+        n = _session.plots.number(pid) if pid is not None else 0
+        p.text(f"<Figure en Mirador{f' (gráfico {n})' if n else ''}>")
 
     try:
         shell.display_formatter.formatters["text/plain"].for_type_by_name("matplotlib.figure", "Figure", figure_text)
