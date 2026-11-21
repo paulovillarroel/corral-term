@@ -50,6 +50,14 @@ Exit codes:
 
 Each new plot is saved as PNG and reported as `[corral] gráfico N guardado en <path>`. Read that file to see the plot before describing or adjusting it. The user sees it in Mirador (it opens on the first plot of a session; `ctrl+b f` brings it to the front).
 
+Every drawing stays in the user's plot history. When you redraw to fix a plot your previous `corral eval` drew (labels overlapping, wrong scale, a typo), add `--reemplazar`: the new version replaces your draft, so the user sees one plot instead of near-identical copies.
+
+```bash
+corral eval --reemplazar 'print(grafico)'
+```
+
+Don't use it when the user asked for a new or different plot, or wants to compare versions.
+
 ## The user's script
 
 The Script pane above the console holds a temporary scratch file that is thrown away when the layout closes, unless saved. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't edit, cite or clean them up. Its current text, unsaved edits included:

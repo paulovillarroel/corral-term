@@ -22,18 +22,20 @@
         "stdin": true,
         "timeout_ms": 10000
       },
-      "format_on_save": true
+      "format_on_save": true,
+      "auto_indent": true,
+      "indent": {
+        "increase_indent_pattern": "[\\{\\(\\[]\\s*$",
+        "decrease_indent_pattern": "^\\s*[\\}\\)\\]]"
+      }
     }
   },
   "lsp": {
     "r": {
       "name": "languageserver",
-      "command": "R",
+      "command": "corral",
       "args": [
-        "--no-echo",
-        "--no-restore",
-        "-e",
-        "languageserver::run()"
+        "_lsp"
       ],
       "enabled": true,
       "auto_start": true,

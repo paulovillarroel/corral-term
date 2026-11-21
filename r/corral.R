@@ -164,9 +164,40 @@ local({
                       file.path(session_dir, "vars.json"))
   }
 
+  # The httpgd device (it shows up as "unigd" in dev.list() since httpgd 2).
+  plot_device <- function() {
+    d <- grDevices::dev.list()
+    d[names(d) %in% c("unigd", "httpgd")][1]
+  }
+
+  # A plot object printed by hand (typing its name, Ctrl+R in the script):
+  # remember which drawing it made, so opening it from the variables pane
+  # shows that drawing instead of drawing it a second time.
+  plot_pages <- 0L
+  remember_plot <- function(value, ok) {
+    dev <- plot_device()
+    if (is.na(dev) || !requireNamespace("unigd", quietly = TRUE)) {
+      plot_pages <<- 0L
+      return(invisible())
+    }
+    pages <- unigd::ugd_state(dev)$hsize
+    grew <- pages > plot_pages
+    plot_pages <<- pages
+    if (!isTRUE(ok) || !grew || !inherits(value, plot_classes) ||
+        !requireNamespace("rlang", quietly = TRUE)) return(invisible())
+    f <- file.path(session_dir, "plotobj-map.json")
+    drawn <- if (file.exists(f)) tryCatch(jsonlite::read_json(f), error = function(e) list()) else list()
+    drawn[[rlang::hash(value)]] <- as.character(unigd::ugd_id(0, which = dev)$id)
+    write_json_atomic(drawn, f)
+  }
+
   if (has_json && !isFALSE(getOption("corral.vars"))) {
     try(snapshot(), silent = TRUE)
-    addTaskCallback(function(...) { try(snapshot(), silent = TRUE); TRUE }, name = "corral")
+    addTaskCallback(function(expr, value, ok, visible) {
+      try(remember_plot(value, ok), silent = TRUE)
+      try(snapshot(), silent = TRUE)
+      TRUE
+    }, name = "corral")
     reg.finalizer(env, function(e) unlink(session_dir, recursive = TRUE), onexit = TRUE)
   }
 
@@ -288,7 +319,7 @@ local({
 
   env$corral_plots <- function() {
     if (!requireNamespace("httpgd", quietly = TRUE)) stop("install httpgd first", call. = FALSE)
-    if (!"httpgd" %in% names(grDevices::dev.list())) return(start_httpgd())
+    if (is.na(plot_device())) return(start_httpgd())
     url <- httpgd::hgd_url()
     open_viewer(url, force = TRUE)
     invisible(url)

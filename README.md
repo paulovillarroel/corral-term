@@ -88,7 +88,7 @@ Después borra la línea de Corral de `~/.Rprofile` y el bloque `# Corral` de `~
 
 ### Salir de Corral
 
-`ctrl+b shift+c` cierra el script, la consola y las variables, y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar queda unos días en la carpeta `.corral/` del proyecto por si lo necesitas. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
+`ctrl+b shift+c` cierra el script, la consola y las variables (también el que esté oculto por `ctrl+b t`), y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar queda unos días en la carpeta `.corral/` del proyecto por si lo necesitas. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
 
 ## Cuándo actúa Corral
 
@@ -105,8 +105,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 
 | Quieres | Haces |
 |---|---|
-| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda (49 % del ancho) y, a la derecha, el script, la consola de R y las variables (el script y la consola se reparten el 73 % del alto, 57/43, y las variables el 27 % restante). El editor abre con el explorador de carpetas a la vista. Con `corral layout --shell` agrega una shell junto a las variables; `--ratio` cambia el ancho de Claude. |
-| Alternar script y consola | `ctrl+b t` rota entre **Script** (el editor ocupa casi todo y la consola muestra sus últimas líneas), **Consola** (al revés) y **Ambos**. El cursor pasa al panel que se agranda. También `corral toggle script\|consola\|ambos`. En un layout que ya tenías: `corral script`. |
+| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda (52 % del ancho) y, a la derecha, el script, la consola de R y las variables (el script y la consola se reparten el 73 % del alto, 57/43, y las variables el 27 % restante). El editor abre con el explorador de carpetas a la vista. Con `corral layout --shell` agrega una shell junto a las variables; `--ratio` cambia el ancho de Claude. |
+| Expandir el script o la consola | `ctrl+b t` expande el panel donde estás (script o consola) a toda la zona que comparten, sobre las variables. Otra vez `ctrl+b t` y vuelven los dos, con la misma proporción. herdr no achica un panel a menos del 10 %, así que el otro pasa a una pestaña propia, "consola (oculta)" o "script (oculto)", donde sigue corriendo: Ctrl+R y Claude siguen ejecutando en la consola aunque no la veas. También `corral toggle script\|consola\|ambos`. En un layout que ya tenías: `corral script`. |
 | Ver tus objetos y gráficos mientras trabajas | El panel de variables se actualiza después de cada comando, tuyo o de Claude, y sigue a la consola aunque reinicies R. Lista tus objetos, incluidos los gráficos guardados en variables (`ggplot`, `lattice`, `patchwork`). Enter sobre un data frame abre la tabla; sobre un objeto gráfico lo dibuja y lo abre en Mirador; sobre otro objeto corre `str()`. El historial de dibujos no aparece aquí: está en Mirador (`ctrl+b f`). En un layout que ya tenías: `corral vars --split`. |
 | Correr código en R | Selecciona texto con el mouse en cualquier panel (por ejemplo, código que escribió Claude); herdr lo copia solo. Después `ctrl+b enter`. Si no hay selección, se envía lo que tengas en el portapapeles. |
 | Ver los gráficos | El primer gráfico de cada sesión abre Mirador solo, como ventana normal a la derecha de la pantalla y al frente. Después se actualiza sin robarte el foco. `ctrl+b f` lo trae al frente en el último gráfico. En una terminal que dibuje imágenes (ver abajo), `ctrl+b f` muestra el gráfico dentro de herdr. |
@@ -123,7 +123,7 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 |---|---|
 | `ctrl+b a` | Abrir el espacio de trabajo de Corral |
 | `ctrl+b shift+c` | Cerrar Corral: cierra script, consola y variables, y deja a Claude como panel normal |
-| `ctrl+b t` | Alternar Script, Consola y Ambos |
+| `ctrl+b t` | Expandir el script o la consola (el panel donde estás); otra vez, ambos |
 | `ctrl+b enter` | Enviar a R la selección o el portapapeles |
 | `ctrl+b f` | Ver el último gráfico en Mirador |
 | `ctrl+b d` | Ver las variables encima de la terminal |
@@ -137,10 +137,10 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | `corral layout` | Abre el espacio de trabajo (`--shell` agrega una shell, `--editor ''` sin script, `--agent ''` sin Claude). |
 | `corral close` | Cierra los paneles de Corral de la pestaña (script, consola, variables) y deja el resto, Claude incluido. La sesión de R se cierra con su panel. |
 | `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. `--leer` muestra el borrador actual; `--guardar ruta.R` lo guarda (con `--forzar` reemplaza). |
-| `corral toggle [script\|consola\|ambos]` | Reparte el espacio entre script y consola; sin argumento, rota. |
+| `corral toggle [script\|consola\|ambos]` | Expande el script o la consola, o vuelve a mostrar ambos; sin argumento, expande el panel donde estás o vuelve a ambos. |
 | `corral console` | Marca el panel actual como consola de R y activa Corral si hay un R abierto. |
 | `corral send 'código'` | Envía código a la consola. También lee stdin, la selección o el portapapeles; `--source` ejecuta con `source()`. |
-| `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes). `--file`, `--timeout`, `--check`. |
+| `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes). `--file`, `--timeout`, `--check`; `--reemplazar` hace que sus gráficos reemplacen a los de la petición anterior. |
 | `corral vars` | Variables encima de la terminal; `--split` abre el panel fijo, `--json` las imprime. |
 | `corral plots` | Último gráfico (en Mirador en Windows). |
 | `corral view archivo` | Abre una tabla (parquet, csv, json) en VisiData. |
@@ -155,7 +155,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 El panel de script es [Fresh](https://getfresh.dev), un editor de terminal sin modos, con los atajos de VS Code (y por lo tanto casi los de Positron), menús y mouse. Para R tiene:
 
 - **Autocompletado** en un menú que aparece solo mientras escribes; ayuda al pasar sobre una función; ir a la definición. Lo da el paquete `languageserver`.
-- **Diagnósticos** de lintr en la línea donde está el problema.
+- **Diagnósticos** como en Positron: solo problemas reales (un objeto que no existe, `x == NA`, un argumento repetido), con las reglas *correctness* de lintr. El estilo no se marca porque Air lo arregla al guardar. Si el proyecto tiene su propio `.lintr` (o tienes uno en `~/.lintr`), se usa ese. La configuración de Corral está en `lib/corral.lintr`, y Fresh arranca el servidor de lenguaje con `corral _lsp` para aplicarla.
+- **Indentación mientras escribes**, igual que la deja Air: un nivel dentro de un paréntesis abierto, un nivel para las líneas que siguen a `|>`, `%>%`, `+` u otro operador, y de vuelta al margen cuando la instrucción termina.
 - **Formato con Air** cada vez que guardas (`Ctrl+S`).
 
 Atajos de Corral. Desde Warp, a través de herdr, solo llegan bien `Ctrl+letra` y las teclas de función: `Ctrl+Enter` llega como `Enter` y los atajos con `Alt` se cortan. Por eso cada acción tiene un atajo que funciona ahí y, entre paréntesis, el de Positron para terminales que sí lo envían.
@@ -174,8 +175,9 @@ Atajos de Corral. Desde Warp, a través de herdr, solo llegan bien `Ctrl+letra` 
 
 Se pierde al cerrar el layout, salvo que lo guardes:
 
-- `Ctrl+S` en el borrador pide un nombre y lo guarda en el proyecto (la carpeta donde abriste el layout). Puedes escribir `analisis/modelo` o una ruta completa; si falta la extensión, agrega `.R`, y si el archivo existe, pregunta antes de reemplazarlo. El aviso de borrador de las dos primeras líneas no pasa al archivo guardado. Desde ahí el editor sigue con el archivo nuevo. En cualquier otro archivo, `Ctrl+S` guarda normal.
-- O pídeselo a Claude: usa `corral script --guardar ruta.R`, que guarda también lo que no has guardado y también quita el aviso. `corral script --leer` muestra el contenido actual.
+- `Ctrl+S` en el borrador pide un nombre y lo guarda en el proyecto (la carpeta donde abriste el layout). Puedes escribir `analisis/modelo` o una ruta completa; si falta la extensión, agrega `.R`, y si el archivo existe, pregunta antes de reemplazarlo. Desde ahí el editor sigue con el archivo nuevo. En cualquier otro archivo, `Ctrl+S` guarda normal.
+- *Archivo → Guardar como* parte en la carpeta del borrador, que no se puede cambiar. Si guardas ahí con otro nombre, Corral mueve el archivo al proyecto con ese nombre (si ya existe uno igual, lo deja y te avisa).
+- O pídeselo a Claude: usa `corral script --guardar ruta.R`, que guarda también lo que no has guardado. `corral script --leer` muestra el contenido actual.
 
 El borrador es un archivo real, y no un "sin nombre", porque el autocompletado solo funciona en archivos guardados. Los archivos nuevos sin nombre se abren como R, pero sin autocompletado hasta que los guardes.
 
@@ -196,6 +198,8 @@ corral vars --json
 ```
 
 Si la consola está ocupada, `corral eval` espera hasta 20 segundos (`--wait-idle`). Si tienes una línea a medio escribir, no ejecuta nada y avisa. Varios agentes pueden usar la misma consola: sus peticiones se ejecutan una a la vez.
+
+Claude mira cada gráfico que dibuja (Corral lo guarda como PNG) y a veces lo corrige: mueve etiquetas, cambia una escala. Para que no te queden versiones casi iguales en Mirador, la corrección va con `corral eval --reemplazar` y reemplaza al borrador. Si le pides un gráfico distinto, o quieres comparar versiones, se suma al historial como siempre.
 
 ### Gráficos en la terminal
 
@@ -256,6 +260,7 @@ Opciones de R:
 
 | Síntoma | Qué hacer |
 |---|---|
+| Fresh muestra un aviso (⚠) sobre el portapapeles de Wayland | WSLg no tiene el protocolo de portapapeles que busca Fresh; Fresh usa X11 y copiar y pegar funciona igual. Corral abre Fresh sin `WAYLAND_DISPLAY` para que no lo intente; si lo abres a mano, `env -u WAYLAND_DISPLAY fresh`. |
 | El panel de variables dice "Esperando una sesión de R" o queda vacío | Ese R no tiene Corral activo. En el panel de la consola, `ctrl+b m`, o `corral_activar()` en R. |
 | Los atajos del script no hacen nada, o el editor no toma el tema nuevo | Fresh sigue con una versión anterior cargada: `Ctrl+Q`, `fresh --cmd daemon kill orchestrator` y vuelve a abrir el layout con `ctrl+b a`. |
 | No aparece el autocompletado | El archivo tiene que estar guardado como `.R` y el estado de Fresh debe decir `LSP (on)`. Si la carpeta no es de confianza, márcala desde el estado (`Confiable`). |

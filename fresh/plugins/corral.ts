@@ -18,6 +18,17 @@ const editor = getEditor();
 function isScratch(path: string): boolean {
   return /\/(\.corral|corral\/borradores)\/[^/]+\/borrador\.R$/.test(path || "");
 }
+
+// Any file inside a scratch folder (git-ignored, removed after two days).
+function inScratchFolder(path: string): boolean {
+  return /\/(\.corral|corral\/borradores)\/[^/]+\/[^/]+$/.test(path || "");
+}
+
+// The project a scratch file belongs to: the folder holding .corral/, else Fresh's folder.
+function projectOf(path: string): string {
+  const i = (path || "").indexOf("/.corral/");
+  return i > 0 ? path.slice(0, i) : editor.getCwd();
+}
 const MAX_LINES = 400;
 
 // Code without strings and comments, enough to count brackets and see how a line ends.
@@ -77,6 +88,61 @@ function statementAt(lines: string[], line: number): [number, number] {
   }
   return [first, last];
 }
+
+// Indentation after Enter, the way Air writes R: one level inside an open
+// bracket (counted from the line that opened it), one level for the lines that
+// continue a pipe or operator chain, and back to the start of the statement
+// once it is complete. Fresh's own rules can't express the last two.
+const OPERATOR_END = /(\|>|%[^%\s]*%|\+|-|\*|\/|\^|&|\||~|=)\s*$/;
+const INDENT_UNIT = 2;
+
+function leading(line: string): number {
+  return line.length - line.replace(/^[ \t]+/, "").length;
+}
+
+// Columns for the line after `p` (the last non-blank line before the cursor).
+function indentAfter(lines: string[], p: number): number {
+  const [first] = statementAt(lines.slice(0, p + 1), p);
+  const open: number[] = [];
+  for (let i = first; i <= p; i++) {
+    for (const c of codeOnly(lines[i])) {
+      if (c === "(" || c === "[" || c === "{") open.push(leading(lines[i]));
+      else if ((c === ")" || c === "]" || c === "}") && open.length) open.pop();
+    }
+  }
+  const continues = OPERATOR_END.test(codeOnly(lines[p]));
+  const base = open.length ? open[open.length - 1] + INDENT_UNIT : leading(lines[first]);
+  return base + (continues ? INDENT_UNIT : 0);
+}
+
+let fixingIndent = false;
+registerHandler("corral_indent", async function (args: { buffer_id: number; text: string }) {
+  if (fixingIndent) return;
+  try {
+    // Only a plain Enter: a newline plus the indentation Fresh chose.
+    if (!/^\r?\n[ \t]*$/.test(args.text || "")) return;
+    const id = args.buffer_id;
+    if (id !== editor.getActiveBufferId()) return;
+    if (!/\.[Rr]$/.test(editor.getBufferPath(id) || "")) return;
+    const cursor = editor.getCursorPosition();
+    const lines = (await editor.getBufferText(id, 0, cursor)).split("\n");
+    const current = lines[lines.length - 1];
+    if (!/^[ \t]*$/.test(current)) return;
+    let p = lines.length - 2;
+    while (p >= 0 && isBlank(lines[p])) p--;
+    if (p < 0) return;
+    const want = " ".repeat(indentAfter(lines, p));
+    if (want === current) return;
+    fixingIndent = true;
+    const start = cursor - current.length;
+    if (await editor.replaceRange(id, start, cursor, want)) editor.setBufferCursor(id, start + want.length);
+  } catch (e) {
+    // Leave Fresh's indentation as it is.
+  } finally {
+    fixingIndent = false;
+  }
+});
+editor.on("after_insert", "corral_indent");
 
 async function runCorral(args: string[]): Promise<boolean> {
   const res = await editor.spawnProcess("corral", args);
@@ -174,7 +240,7 @@ registerHandler("corral_save", async function () {
       editor.executeAction("save");
       return;
     }
-    const project = editor.getCwd();
+    const project = projectOf(path);
     const answer = await editor.prompt("Guardar en el proyecto: ", project + "/");
     if (!answer || !answer.trim() || answer.trim() === project + "/") return;
     let target = answer.trim();
@@ -186,13 +252,6 @@ registerHandler("corral_save", async function () {
         editor.setStatus("Corral: no se guardó");
         return;
       }
-    }
-    // Drop the scratch notice at the top: it doesn't belong in the project file.
-    const text = await editor.getBufferText(id);
-    const notice = text.match(/^# Borrador temporal[^\n]*\n# [^\n]*\n\n?/);
-    if (notice) {
-      const bytes = unescape(encodeURIComponent(notice[0])).length;
-      await editor.replaceRange(id, 0, bytes, "");
     }
     // The save is confirmed later (Fresh can still refuse it, e.g. when the file
     // is open in another Fresh): only claim success once the buffer moved there.
@@ -274,6 +333,34 @@ registerHandler("corral_show_explorer", async function () {
   }
 });
 editor.on("buffer_activated", "corral_show_explorer");
+
+// Fresh's own "Save as" (File menu) starts in the scratch folder. A file saved
+// there under another name would stay hidden, git-ignored and be deleted in two
+// days, so move it to the project with the same name.
+registerHandler("corral_after_save", async function (args: { path: string; buffer_id: number }) {
+  try {
+    const path = args.path || "";
+    const name = path.split("/").pop() || "";
+    if (!inScratchFolder(path) || name === "borrador.R" || name.startsWith(".")) return;
+    const target = projectOf(path) + "/" + name;
+    if (editor.fileExists(target)) {
+      editor.setStatus(`Corral: ${name} quedó en la carpeta del borrador porque ya existe en el proyecto; usa Ctrl+S para elegir otro nombre`);
+      return;
+    }
+    if (!editor.saveBufferToPath(args.buffer_id, target)) return;
+    for (let i = 0; i < 10; i++) {
+      await editor.delay(200);
+      if (editor.getBufferPath(args.buffer_id) === target) {
+        await editor.spawnProcess("rm", ["-f", "--", path]);
+        editor.setStatus("Corral: guardado en el proyecto, " + target);
+        return;
+      }
+    }
+  } catch (e) {
+    editor.setStatus("Corral: " + String(e));
+  }
+});
+editor.on("after_file_save", "corral_after_save");
 editor.setInterval(1000, "corral_show_explorer");
 
 editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola de R", "corral_run_line", null);

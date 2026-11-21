@@ -182,7 +182,7 @@ def cmd_layout(args: argparse.Namespace) -> None:
     vars_pane = split_vars_pane(right, ratio=0.73)
     editor = args.editor if args.editor and shutil.which(shlex.split(args.editor)[0]) else ""
     if editor:
-        console = herdr("pane", "split", right, "--direction", "down", "--ratio", str(TOGGLE_MODES["ambos"]), "--cwd", cwd,
+        console = herdr("pane", "split", right, "--direction", "down", "--ratio", str(SCRIPT_SHARE), "--cwd", cwd,
                         "--no-focus")["pane"]["pane_id"]
         herdr("pane", "rename", right, "corral:script")
         herdr("pane", "run", right, editor_command(editor, scratch_script(ws, cwd)))
@@ -206,9 +206,6 @@ def cmd_layout(args: argparse.Namespace) -> None:
 SCRATCH_ROOT = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "corral" / "borradores"
 SCRATCH_INDEX = STATE_DIR / "borradores.json"
 SCRATCH_MAX_AGE = 2 * 86400
-SCRATCH_HEADER = ("# Borrador temporal: se descarta al cerrar este layout.\n"
-                  "# Ctrl+S lo guarda en tu proyecto (o pídeselo a Claude).\n\n")
-SCRATCH_HEADER_RE = re.compile(r"\A# Borrador temporal[^\n]*\n# [^\n]*\n\n?")
 
 
 def scratch_root(project: str | None) -> Path:
@@ -251,7 +248,7 @@ def scratch_script(workspace: str | None, project: str | None = None) -> Path:
     folder = root / f"{label}-{time.strftime('%Y%m%d-%H%M%S')}"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "borrador.R"
-    path.write_text(SCRATCH_HEADER, encoding="utf-8")
+    path.write_text("", encoding="utf-8")
     index = read_json_file(SCRATCH_INDEX)
     index[workspace or "default"] = str(path)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -268,8 +265,12 @@ def read_json_file(path: Path) -> dict:
 
 def editor_command(editor: str, target: Path | str) -> str:
     """Command line for the script pane. Fresh starts clean (--no-restore), without old tabs."""
-    extra = " --no-restore" if any(Path(t).name == "fresh" for t in shlex.split(editor)) else ""
-    return f"{editor}{extra} {shlex.quote(str(target))}"
+    is_fresh = any(Path(t).name == "fresh" for t in shlex.split(editor))
+    extra = " --no-restore" if is_fresh else ""
+    # WSLg's Wayland has no clipboard protocol for Fresh: it warns and falls back
+    # to X11 anyway, so start it on X11 directly.
+    prefix = "env -u WAYLAND_DISPLAY " if is_fresh and os.environ.get("WSL_DISTRO_NAME") and os.environ.get("DISPLAY") else ""
+    return f"{prefix}{editor}{extra} {shlex.quote(str(target))}"
 
 
 def scratch_text(scratch: str) -> str:
@@ -329,37 +330,98 @@ def split_between(node: dict, a: str, b: str, path: list[bool]) -> tuple[list[bo
     return None
 
 
-TOGGLE_MODES = {"ambos": 0.57, "script": 0.86, "consola": 0.14}
+TOGGLE_NAMES = {"ambos": "Script y consola", "script": "Script", "consola": "Consola"}
+PARKED_TAB = {"script": "script (oculto)", "consola": "consola (oculta)"}
+EXPANDED_FILE = STATE_DIR / "expandido.json"
+SCRIPT_SHARE = 0.57
 
 
-def cmd_toggle(args: argparse.Namespace) -> None:
-    """Give the upper right area to the script, the console, or both (ctrl+b t)."""
-    script, console = find_labeled("corral:script"), find_labeled(console_label("r"))
-    if not script or not console:
-        notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script --split'")
-        return
+def script_split(script: str, console: str) -> tuple[str, list, bool, float] | None:
+    """Tab, split path, whether the script comes first, and the script's share of the split."""
     layout = herdr_socket("layout.export", {"pane_id": console})["layout"]
     found = split_between(layout["root"], script, console, [])
     if not found:
-        raise CorralError("el script y la consola no están en la misma división")
+        return None
     path, node, script_first = found
-    share = node["ratio"] if script_first else 1 - node["ratio"]  # script's share
-    current = "script" if share > 0.75 else "consola" if share < 0.25 else "ambos"
-    order = ["ambos", "script", "consola"]
-    mode = args.mode or order[(order.index(current) + 1) % len(order)]
-    share = TOGGLE_MODES[mode]
-    herdr_socket("layout.set_split_ratio", {"tab_id": layout["tab_id"], "path": path,
-                                            "ratio": share if script_first else 1 - share})
-    # Put the cursor where the space went (focus moves from the other pane toward it).
+    return layout["tab_id"], path, script_first, (node["ratio"] if script_first else 1 - node["ratio"])
+
+
+def cmd_toggle(args: argparse.Namespace) -> None:
+    """The upper right area for the script, the console, or both (ctrl+b t).
+
+    herdr won't make a split smaller than 10 %, so expanding one moves the other
+    to a tab of its own, where it keeps running. Back to both, it returns to its
+    place with the proportion it had. Without a mode, ctrl+b t expands the pane
+    you are in, and puts both back when one is expanded.
+    """
+    ws = current_workspace()
+    panes = {p["pane_id"]: p for p in list_panes(ws)}
+    by_label = {p.get("label"): pid for pid, p in panes.items()}
+    script, console = by_label.get("corral:script"), by_label.get(console_label("r"))
+    if not script or not console:
+        notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'")
+        return
+    saved = read_json_file(EXPANDED_FILE)
+    key = ws or "default"
+    state = saved.get(key) or {}
+
+    if panes[script].get("tab_id") == panes[console].get("tab_id"):
+        current, parked = "ambos", None
+    else:
+        parked = state.get("parked") if state.get("parked") in (script, console) else None
+        if not parked:
+            # The variables pane stays with the visible one.
+            home = panes.get(by_label.get("corral:vars") or "", {}).get("tab_id")
+            parked = script if panes[console].get("tab_id") == home else console
+        current = "script" if parked == console else "consola"
+
+    if args.mode:
+        mode = args.mode
+    elif current != "ambos":
+        mode = "ambos"
+    else:
+        mode = "consola" if current_pane() == console else "script"
+    if mode == current:
+        notify("Corral", TOGGLE_NAMES[mode])
+        return
+
+    focused = current_pane()
+    if parked:
+        # Back to both, script above the console.
+        share = state.get("share", SCRIPT_SHARE)
+        visible = script if parked == console else console
+        tab = panes[visible]["tab_id"]
+        if parked == console:
+            herdr_socket("pane.move", {"pane_id": console, "focus": False, "destination": {
+                "type": "tab", "tab_id": tab, "target_pane_id": script, "split": "down", "ratio": share}})
+        else:
+            herdr_socket("pane.move", {"pane_id": script, "focus": False, "destination": {
+                "type": "tab", "tab_id": tab, "target_pane_id": console, "split": "down", "ratio": 1 - share}})
+            herdr_socket("pane.swap", {"source_pane_id": script, "target_pane_id": console})
+            found = script_split(script, console)
+            if found:
+                herdr_socket("layout.set_split_ratio", {"tab_id": found[0], "path": found[1],
+                                                        "ratio": share if found[2] else 1 - share})
+        if focused in (script, console):  # the swap can move the focus; keep it where you were
+            herdr_socket("pane.focus", {"pane_id": focused})
+        saved.pop(key, None)
+
     if mode != "ambos":
-        toward_script = "up" if script_first else "down"
-        toward_console = "down" if script_first else "up"
-        source, direction = (console, toward_script) if mode == "script" else (script, toward_console)
-        try:
-            herdr("pane", "focus", "--pane", source, "--direction", direction)
-        except CorralError:
-            pass
-    notify("Corral", {"ambos": "Script y consola", "script": "Script", "consola": "Consola"}[mode])
+        keep, hide = (script, console) if mode == "script" else (console, script)
+        found = script_split(script, console)
+        share = found[3] if found else SCRIPT_SHARE
+        if not 0.15 <= share <= 0.85:  # left over from the old 86/14 toggle
+            share = SCRIPT_SHARE
+        destination = {"type": "new_tab", "label": PARKED_TAB["consola" if hide == console else "script"]}
+        if ws:
+            destination["workspace_id"] = ws
+        herdr_socket("pane.move", {"pane_id": hide, "focus": False, "destination": destination})
+        herdr_socket("pane.focus", {"pane_id": keep})
+        saved[key] = {"parked": hide, "share": share}
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    EXPANDED_FILE.write_text(json.dumps(saved))
+    notify("Corral", TOGGLE_NAMES[mode] + (" (ctrl+b t para volver)" if mode != "ambos" else ""))
 
 
 def cmd_script(args: argparse.Namespace) -> None:
@@ -378,7 +440,7 @@ def cmd_script(args: argparse.Namespace) -> None:
         if target.exists() and not args.forzar:
             raise CorralError(f"{target} ya existe; usa --forzar para reemplazarlo")
         target.parent.mkdir(parents=True, exist_ok=True)
-        body = SCRATCH_HEADER_RE.sub("", text)
+        body = text
         if body and not body.endswith("\n"):
             body += "\n"
         target.write_text(body, encoding="utf-8")
@@ -417,6 +479,11 @@ def cmd_close(args: argparse.Namespace) -> None:
     if tab:
         panes = [p for p in panes if p.get("tab_id") == tab]
     targets = [p for p in panes if p.get("label") in CORRAL_LABELS]
+    # A pane hidden by ctrl+b t lives in a tab of its own.
+    expanded = read_json_file(EXPANDED_FILE)
+    parked = (expanded.pop(current_workspace() or "default", None) or {}).get("parked")
+    targets += [p for p in list_panes(current_workspace())
+                if p["pane_id"] == parked and p.get("label") in CORRAL_LABELS and p not in targets]
     if not targets:
         notify("Corral", "no hay paneles de Corral en esta pestaña")
         return
@@ -426,6 +493,8 @@ def cmd_close(args: argparse.Namespace) -> None:
             herdr("pane", "close", p["pane_id"])
         except CorralError:
             pass
+    if parked:
+        EXPANDED_FILE.write_text(json.dumps(expanded))
     note = f"{len(targets)} paneles cerrados"
     if scratch and Path(scratch).exists():
         note += "; el borrador queda unos días en " + str(Path(scratch).parent)  # in .corral/ when there's a project
@@ -970,6 +1039,27 @@ def split_vars_pane(console: str | None = None, ratio: float = 0.62) -> str:
     return new
 
 
+def lintr_config_found(start: Path) -> bool:
+    """Would lintr find a config of its own (project .lintr, ~/.lintr or its user config)?"""
+    for folder in [start, *start.parents]:
+        if (folder / ".lintr").is_file():
+            return True
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return (Path.home() / ".lintr").is_file() or (config_home / "R" / "lintr" / "config").is_file()
+
+
+def cmd_lsp(_: argparse.Namespace) -> None:
+    """R language server for the editor (completion, diagnostics).
+
+    lintr only reports real problems, like Positron, and leaves style to Air,
+    unless the project brings its own .lintr.
+    """
+    code = "languageserver::run()"
+    if not lintr_config_found(Path.cwd()):
+        code = f"options(lintr.linter_file = {json.dumps(str(REPO / 'lib' / 'corral.lintr'))}); {code}"
+    os.execvp("R", ["R", "--no-echo", "--no-restore", "-e", code])
+
+
 def cmd_plot_ready(_: argparse.Namespace) -> None:
     """First plot of an R session (called by corral.R)."""
     if image_mode()[0] == "kitty":
@@ -1103,15 +1193,49 @@ def cmd_eval(args: argparse.Namespace) -> None:
         new = state.get("hsize", 0)
         changed = before is None or state.get("upid") != before[2].get("upid")
         indexes = list(range(old, new)) or ([new - 1] if changed and new else [])
-        for i in indexes:
-            png = edir / f"{rid}-plot-{i + 1}.png"
+        current = httpgd_ids(sdir)
+        drawn = [current[i] for i in indexes if i < len(current)]
+        # The plots of the previous eval, so a corrected version can replace them.
+        last_file = edir / "ultimos-graficos.json"
+        removed = 0
+        if args.reemplazar and drawn:
             try:
-                with urllib.request.urlopen(f"{base}/plot?index={i}&width=900&height=600&renderer=png&token={token}", timeout=10) as r:
+                previous = json.loads(last_file.read_text()).get("ids", [])
+            except (OSError, ValueError):
+                previous = []
+            removed = remove_plots(sdir, [i for i in previous if i not in drawn])
+            current = httpgd_ids(sdir)
+        if drawn:
+            last_file.write_text(json.dumps({"rid": rid, "ids": drawn}))
+        for plot_id in drawn:
+            number = current.index(plot_id) + 1 if plot_id in current else 0
+            png = edir / f"{rid}-plot-{number}.png"
+            try:
+                with urllib.request.urlopen(f"{base}/plot?id={plot_id}&width=900&height=600&renderer=png&token={token}", timeout=10) as r:
                     png.write_bytes(r.read())
-                print(f"[corral] gráfico {i + 1} guardado en {png} (ctrl+b f para verlo en herdr)")
+                print(f"[corral] gráfico {number} guardado en {png} (ctrl+b f para verlo en herdr)")
             except OSError:
                 pass
+        if removed:
+            print(f"[corral] reemplazó {removed} gráfico(s) de la petición anterior; el usuario ve solo la versión nueva")
     sys.exit(1 if result.get("status") == "error" else 0)
+
+
+def remove_plots(session_dir: Path, ids: list[str]) -> int:
+    """Remove plots from the session's httpgd history by id; returns how many went."""
+    removed = 0
+    for plot_id in ids:
+        state = httpgd_state(session_dir)
+        current = httpgd_ids(session_dir)
+        if not state or plot_id not in current:
+            continue
+        base, token, _ = state
+        try:
+            with urllib.request.urlopen(f"{base}/remove?index={current.index(plot_id)}&token={token}", timeout=5):
+                removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def clip_output(text: str, limit: int, full: Path) -> str:
@@ -1342,7 +1466,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--agent", default=os.environ.get("CORRAL_AGENT", "claude"), help="comando del panel izquierdo ('' para dejar shell)")
     p.add_argument("--console", default=os.environ.get("CORRAL_R", "CORRAL=1 R --quiet --no-save"),
                    help="comando de la consola; CORRAL=1 activa Corral en ese R")
-    p.add_argument("--ratio", type=float, default=0.49, help="fracción del ancho para el panel del agente")
+    p.add_argument("--ratio", type=float, default=0.516, help="fracción del ancho para el panel del agente")
     p.add_argument("--shell", action="store_true", help="agregar una shell junto al panel de variables")
     p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"), help="editor del panel de script ('' sin script)")
     p.set_defaults(func=cmd_layout)
@@ -1350,8 +1474,9 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("close", help="cierra script, consola y variables de esta pestaña; deja a Claude")
     p.set_defaults(func=cmd_close)
 
-    p = sub.add_parser("toggle", help="alterna el espacio entre script y consola (ctrl+b t)")
-    p.add_argument("mode", nargs="?", choices=list(TOGGLE_MODES), help="ambos, script o consola; sin valor, rota")
+    p = sub.add_parser("toggle", help="expande el script o la consola a toda la zona, o muestra ambos (ctrl+b t)")
+    p.add_argument("mode", nargs="?", choices=list(TOGGLE_NAMES),
+                   help="ambos, script o consola; sin valor, expande el panel donde estás o vuelve a ambos")
     p.set_defaults(func=cmd_toggle)
 
     p = sub.add_parser("script", help="agrega el editor de scripts sobre la consola")
@@ -1408,13 +1533,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--wait-idle", type=float, default=20, help="segundos esperando que la consola se desocupe (20)")
     p.add_argument("--max-chars", type=int, default=20000, help="recorta salidas más largas (20000)")
     p.add_argument("--check", action="store_true", help="solo verificar que hay consola y sesión")
+    p.add_argument("--reemplazar", action="store_true",
+                   help="los gráficos que dibuje reemplazan a los de la petición anterior (para corregir un gráfico)")
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("open", help="abre una URL local en el navegador; sin URL, abre Mirador")
     p.add_argument("url", nargs="?")
     p.set_defaults(func=cmd_open)
 
-    for name, func in (("_plots", cmd_plots_tui), ("_vars", cmd_vars_tui), ("_plot-ready", cmd_plot_ready)):
+    for name, func in (("_plots", cmd_plots_tui), ("_vars", cmd_vars_tui), ("_plot-ready", cmd_plot_ready),
+                       ("_lsp", cmd_lsp)):
         sub.add_parser(name, help=argparse.SUPPRESS).set_defaults(func=func)
 
     p = sub.add_parser("theme", help="aplica el tema de herdr al editor, los visores, VisiData y Mirador")

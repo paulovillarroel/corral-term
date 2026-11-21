@@ -1,0 +1,6 @@
+# lintr settings for Corral's editor (Fresh + languageserver), used only when the
+# project has no .lintr of its own.
+#
+# Like Positron, the editor flags real problems (undefined objects, x == NA,
+# duplicated arguments, ...) and leaves style to Air, which formats on save.
+linters: lintr::linters_with_tags("correctness")
