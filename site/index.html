@@ -139,7 +139,7 @@
         <ul class="points">
           <li><b>In plain sight</b><span>the code is typed into the console you are looking at</span></li>
           <li><b>One at a time</b><span>requests queue, with a time limit and clipped output</span></li>
-          <li><b>Yours to decide</b><span>agents on, ask or off; full results, your review first, or structure only</span></li>
+          <li><b>Yours to decide</b><span>agents ask first by default, or run freely, or not at all; full results, your review first, or structure only</span></li>
           <li><b>Recorded</b><span>every request in a local audit log</span></li>
           <li><b>Any agent</b><span>shell commands plus an open Agent Skills skill</span></li>
         </ul>
@@ -170,6 +170,22 @@
             </g>
           </svg>
         </figure>
+    </div>
+  </section>
+
+  <section class="showcase" id="herdr">
+    <div class="show-text">
+      <div class="section-label"><span>Built on herdr</span><span>and more than herdr</span></div>
+      <h2>herdr runs the panes. Corral turns them into a workbench.</h2>
+      <p><a href="https://herdr.dev/tui/">herdr</a> is the terminal multiplexer Corral runs on: workspaces, tabs and panes that keep running when you close the window, with your agents in them. Corral doesn't stop there. It builds on herdr and takes it further, into a full data science workspace:</p>
+      <ul class="points">
+        <li><b>One key</b><span>ctrl+b a lays out the agent, the script, the console and the variables, sized for data work</span></li>
+        <li><b>A live session</b><span>R on Ark or Python in IPython, shared with your agent</span></li>
+        <li><b>Views</b><span>the variables, tables through DuckDB and plots over your panes; Mirador in the browser</span></li>
+        <li><b>The harness</b><span>rules around every agent request, enforced in Corral's own code</span></li>
+        <li><b>One palette</b><span>every Corral and herdr action under ctrl+b space</span></li>
+      </ul>
+      <p class="more-links"><a href="docs/layouts.html">Layouts and panes</a><a href="docs/architecture.html">Architecture</a></p>
     </div>
   </section>
 
@@ -370,6 +386,22 @@
       <source srcset="assets/charts/vs-positron-dark.svg" media="all">
       <img src="assets/charts/vs-positron-light.svg" width="760" alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB; 0.36 % idle CPU vs 13.9 %">
     </picture>
+  </section>
+
+  <section class="showcase" id="why">
+    <div class="show-text">
+      <div class="section-label"><span>Why Corral</span><span>the idea</span></div>
+      <h2>A corral for the herd.</h2>
+      <p>Corral runs on herdr, and a herd needs a corral: one place where you gather the consoles, the editor, the data, the plots and your agent, and work with them under rules you set. Behind it is one idea: in data science the work happens in a live session, so the agent should work there too, where you can see it.</p>
+      <ul class="points">
+        <li><b>The session</b><span>the agent works in your live session, not in a script you run again to get its objects back</span></li>
+        <li><b>A harness</b><span>no chat and no model of its own: the agent you already use, with rules around it</span></li>
+        <li><b>Seen, approved</b><span>every request is typed in your console, and by default waits for your approval</span></li>
+        <li><b>Light</b><span>made for a day's work: it opens in milliseconds and stays steady until evening</span></li>
+        <li><b>Where it fits</b><span>exploring, iterating with the agent, validating, and checking models already in use (performance, bias, drift); your repository, tests and pipelines keep the rest</span></li>
+      </ul>
+      <p class="more-links"><a href="docs/philosophy.html">Why Corral</a></p>
+    </div>
   </section>
 
   <section class="cta">
