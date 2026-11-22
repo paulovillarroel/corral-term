@@ -54,11 +54,11 @@ function tr(en: string, es: string): string {
 }
 
 // Corral scratch files: <project>/.corral/<name>/draft.R (borrador.R in Spanish),
-// or the temp folder.
-const SCRATCH_NAME = /^(draft|borrador)\.R$/;
+// or draft.py when the layout starts with Python, or the temp folder.
+const SCRATCH_NAME = /^(draft|borrador)\.(R|py)$/;
 
 function isScratch(path: string): boolean {
-  return /\/(\.corral|corral\/borradores)\/[^/]+\/(draft|borrador)\.R$/.test(path || "");
+  return /\/(\.corral|corral\/borradores)\/[^/]+\/(draft|borrador)\.(R|py)$/.test(path || "");
 }
 
 // Any file inside a scratch folder (git-ignored, removed after two days).
@@ -330,7 +330,8 @@ registerHandler("corral_run_file", async function () {
 });
 
 // Scratch files: Fresh does not let outside programs read unsaved buffers, so
-// mirror each Corral scratch buffer to ".actual.R" next to it. `corral script
+// mirror each Corral scratch buffer to ".actual.R" next to it (an R or a Python
+// draft alike). `corral script
 // --save/--read` (and Claude) read that copy. It is written when typing
 // pauses for 0.4 s (at least every 2 s while typing goes on) and when the
 // buffer shows up.
@@ -342,7 +343,7 @@ let dirtySince = 0;
 function scratchCopy(id: number): [string, string] | null {
   const path = editor.getBufferPath(id) || "";
   if (!isScratch(path)) return null;
-  return [path, path.replace(/(draft|borrador)\.R$/, ".actual.R")];
+  return [path, path.replace(/(draft|borrador)\.(R|py)$/, ".actual.R")];
 }
 
 async function mirror(id: number): Promise<void> {
@@ -572,7 +573,8 @@ registerHandler("corral_scratch_request", async function (args: { handle: number
   let ok = false;
   let msg = "";
   try {
-    const id = editor.findBufferByPath(folder + "/draft.R") || editor.findBufferByPath(folder + "/borrador.R");
+    const id = ["draft.R", "borrador.R", "draft.py", "borrador.py"]
+      .map((name) => editor.findBufferByPath(folder + "/" + name)).find((b) => b) || 0;
     if (!id) {
       msg = tr("the draft is not open in the editor (if you saved it in the project, edit that file)",
         "el borrador no está abierto en el editor (si lo guardaste en el proyecto, edita ese archivo)");

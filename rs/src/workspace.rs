@@ -18,8 +18,9 @@ use std::time::{Duration, Instant};
 const SCRIPT_SHARE: f64 = 0.57;
 const CORRAL_LABELS: [&str; 5] = ["corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell"];
 const SCRATCH_MAX_AGE: u64 = 2 * 86400;
-/// The draft's file name in each language; Corral and its editor plugin know both.
-const SCRATCH_NAMES: [&str; 2] = ["draft.R", "borrador.R"];
+/// The draft's file name, in English and Spanish, for an R or a Python draft;
+/// Corral and its editor plugin know all four.
+const SCRATCH_NAMES: [&str; 4] = ["draft.R", "borrador.R", "draft.py", "borrador.py"];
 
 /// Options like `--name value`, flags like `--name`, and the rest in order.
 struct Args {
@@ -74,9 +75,9 @@ fn layout_state() -> (Value, String) {
 // ----------------------------------------------------------------------- layout
 
 fn layout_usage() -> &'static str {
-    tr("usage: corral layout [--focus agent|code] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
+    tr("usage: corral layout [--focus agent|code] [--lang r|python] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
 [--console COMMAND] [--ratio 0.516] [--shell] [--editor COMMAND]",
-       "uso: corral layout [--focus agent|code] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
+       "uso: corral layout [--focus agent|code] [--lang r|python] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
 [--console COMANDO] [--ratio 0.516] [--shell] [--editor COMANDO]")
 }
 
@@ -84,8 +85,14 @@ fn layout_usage() -> &'static str {
 /// the variables below. With `--focus code` the script and the agent trade
 /// places: the script on the left, the agent over the console. The two panes
 /// above the variables share that area; ctrl+b t gives it to one or the other.
+/// It starts with R, or with Python: `--lang`, else `corral config start`.
 pub fn layout(args: &[String]) -> Result<(), String> {
-    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus"], &["--shell"], layout_usage())?;
+    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus", "--lang"], &["--shell"], layout_usage())?;
+    let lang = match a.value("--lang") {
+        Some(l @ ("r" | "python")) => l,
+        Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),
+        None => start_lang(),
+    };
     let code = match a.value("--focus").unwrap_or("agent") {
         "agent" => false,
         "code" => true,
@@ -132,7 +139,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let console_pane = if editor_ok {
         let c = herdr::split(&right, "down", Some(SCRIPT_SHARE), Some(&cwd))?;
         herdr::rename(&script_pane, "corral:script")?;
-        let draft = scratch_script(Some(&ws), &cwd)?;
+        let draft = scratch_script(Some(&ws), &cwd, lang)?;
         herdr::run(&script_pane, &editor_command(&editor_cmd, &draft, true))?;
         c
     } else {
@@ -143,10 +150,12 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         state.set("focus", "code".into());
         state.set("agent", agent_pane.as_str().into());
     }
+    state.set("active", lang.into());
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
-    herdr::rename(&console_pane, "corral:r")?;
-    let console_cmd = a.value("--console").map(String::from).or_else(|| std::env::var("CORRAL_R").ok()).unwrap_or_else(|| console::command("r"));
+    herdr::rename(&console_pane, &console::label(lang))?;
+    let env_console = if lang == "r" { std::env::var("CORRAL_R").ok() } else { None };
+    let console_cmd = a.value("--console").map(String::from).or(env_console).unwrap_or_else(|| console::command(lang));
     herdr::run(&console_pane, &console_cmd)?;
 
     if a.flag("--shell") {
@@ -161,8 +170,14 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         ("console", console_pane.as_str().into()),
         ("script", if editor_ok { script_pane.as_str().into() } else { Value::Null }),
         ("vars", vars_pane.as_str().into()), ("focus", if code { "code" } else { "agent" }.into()),
+        ("lang", lang.into()),
     ]).to_json());
     Ok(())
+}
+
+/// The console a new layout starts with: `corral config start`, R unless it says python.
+pub fn start_lang() -> &'static str {
+    if env::config().get("start").str() == Some("python") { "python" } else { "r" }
 }
 
 // ----------------------------------------------------------------------- drafts
@@ -196,7 +211,7 @@ pub fn is_scratch_name(name: &str) -> bool {
 /// A new, empty .R draft for the script pane, thrown away unless you save it. It
 /// must be a real file because the editor only offers completion on saved files.
 /// Drafts no editor has open, and folders older than two days, go away here.
-pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String> {
+pub fn scratch_script(ws: Option<&str>, project: &str, lang: &str) -> Result<PathBuf, String> {
     let mut label = "corral".to_string();
     if let Ok(list) = herdr::call("workspace.list", Value::obj()) {
         if let Some(w) = list.get("workspaces").arr().iter().find(|w| w.get("workspace_id").str() == ws) {
@@ -235,7 +250,8 @@ pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String
     }
     let folder = root.join(format!("{label}-{}", env::stamp()));
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    let path = folder.join(tr(SCRATCH_NAMES[0], SCRATCH_NAMES[1]));
+    let (en, es) = if lang == "python" { (SCRATCH_NAMES[2], SCRATCH_NAMES[3]) } else { (SCRATCH_NAMES[0], SCRATCH_NAMES[1]) };
+    let path = folder.join(tr(en, es));
     std::fs::write(&path, "").map_err(|e| format!("{}: {e}", path.display()))?;
     let mut index = env::read_json(&scratch_index());
     index.set(ws.unwrap_or("default"), path.to_string_lossy().to_string().into());
@@ -378,7 +394,12 @@ pub fn script(args: &[String]) -> Result<(), String> {
         env::notify("Script", tr("this workspace already has a script pane", "ya hay un panel de script en este workspace"));
         return Ok(());
     }
-    let console = console::find("r", ws.as_deref()).ok_or(tr("no corral:r console in this workspace", "no hay consola corral:r en este workspace"))?;
+    // Over the console in view, R or Python; its draft is in that language.
+    let lang = env::active_lang(ws.as_deref(), &panes);
+    let console = console::find(&lang, ws.as_deref()).ok_or_else(|| {
+        let label = console::label(&lang);
+        trf!("no {label} console in this workspace", "no hay consola {label} en este workspace")
+    })?;
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
     if editor_cmd.split_whitespace().next().and_then(env::which).is_none() {
         return Err(trf!("editor '{editor_cmd}' not found", "no encuentro el editor '{editor_cmd}'"));
@@ -391,7 +412,7 @@ pub fn script(args: &[String]) -> Result<(), String> {
         None => {
             let project = env::plugin_context().get("focused_pane_cwd").str().map(String::from)
                 .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned())).unwrap_or_else(|| ".".into());
-            scratch_script(ws.as_deref(), &project)?
+            scratch_script(ws.as_deref(), &project, &lang)?
         }
     };
     herdr::run(&new, &editor_command(&editor_cmd, &target, file.is_none()))

@@ -95,6 +95,19 @@ title = "Corral: back to herdr's theme"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "theme", "herdr"]
 
+# The console a new layout starts with: R or Python (corral config start).
+[[actions]]
+id = "start-r"
+title = "Corral: start with R"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "start", "r"]
+
+[[actions]]
+id = "start-python"
+title = "Corral: start with Python"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "start", "python"]
+
 # What agents may do in your consoles (Security model in the docs). Each title says
 # what you get; Corral notifies you of the choice.
 [[actions]]
