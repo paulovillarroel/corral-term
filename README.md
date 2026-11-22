@@ -198,7 +198,7 @@ Se pierde al cerrar el layout, salvo que lo guardes:
 
 El borrador es un archivo real, y no un "sin nombre", porque el autocompletado solo funciona en archivos guardados. Los archivos nuevos sin nombre se abren como R, pero sin autocompletado hasta que los guardes.
 
-Fresh mantiene un servicio de fondo con la configuración y los plugins cargados. Si cambias `config.json` o el plugin, cierra el editor y reinícialo con `fresh --cmd daemon kill orchestrator` antes de volver a abrirlo.
+Cada editor lee la configuración y los plugins al abrirse. Si cambias `config.json` o el plugin, cierra el editor con `Ctrl+Q` y vuelve a abrirlo (o vuelve a abrir el layout con `ctrl+b a`).
 
 La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin en [`fresh/plugins/corral.ts`](fresh/plugins/corral.ts). Fresh viene con las búsquedas de actualizaciones y la telemetría desactivadas (`check_for_updates: false`).
 
@@ -398,7 +398,7 @@ Opciones de R:
 |---|---|
 | Fresh muestra un aviso (⚠) sobre el portapapeles de Wayland | WSLg no tiene el protocolo de portapapeles que busca Fresh; Fresh usa X11 y copiar y pegar funciona igual. Corral abre Fresh sin `WAYLAND_DISPLAY` para que no lo intente; si lo abres a mano, `env -u WAYLAND_DISPLAY fresh`. |
 | El panel de variables dice "Esperando una sesión de R" o queda vacío | Ese R no tiene Corral activo. En el panel de la consola, `ctrl+b m`, o `corral_activar()` en R. |
-| Los atajos del script no hacen nada, o el editor no toma el tema nuevo | Fresh sigue con una versión anterior cargada: `Ctrl+Q`, `fresh --cmd daemon kill orchestrator` y vuelve a abrir el layout con `ctrl+b a`. |
+| Los atajos del script no hacen nada, o el editor no toma el tema nuevo | Ese editor se abrió con una versión anterior: ciérralo con `Ctrl+Q` y vuelve a abrir el layout con `ctrl+b a`. |
 | No aparece el autocompletado | El archivo tiene que estar guardado como `.R` y el estado de Fresh debe decir `LSP (on)`. Si la carpeta no es de confianza, márcala desde el estado (`Confiable`). |
 | Mirador no se abre | `corral doctor` muestra si está corriendo y qué navegador usa. `corral mirador --url` da la dirección para abrirla a mano. |
 | `ctrl+b enter` dice "Nada que enviar" | Selecciona el código con el mouse (herdr lo copia) o cópialo con `Ctrl+C` antes. |
