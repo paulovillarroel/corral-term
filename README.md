@@ -21,12 +21,81 @@ Written in Rust. DuckDB for your data.</p>
 
 ## Install
 
+### What you need first
+
+| You need | How to get it |
+|---|---|
+| Linux x86_64, or Windows with WSL | On Windows: `wsl --install` in PowerShell, then do everything inside Ubuntu. macOS is not supported yet. |
+| `curl` and `tar` | Ubuntu has them; otherwise `sudo apt install curl tar`. |
+| [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. `herdr update` updates it. |
+| R, with the `httpgd` and `jsonlite` packages | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig), then `Rscript -e 'install.packages(c("httpgd", "jsonlite"))'`. |
+
+Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…), [uv](https://docs.astral.sh/uv/) for the Python console, and the R packages `nanoparquet` and `rlang`.
+
+### One line
+
 ```bash
 curl -LsSf https://corral-term.dev/install.sh | sh
 ```
 
-You need Linux x86_64 or Windows with WSL, herdr TUI 0.9.5 or newer, and R with `httpgd` and `jsonlite`. The installer checks everything before it changes anything and brings the rest ([what you need](https://corral-term.dev/docs/install.html#before-you-install)).
+The installer first prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
 
-Then open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>. <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut.
+- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, checking the checksum when one is published;
+- links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
+- backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
-Version 0.1.0 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
+`sh -s -- --check` at the end of the line only checks. `corral uninstall` takes everything out again. At the end it sends one anonymous ping (version, system, country; no IP) to count installs; `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
+
+### Then
+
+Open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>: your agent, the script, the R console and the variables. <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a line, <kbd>ctrl+b</kbd> <kbd>y</kbd> switches to Python, <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut. [Quick start](https://corral-term.dev/docs/quickstart.html).
+
+## Performance
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/assets/charts/vs-positron-dark.svg">
+  <img alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB of memory; 0.36 % vs 13.9 % idle CPU" src="site/assets/charts/vs-positron-light.svg" width="760">
+</picture>
+
+Same machine and project, R in WSL, two runs each, against Positron as a full desktop IDE. <kbd>Ctrl</kbd>+<kbd>R</kbd> to the result in your console takes about 5 ms. Method and the numbers for each piece: [Performance](https://corral-term.dev/docs/performance.html).
+
+## How it is built
+
+Corral is a thin layer of Rust between herdr and the engines that do the heavy lifting:
+
+```mermaid
+flowchart TB
+  subgraph herdr["herdr TUI: your terminal workspace"]
+    agent["Agent<br/>Claude Code, Codex…"]
+    script["Script<br/>Fresh + Corral plugin"]
+    console["Console<br/>R or Python"]
+    vars["Variables"]
+  end
+  corral["corral: one Rust binary, no dependencies<br/>layouts · send / eval · viewers · Mirador's server · installer"]
+  herdr <-->|"herdr's socket (JSON)"| corral
+  corral --> ark["Ark<br/>R kernel, over ZeroMQ"]
+  corral --> ipython["IPython<br/>project's uv environment"]
+  corral --> duckdb["DuckDB<br/>queries Parquet page by page"]
+  corral --> mirador["Mirador<br/>plots and tables in the browser"]
+```
+
+- **Code:** <kbd>Ctrl</kbd>+<kbd>R</kbd> runs `corral send` and agents run `corral eval`; both type into your live console, so you see every line run. After each command the session writes its variables for the variables pane.
+- **Tables:** `View(df)` writes a temporary Parquet file and the table viewer asks DuckDB only for the rows on screen; <kbd>m</kbd> opens the same file in Mirador.
+- **Plots:** httpgd (or its Python twin) draws them, and Mirador shows each one about 80 ms later.
+
+| Technology | What it does in Corral | Written in |
+|---|---|---|
+| [herdr TUI](https://herdr.dev/tui/) | The terminal workspace: panes that survive closing the window | Rust |
+| `corral` | Layouts, sending code, `corral eval`, variables pane, table viewer, palette, Mirador's server, installer | Rust, no crates |
+| [Ark](https://github.com/posit-dev/ark) | R kernel and language server (Positron's) | Rust |
+| [Fresh](https://getfresh.dev) | Script editor, with Corral's plugin | Rust (plugin in TypeScript) |
+| [DuckDB](https://duckdb.org) | Queries the tables `View()` opens | C++ |
+| [httpgd](https://github.com/nx10/httpgd) | R's graphics device that Mirador reads | R / C++ |
+| [uv](https://docs.astral.sh/uv/), IPython, [ty](https://github.com/astral-sh/ty), [Ruff](https://docs.astral.sh/ruff/) | The Python console, completion and formatting | Rust / Python |
+| [Air](https://posit-dev.github.io/air/) | Formats R on save | Rust |
+
+The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python sessions; `fresh/` is the editor plugin; `herdr/` the herdr plugin; `mirador/` Mirador's page; `skills/` the agent skill; `site/` the website and documentation; `api/` the install counter on Vercel. More in [Architecture](https://corral-term.dev/docs/architecture.html).
+
+---
+
+Version 0.1.1 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
