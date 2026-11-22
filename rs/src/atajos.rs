@@ -123,7 +123,7 @@ fn plugin_actions() -> Vec<(String, String, Vec<String>)> {
         } else if let Some(v) = toml_str(t, "title") {
             a.1 = v;
         } else if let Some(rest) = t.strip_prefix("command") {
-            // command = ["../bin/corral-run", "layout", …]
+            // command = ["../rs/target/release/corral", "layout", …]
             a.2 = rest.split('"').skip(1).step_by(2).skip(1).map(String::from).collect();
         }
     }

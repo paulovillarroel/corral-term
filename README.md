@@ -11,7 +11,6 @@ Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es [Ark](
 | Carpeta | Qué es |
 |---|---|
 | `rs/` | El comando `corral`, en Rust y sin dependencias: todo Corral. El layout y sus paneles, enviar y ejecutar código, las consolas, el panel de variables, las tablas, la paleta, los gráficos, Mirador, el tema, la instalación y `doctor`. |
-| `bin/corral-run` | Lo que ejecutan los atajos de herdr: el comando `corral`. |
 | `herdr/` | Plugin de herdr: atajos, layout y popups. Solo llama a `corral`. |
 | `r/corral.R` | Lado de R: registra la sesión, `View()` y gráficos con httpgd. |
 | `py/` | Lado de Python: la sesión de IPython publica sus variables, sirve las figuras de matplotlib con la misma interfaz que httpgd y agrega `View()`. Corre dentro de tu IPython, así que es Python. |

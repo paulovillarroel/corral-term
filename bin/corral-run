@@ -1,8 +1,0 @@
-#!/bin/sh
-# What herdr's plugin actions run: Corral's command (Rust).
-corral="$(dirname "$0")/../rs/target/release/corral"
-if [ ! -x "$corral" ]; then
-    echo "corral no está compilado: corre 'cargo build --release' en $(dirname "$0")/../rs, o vuelve a instalar Corral" >&2
-    exit 1
-fi
-exec "$corral" "$@"
