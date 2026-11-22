@@ -4,10 +4,11 @@
 #   curl -LsSf https://corral-term.dev/install.sh | sh
 #
 # It installs the latest published version (CORRAL_VERSION=v0.1.3 picks another),
-# checks the package's SHA-256 before opening it, and says which version it is.
-# It never falls back to an unreleased copy: if something fails, it stops and
-# says why. From a copy of the repository it installs that copy, without
-# downloading anything:
+# checks the package's SHA-256 before opening it and, when the GitHub CLI (gh
+# 2.49 or later, logged in) is there, its build provenance attestation; and it
+# says which version it is. It never falls back to an unreleased copy: if
+# something fails, it stops and says why. From a copy of the repository it
+# installs that copy, without downloading anything:
 #   sh install.sh
 # To only check the requirements, without installing anything:
 #   sh install.sh --check          (or, with the curl line: ... | sh -s -- --check)
@@ -93,6 +94,40 @@ sha256() {
     fi
 }
 
+# attestation FILE: check that the package was built by this project's GitHub
+# workflow, with the GitHub CLI. The SHA-256 comes from the same release as the
+# package, so it catches a broken download; the attestation is signed by GitHub
+# when the workflow builds the package, so it also catches a package replaced in
+# the release. Without gh (2.49 or later, logged in) it says so and goes on.
+attestation() {
+    if [ -n "${CORRAL_NO_ATTESTATION:-}" ]; then
+        printf '%s\n' "$(t "! Attestation not checked (CORRAL_NO_ATTESTATION)." "! Atestación sin comprobar (CORRAL_NO_ATTESTATION).")"
+        return 0
+    fi
+    if ! command -v gh >/dev/null 2>&1 || ! gh attestation verify --help >/dev/null 2>&1; then
+        printf '  %s\n' "$(t "Attestation not checked: that needs the GitHub CLI (gh 2.49 or later)." \
+                             "Atestación sin comprobar: hace falta la CLI de GitHub (gh 2.49 o posterior).")"
+        return 0
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        printf '  %s\n' "$(t "Attestation not checked: gh isn't logged in (gh auth login)." \
+                             "Atestación sin comprobar: gh no tiene una sesión iniciada (gh auth login).")"
+        return 0
+    fi
+    if why=$(gh attestation verify "$1" --repo "$REPO" </dev/null 2>&1); then
+        printf '%s✓%s %s\n' "$green" "$off" "$(t "Attestation checked: built by $REPO's GitHub workflow" \
+                                                  "Atestación comprobada: la compiló el flujo de GitHub de $REPO")"
+        return 0
+    fi
+    printf '%s\n' "$why" | tail -n 5 >&2
+    stop "$(t "The package's build provenance attestation didn't check out, so I didn't open it." \
+              "La atestación de origen del paquete no se pudo comprobar, así que no lo abrí.")" \
+         "$(t "Try again; if it keeps happening, tell the project: https://github.com/$REPO/issues" \
+              "Vuelve a intentarlo; si se repite, avísale al proyecto: https://github.com/$REPO/issues")" \
+         "$(t "If gh itself doesn't work here, CORRAL_NO_ATTESTATION=1 installs with only the SHA-256 check." \
+              "Si es gh el que no funciona aquí, CORRAL_NO_ATTESTATION=1 instala solo con la comprobación del SHA-256.")"
+}
+
 # latest_tag: the tag of the latest published version (v0.1.3), from GitHub's redirect.
 latest_tag() {
     url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null) || return 0
@@ -146,13 +181,22 @@ main() {
     trap 'rm -rf "$tmp"' EXIT
     trap 'exit 130' INT TERM
 
+    attest=""
     if [ -n "${CORRAL_URL:-}" ]; then
-        # A package from elsewhere (tests, a mirror): checked only if CORRAL_SHA256 says against what.
+        # A package from elsewhere (tests, a mirror): CORRAL_SHA256 says what it must be;
+        # skipping the check takes saying so (CORRAL_SHA256=skip).
+        expected=${CORRAL_SHA256:-}
+        [ -n "$expected" ] ||
+            stop "$(t "CORRAL_URL needs CORRAL_SHA256: the SHA-256 the package must have." \
+                      "CORRAL_URL necesita CORRAL_SHA256: el SHA-256 que debe tener el paquete.")" \
+                 "$(t "To install it without checking, say so: CORRAL_SHA256=skip" \
+                      "Para instalarlo sin comprobarlo, dilo: CORRAL_SHA256=skip")"
+        [ "$expected" != skip ] || expected=""
         printf '%s\n' "$(t "Downloading Corral from $CORRAL_URL..." "Descargando Corral desde $CORRAL_URL...")"
         curl -fsSL "$CORRAL_URL" -o "$tmp/$PACKAGE" ||
             stop "$(t "Couldn't download $CORRAL_URL." "No pude descargar $CORRAL_URL.")"
-        expected=${CORRAL_SHA256:-}
     else
+        attest=yes
         tag=${CORRAL_VERSION:-$(latest_tag)}
         [ -n "$tag" ] || stop "$(t "Couldn't find out which version of Corral is the latest." "No pude averiguar cuál es la última versión de Corral.")" \
                              "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")"
@@ -173,14 +217,15 @@ main() {
     if [ -n "$expected" ]; then
         actual=$(sha256 "$tmp/$PACKAGE")
         [ "$actual" = "$expected" ] ||
-            stop "$(t "The download doesn't match its published SHA-256, so I didn't open it." "La descarga no coincide con su SHA-256 publicado, así que no la abrí.")" \
+            stop "$(t "The download doesn't match the SHA-256 it should have, so I didn't open it." "La descarga no coincide con el SHA-256 que debe tener, así que no la abrí.")" \
                  "$(t "expected" "esperado")  $expected" "$(t "got     " "obtenido")  $actual" \
                  "" "$(t "Try again; if it keeps happening, tell the project: https://github.com/$REPO/issues" \
                          "Vuelve a intentarlo; si se repite, avísale al proyecto: https://github.com/$REPO/issues")"
         printf '%s✓%s %s\n' "$green" "$off" "$(t "SHA-256 checked" "SHA-256 comprobado")"
     else
-        printf '%s\n' "$(t "! Not checked: CORRAL_URL without CORRAL_SHA256." "! Sin comprobar: CORRAL_URL sin CORRAL_SHA256.")"
+        printf '%s\n' "$(t "! Not checked (CORRAL_SHA256=skip)." "! Sin comprobar (CORRAL_SHA256=skip).")"
     fi
+    [ -z "$attest" ] || attestation "$tmp/$PACKAGE"
 
     tar -xzf "$tmp/$PACKAGE" -C "$tmp"
     found=$(find "$tmp" -maxdepth 3 -path '*/rs/Cargo.toml' | head -n 1)
