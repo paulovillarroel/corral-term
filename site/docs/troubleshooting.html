@@ -69,7 +69,7 @@
 
     <h2 id="known-limits">Known limits</h2>
     <ul>
-    <li>Corral works on Linux x86_64 and on WSL. It doesn't work on macOS yet: the Rust code talks to the terminal with Linux's values (the <code>termios</code> layout and the <code>TIOCGWINSZ</code> code are different on a Mac), Corral looks at processes in <code>/proc</code>, which macOS doesn't have, it opens the browser with <code>xdg-open</code>, and the herdr plugin declares itself for Linux only.</li>
+    <li>Corral works on Linux x86_64 and on WSL. The macOS version is in development; until then, Corral doesn't work on a Mac, because the Rust code talks to the terminal with Linux's values (the <code>termios</code> layout and the <code>TIOCGWINSZ</code> code are different on a Mac), Corral looks at processes in <code>/proc</code>, which macOS doesn't have, it opens the browser with <code>xdg-open</code>, and the herdr plugin declares itself for Linux only.</li>
     <li>On Windows, plots can't be shown sharply inside herdr, so they go to Mirador (see <a href="plots.html">Plots and Mirador</a>).</li>
     <li>From Warp, <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd> shortcuts and <kbd>Alt</kbd> shortcuts don't reach the editor. That is why the main keys are <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd>.</li>
     <li>Tables from <code>View()</code> are saved in R's (or Python's) temporary folder and go away when you close the console.</li>
