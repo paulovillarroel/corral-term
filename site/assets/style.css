@@ -61,7 +61,9 @@
 
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; background: var(--bg); }
+/* Moving between pages fades instead of blinking (browsers that support it). */
+@view-transition { navigation: auto; }
 body {
   margin: 0;
   background: var(--bg);
