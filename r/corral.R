@@ -395,7 +395,7 @@ local({
     # Mirador and herdr popups are separate from this terminal, so R stays free.
     # Elsewhere the viewer takes over this terminal until you quit it.
     system2(env$corral_bin(),
-            c("view", shQuote(f), "--title", shQuote(title), "--session", session_id,
+            c("view", shQuote(f), "--title", shQuote(title), "--session", session_id, "--temp",
               if (isTRUE(mirador)) "--mirador"),
             wait = !in_herdr() && !isTRUE(mirador))
     invisible(f)

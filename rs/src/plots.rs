@@ -429,11 +429,76 @@ fn view_usage() -> &'static str {
        "uso: corral view ARCHIVO [--title TÍTULO] [--mirador] [--inline] [--session SESIÓN]")
 }
 
+// View() in R or Python saves each table to a temporary file, and a day's work makes
+// many of them: a new View() of the same object replaces the previous file, and each
+// session keeps its latest KEEP_VIEWS, up to KEEP_VIEW_BYTES in all (the newest one
+// always stays). Only files `corral view` gets with --temp, which View() passes, are
+// ever deleted; a file of yours never is. Mirador drops a table whose file is gone.
+const KEEP_VIEWS: usize = 20;
+const KEEP_VIEW_BYTES: u64 = 2 << 30;
+
+/// A session's View() file: title, path and size.
+type ViewFile = (String, String, u64);
+
+/// Given a session's View() files (oldest first) and the new one: the files to
+/// keep, the new one last, and the paths to delete.
+fn prune_views(mut kept: Vec<ViewFile>, new: ViewFile) -> (Vec<ViewFile>, Vec<String>) {
+    let mut gone = Vec::new();
+    kept.retain(|(title, path, _)| {
+        if *path == new.1 {
+            false
+        } else if *title == new.0 {
+            gone.push(path.clone());
+            false
+        } else {
+            true
+        }
+    });
+    kept.push(new);
+    while kept.len() > 1 && (kept.len() > KEEP_VIEWS || kept.iter().map(|v| v.2).sum::<u64>() > KEEP_VIEW_BYTES) {
+        gone.push(kept.remove(0).1);
+    }
+    (kept, gone)
+}
+
+/// A file View() wrote: R's tempfile("corral-…"), or a file in Python's corral-py-… folder.
+fn own_copy(p: &Path) -> bool {
+    let name = |q: Option<&Path>| q.and_then(|q| q.file_name()).and_then(|n| n.to_str()).unwrap_or("").to_string();
+    name(Some(p)).starts_with("corral-") || name(p.parent()).starts_with("corral-py-")
+}
+
+/// Record this View() file in its session's views.json and delete the files it makes stale.
+fn tidy_views(session: &str, title: &str, path: &Path) {
+    let plain = !session.is_empty() && !session.starts_with('.')
+        && session.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+    let dir = env::state_dir().join("sessions").join(session);
+    if !plain || !dir.is_dir() {
+        return;
+    }
+    let list = dir.join("views.json");
+    let kept: Vec<ViewFile> = env::read_json(&list).arr().iter().map(|v| (
+        v.get("title").str().unwrap_or("").to_string(),
+        v.get("path").str().unwrap_or("").to_string(),
+        v.get("size").num().unwrap_or(0.0) as u64,
+    )).collect();
+    let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let (kept, gone) = prune_views(kept, (title.to_string(), path.to_string_lossy().into_owned(), size));
+    for p in gone {
+        if own_copy(Path::new(&p)) && Path::new(&p).is_file() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+    let rows = kept.into_iter().map(|(t, p, s)| obj(vec![("title", t.into()), ("path", p.into()), ("size", (s as f64).into())])).collect();
+    env::write_json(&list, &Value::Arr(rows));
+}
+
 /// `corral view FILE`: a table (parquet, csv, …) in a herdr popup, in Mirador, or here.
 /// The terminal viewer is the default; Mirador only when asked (`--mirador`, the
 /// `m` key in the viewer or the variables pane, `View(x, mirador = TRUE)`).
+/// `--temp` (from View()): the file is Corral's own copy, see tidy_views.
 pub fn cmd_view(args: &[String]) -> Result<(), String> {
     let (mut file, mut title, mut inline, mut session, mut mirador) = (None::<String>, None::<String>, false, None::<String>, false);
+    let mut temp = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -441,6 +506,7 @@ pub fn cmd_view(args: &[String]) -> Result<(), String> {
             "--session" => session = it.next().cloned(),
             "--inline" => inline = true,
             "--mirador" => mirador = true,
+            "--temp" => temp = true,
             "-h" | "--help" => {
                 println!("{}", view_usage());
                 return Ok(());
@@ -456,6 +522,9 @@ pub fn cmd_view(args: &[String]) -> Result<(), String> {
     }
     let title = title.unwrap_or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
     let shown = path.to_string_lossy().into_owned();
+    if let (true, Some(s)) = (temp, &session) {
+        tidy_views(s, &title, &path);
+    }
 
     // auto: inside herdr everything opens in herdr; elsewhere Mirador if it is running.
     let target = std::env::var("CORRAL_VIEW").unwrap_or_else(|_| "auto".into());
@@ -671,5 +740,57 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(title: &str, path: &str, size: u64) -> ViewFile {
+        (title.into(), path.into(), size)
+    }
+
+    #[test]
+    fn a_new_view_of_the_same_object_replaces_its_file() {
+        let (kept, gone) = prune_views(vec![v("sales", "/t/corral-1.parquet", 10), v("df", "/t/corral-2.parquet", 10)],
+                                       v("sales", "/t/corral-3.parquet", 10));
+        assert_eq!(gone, vec!["/t/corral-1.parquet"]);
+        assert_eq!(kept, vec![v("df", "/t/corral-2.parquet", 10), v("sales", "/t/corral-3.parquet", 10)]);
+    }
+
+    #[test]
+    fn only_views_own_copies_are_deleted() {
+        assert!(own_copy(Path::new("/tmp/RtmpAb12/corral-1a2b.parquet")));
+        assert!(own_copy(Path::new("/tmp/corral-py-x1y2/101500-abc123.parquet")));
+        assert!(!own_copy(Path::new("/home/me/corral-term/data/sales.parquet")));
+        assert!(!own_copy(Path::new("/home/me/data/sales.parquet")));
+    }
+
+    #[test]
+    fn the_same_file_again_is_kept() {
+        let (kept, gone) = prune_views(vec![v("sales", "/t/corral-1.parquet", 10)], v("sales", "/t/corral-1.parquet", 10));
+        assert!(gone.is_empty());
+        assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn keeps_the_latest_twenty() {
+        let earlier: Vec<ViewFile> = (0..KEEP_VIEWS).map(|i| v(&format!("t{i}"), &format!("/t/corral-{i}"), 1)).collect();
+        let (kept, gone) = prune_views(earlier, v("new", "/t/corral-new", 1));
+        assert_eq!(gone, vec!["/t/corral-0"]);
+        assert_eq!(kept.len(), KEEP_VIEWS);
+        assert_eq!(kept.last().unwrap().0, "new");
+    }
+
+    #[test]
+    fn keeps_under_the_size_limit_but_always_the_newest() {
+        let gb = 1 << 30;
+        let (kept, gone) = prune_views(vec![v("a", "/t/corral-a", gb), v("b", "/t/corral-b", gb)], v("c", "/t/corral-c", gb));
+        assert_eq!(gone, vec!["/t/corral-a"]);
+        assert_eq!(kept.iter().map(|k| k.0.as_str()).collect::<Vec<_>>(), vec!["b", "c"]);
+        let (kept, gone) = prune_views(vec![v("a", "/t/corral-a", gb)], v("huge", "/t/corral-huge", 5 * gb));
+        assert_eq!(gone, vec!["/t/corral-a"]);
+        assert_eq!(kept, vec![v("huge", "/t/corral-huge", 5 * gb)]);
     }
 }

@@ -10,6 +10,7 @@ use crate::mirador::{duck, sql_ident, sql_lit, table_source};
 use crate::term::{clip, out, width, Screen};
 use crate::vars::{message_screen, Colors};
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::Command;
 
 const PAGE: usize = 200;
@@ -58,6 +59,7 @@ enum Mode {
 
 struct Viewer {
     src: String,
+    path: String,
     title: String,
     cols: Vec<Col>,
     all: usize,
@@ -90,12 +92,21 @@ impl Viewer {
         }).collect();
         let all = count(&format!("SELECT count(*) AS n FROM {src}"))?;
         let mut v = Viewer {
-            src, title: title.into(), cols, all, total: all, filter: String::new(), conditions: Vec::new(), typing: None, sort: None,
+            src, path: path.into(), title: title.into(), cols, all, total: all, filter: String::new(), conditions: Vec::new(), typing: None, sort: None,
             cache_start: 0, cache: Vec::new(), widths: Vec::new(), row: 0, col: 0, top: 0, first_col: 0,
             mode: Mode::Data, status: String::new(), colors: Colors::load(), header_spans: Vec::new(),
         };
         v.fetch(0)?;
         Ok(v)
+    }
+
+    /// A query's error, or what happened when the file itself is gone.
+    fn why(&self, error: String) -> String {
+        if Path::new(&self.path).exists() {
+            return error;
+        }
+        tr("This table's file is gone: a newer View() replaced it, or its session ended. q closes the viewer.",
+           "El archivo de esta tabla ya no está: lo reemplazó un View() más nuevo, o terminó su sesión. q cierra el visor.").into()
     }
 
     fn where_clause(&self) -> String {
@@ -146,7 +157,7 @@ impl Viewer {
         }
         let start = top.saturating_sub(PAGE / 4);
         if let Err(e) = self.fetch(start) {
-            self.status = e;
+            self.status = self.why(e);
         }
     }
 
@@ -157,7 +168,7 @@ impl Viewer {
             self.fetch(0)
         }) {
             Ok(_) => {}
-            Err(e) => self.status = e,
+            Err(e) => self.status = self.why(e),
         }
         self.row = 0;
         self.top = 0;
@@ -355,7 +366,7 @@ impl Viewer {
                 let srows = rows.arr().iter().map(|r| names.iter().map(|n| r.get(n).clone()).collect()).collect();
                 self.mode = Mode::Summary(scols, srows, 0);
             }
-            Err(e) => self.status = e,
+            Err(e) => self.status = self.why(e),
         }
     }
 }

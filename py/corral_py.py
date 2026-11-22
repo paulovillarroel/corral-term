@@ -578,7 +578,7 @@ def View(x, title: str | None = None, mirador: bool = False) -> None:
     corral = corral_bin()
     if not corral:
         raise RuntimeError(tr("`corral` is not on the PATH", "`corral` no está en el PATH"))
-    args = [corral, "view", str(path), "--title", str(title), "--session", session.id]
+    args = [corral, "view", str(path), "--title", str(title), "--session", session.id, "--temp"]
     if mirador:
         args.append("--mirador")
     if in_herdr() or mirador:
