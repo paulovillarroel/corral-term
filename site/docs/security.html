@@ -66,11 +66,11 @@
 
     <h3>Access levels</h3>
     <pre><code><span class="p">$ </span>corral config agents ask
-<span class="p">$ </span>corral config agents off
-<span class="p">$ </span>corral config agents on</code></pre>
+<span class="p">$ </span>corral config agents on
+<span class="p">$ </span>corral config agents off</code></pre>
     <ul>
-      <li><code>on</code> (the default): an agent's <code>corral eval</code> runs in your console, where you watch it, without asking first. Whatever can call <code>corral eval</code> as you, an agent or a script, can run any code in your session. Choose <code>ask</code> if no code should run before you read it.</li>
-      <li><code>ask</code>: every request opens a popup with the exact code, which agent pane asked and what it will see back. <kbd>Enter</kbd> runs it; <kbd>n</kbd> or <kbd>Esc</kbd> refuses, and the agent is told not to try again unless you ask. With no answer in 5 minutes, nothing runs.</li>
+      <li><code>ask</code> (the default): every request opens a popup with the exact code, which agent pane asked and what it will see back. <kbd>Enter</kbd> runs it; <kbd>n</kbd> or <kbd>Esc</kbd> refuses, and the agent is told not to try again unless you ask. With no answer in 5 minutes, nothing runs. A missing or mistyped setting also asks.</li>
+      <li><code>on</code>: an agent's <code>corral eval</code> runs in your console, where you watch it, without asking first. Whatever can call <code>corral eval</code> as you, an agent or a script, can run any code in your session. Watching is not the same as reading, so choose it only when the speed is worth more than reading every request.</li>
       <li><code>off</code>: <code>corral eval</code> refuses everything.</li>
     </ul>
     <figure class="tui-shot" role="img" aria-label="Corral's approval popup: an agent wants to run four lines of R in the console; Enter runs it, n refuses">
@@ -152,7 +152,7 @@
     <h2>For sensitive data</h2>
     <p>A setup for health records or anything that must not leave your organization:</p>
     <ol>
-      <li><strong>Turn on Corral's controls:</strong> <code>corral config agents ask</code>, and <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
+      <li><strong>Turn on Corral's controls:</strong> keep <code>agents ask</code> (the default), and add <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
       <li><strong>Limit the agent's own tools.</strong> Let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
 <pre><code>{
   "permissions": {
