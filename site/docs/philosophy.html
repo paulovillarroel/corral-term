@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- Paint the page's own background from the first frame (no white flash between pages);
+     the saved theme applies before the stylesheets load. -->
+<style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<title>Why Corral · Corral docs</title>
+<meta name="description" content="The idea behind Corral: the live session as the unit of work, a harness rather than an AI, code you see and approve, lightness for a day's work, where the name comes from, and where Corral fits in a data scientist's work.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- Vercel Web Analytics: page views, no cookies. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Speed Insights: real visitors' load times. -->
+<script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Why Corral</h1>
+    <p class="intro">Corral starts from one idea: in data science the work happens in a live session, so an agent that helps you should work there too, where you can see it. This page explains that idea, where the name comes from, and where Corral fits in your work.</p>
+
+    <h2>The name</h2>
+    <p>Corral runs on <a href="https://herdr.dev/tui/">herdr</a>, and a herd needs a corral. herdr keeps the herd: workspaces, tabs and panes, and the agents and programs running in them. Corral is the fenced place where you gather that herd to work: the consoles, the editor, the variables, the tables, the plots and the agents, together and under rules you set.</p>
+    <p>The word works a second way too. A corral is a bounded space where things meet and work gets done. It isn't there to lock anything in; it gives your tools and your agent one place to work together, with clear rules.</p>
+
+    <h2>The session is the unit of work</h2>
+    <p>Coding agents grew up in software engineering: they edit files, run tests and hand you a diff. Analysis works differently. It is exploratory and it has state: the work in progress is the objects in memory, the data you loaded, the model you fitted a minute ago. Copying code from a chat into a console, or running an agent's script again to get its objects back, breaks that flow.</p>
+    <p>In Corral the agent runs its code in your console, with <code>corral eval</code>. What it creates lands in your session next to what you created, and you can look at it, change it or plot it at once. It is the old habit of R and S, working at the prompt, carried over to working with agents.</p>
+
+    <h2>A harness, not an AI</h2>
+    <p>Corral has no chat and no model of its own. The agent is the one you already use (Claude Code, Codex, Gemini CLI, opencode…), in its own pane. Corral provides what sits between it and your session: a few shell commands, a skill in the open Agent Skills format that teaches the agent to use them, and rules that live in Corral's code, so they hold whatever the model was told. Any agent that can run a shell command can work with it.</p>
+
+    <h2>You see it, and you approve it</h2>
+    <p>The code an agent runs is typed into your console, one request at a time, and written to a local audit log. Seeing code go by is not the same as reading it, so by default every request waits in a popup until you approve it (<code>agents ask</code>). If you prefer speed, <code>corral config agents on</code> lets the agent run without asking, still in plain sight. The <a href="security.html">Security model</a> has the details.</p>
+    <p>The roles stay clear. You control the code, the data, the sessions and the analytic decisions; the agent explores, runs, transforms, models and proposes. The conclusions are still yours.</p>
+
+    <h2>Light, for a day's work</h2>
+    <p>If your work already happens in the terminal with an agent, a desktop IDE of several gigabytes next to it is mostly weight. Corral is one Rust binary with no dependencies, its own processes use a few megabytes each, and a layout has R ready in under half a second. Those figures are measured, and the <a href="performance.html">Performance</a> page shows how and what they leave out.</p>
+    <p>An IDE is for working all day, not for opening and closing, so what counts most is that Corral behaves the same in the evening as in the morning: <code>View()</code> as fast the twentieth time as the first, R's memory steady, and temporary files that don't pile up.</p>
+
+    <h2>Processes and files, not libraries</h2>
+    <p>Corral leans on engines that already do their job well (herdr, Ark, Fresh, DuckDB, uv) and talks to them through processes and plain formats: herdr's socket, the Jupyter protocol, Parquet and JSON files. The table viewer and Mirador run outside your session, so if one of them fails, your session doesn't. The same care goes for your machine: the installer never uses <code>sudo</code>, keeps a copy of each file it changes, and <code>corral uninstall</code> takes everything out.</p>
+
+    <h2>Where Corral fits</h2>
+    <p>An analysis usually goes through five stages:</p>
+    <ol>
+      <li><strong>Preparation.</strong> Import the data, set up the environment, look at its structure.</li>
+      <li><strong>Exploration.</strong> Variables, distributions, anomalies, relationships, missing data.</li>
+      <li><strong>Assisted iteration.</strong> Ask the agent for calculations, transformations, analyses or tests on the session.</li>
+      <li><strong>Validation.</strong> Inspect the results, read the code, check the assumptions.</li>
+      <li><strong>Formalization.</strong> Turn what worked into reproducible scripts, tests and pipelines.</li>
+    </ol>
+    <p>Corral is made for the first four, and above all for exploration and iteration, where the live session matters most. Formalization belongs to your project: the scripts you save, your repository, your tests and your pipelines. A live session is quick to work in and easy to lose, so the draft is temporary on purpose: save the code that matters (<kbd>Ctrl</kbd>+<kbd>S</kbd>, or ask the agent to save the draft), and the audit log keeps what agents ran.</p>
+
+    <h3>Checking what is already built</h3>
+    <p>A good part of data science is not building something new but keeping an eye on systems, models and algorithms already in use: how a model performs on this month's data, whether it treats some group worse, whether its inputs drifted, whether an algorithm still does what it should. That is analysis, not development, and it doesn't need the whole infrastructure up. Load the data and the model, ask your questions, look at the answers: a tool that opens in under a second and stays light is enough.</p>
+
+    <h2>What Corral leaves to other tools</h2>
+    <ul>
+      <li><strong>Your team's development workflow.</strong> Reproducibility, version control, tests, dependency management and code review belong to your workflow, not to the IDE.</li>
+      <li><strong>Positron, RStudio and VS Code.</strong> They are still the right tools for heavier work, and Corral doesn't touch them.</li>
+      <li><strong>A sandbox.</strong> Code an agent runs has your user's permissions. The <a href="security.html">Security model</a> says what Corral enforces and what it doesn't.</li>
+    </ul>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

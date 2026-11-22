@@ -6,6 +6,7 @@
 const NAV = [
   ["Start here", [
     ["index.html", "Overview"],
+    ["philosophy.html", "Why Corral"],
     ["install.html", "Install"],
     ["quickstart.html", "Quick start"],
     ["keys.html", "Keyboard shortcuts"],
