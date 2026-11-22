@@ -2,6 +2,17 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Agents ask by default: each `corral eval` waits in a popup until you approve it. A missing or mistyped `agents` setting also asks; only `corral config agents on` lets agents run without asking. If you had set `on`, nothing changes for you.
+- Start with R or with Python: "Corral: start with R" and "Corral: start with Python" in the palette (`corral config start r|python`), or `corral layout --lang python` for one layout. A Python layout opens the Python console and a `draft.py`, so Ctrl+R sends to Python; `corral script` follows the console in view.
+- Docs: Why Corral, a new page with the idea behind Corral, where the name comes from and where it fits in a data scientist's work; the panes of a layout, with a diagram; and the draft is deleted when you close Corral unless you save it.
+
+### Fixes
+
+- The notice for `agent_output structure` no longer says agents never see values; it says to keep `agents ask` with it.
+- Docs: `corral layout --focus` takes `code`, not `codigo`.
+
 ## 0.1.6
 
 A long session doesn't fill the disk.
