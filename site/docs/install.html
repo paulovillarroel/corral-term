@@ -85,6 +85,8 @@
 
     <h2>Install with one line</h2>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh</code></pre>
+    <p>The installer speaks English. To read it in Spanish, set <code>CORRAL_LANG=es</code>; an update already speaks the language you chose with <code>corral config language</code>.</p>
+    <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | CORRAL_LANG=es sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
     <pre><code>Downloading Corral 0.1.8...
 ✓ SHA-256 checked
