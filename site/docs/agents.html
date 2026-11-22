@@ -157,6 +157,7 @@
     <li>It keeps the output small (<code>head()</code>, <code>str()</code>, <code>summary()</code>, <code>df.head()</code>), and does scratch work in <code>local({ ... })</code> in R, or in a function in Python, so your environment stays clean.</li>
     <li>To show you a table, it runs <code>View(df)</code> through <code>corral eval</code>, and the table opens in your viewer.</li>
     <li>When you ask, it rearranges the panes (<code>corral toggle</code>, <code>corral switch</code>), and reads or changes your shortcuts (<code>corral keys</code>).</li>
+    <li>It answers questions about Corral from these pages, which come with Corral, and from <code>corral --help</code>, and reads your settings with <code>corral config</code>. It changes a setting only when you ask, and never <code>agents</code> or <code>agent_output</code>: for those it gives you the command or the palette entry, so the change comes from you.</li>
     </ul>
 
     <h3>What it asks before doing</h3>
