@@ -45,6 +45,43 @@
     <h1>Layouts and panes</h1>
     <p class="intro">A Corral layout puts the agent, the script, the console and the variables in one herdr tab. There are two arrangements, and you can expand or swap panes without losing anything, because every session keeps running in its herdr pane.</p>
 
+    <h2>The panes</h2>
+    <figure class="arch">
+      <svg viewBox="0 0 680 420" role="img" aria-labelledby="panes-t panes-d">
+        <title id="panes-t">The panes of a Corral layout</title>
+        <desc id="panes-d">One herdr tab. On the left, about half the width, the agent. On the right, from top to bottom: the script editor with the draft, the R or Python console, and the variables pane.</desc>
+        <rect class="frame" x="20" y="14" width="640" height="392" rx="14"/>
+        <text class="s" x="38" y="34" dominant-baseline="central">a herdr tab, corral</text>
+        <g class="core"><rect x="30" y="52" width="318" height="344" rx="6"/>
+          <text class="t" x="189" y="196" text-anchor="middle" dominant-baseline="central">Agent</text>
+          <text class="s" x="189" y="218" text-anchor="middle" dominant-baseline="central">Claude Code, Codex or any agent</text>
+          <text class="s" x="189" y="238" text-anchor="middle" dominant-baseline="central">runs code in the console with corral eval</text></g>
+        <g class="ui"><rect x="356" y="52" width="294" height="138" rx="6"/>
+          <text class="t" x="503" y="98" text-anchor="middle" dominant-baseline="central">Script</text>
+          <text class="s" x="503" y="120" text-anchor="middle" dominant-baseline="central">the editor, with draft.R or draft.py</text>
+          <text class="s" x="503" y="140" text-anchor="middle" dominant-baseline="central">corral:script</text></g>
+        <g class="eng"><rect x="356" y="196" width="294" height="104" rx="6"/>
+          <text class="t" x="503" y="226" text-anchor="middle" dominant-baseline="central">Console</text>
+          <text class="s" x="503" y="248" text-anchor="middle" dominant-baseline="central">R on Ark, or Python in IPython</text>
+          <text class="s" x="503" y="268" text-anchor="middle" dominant-baseline="central">corral:r · corral:python</text></g>
+        <g class="ui"><rect x="356" y="306" width="294" height="90" rx="6"/>
+          <text class="t" x="503" y="330" text-anchor="middle" dominant-baseline="central">Variables</text>
+          <text class="s" x="503" y="352" text-anchor="middle" dominant-baseline="central">the objects in your session</text>
+          <text class="s" x="503" y="372" text-anchor="middle" dominant-baseline="central">corral:vars</text></g>
+      </svg>
+    </figure>
+    <table>
+    <thead><tr><th>Pane</th><th>What it holds</th><th>Keys</th></tr></thead>
+    <tbody>
+    <tr><td>Agent</td><td>Claude Code, or the agent in <code>corral config agent</code>. You talk to it here; it runs its code in your console with <code>corral eval</code>.</td><td></td></tr>
+    <tr><td>Script <code>corral:script</code></td><td>The editor, Fresh, with an empty draft ready to use: <code>draft.R</code>, or <code>draft.py</code> when Corral starts with Python. If you don't save it, it is deleted when you close Corral (<a href="editor.html#the-draft">The draft</a>).</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd> line or selection, <kbd>F5</kbd> the file, <kbd>Ctrl</kbd>+<kbd>S</kbd> save</td></tr>
+    <tr><td>Console <code>corral:r</code>, <code>corral:python</code></td><td>The live session you and the agent share: R on Ark (or plain R), or Python in IPython.</td><td><kbd>ctrl+b</kbd> <kbd>y</kbd> switches R and Python</td></tr>
+    <tr><td>Variables <code>corral:vars</code></td><td>The objects in the session, in tabs: Data, Plots, Values, Functions and Other. <kbd>Enter</kbd> shows one: a data frame opens in the table viewer.</td><td><kbd>ctrl+b</kbd> <kbd>d</kbd> a bigger view</td></tr>
+    <tr><td>Shell <code>corral:shell</code></td><td>Only with <code>corral layout --shell</code>: a shell next to the variables.</td><td></td></tr>
+    </tbody>
+    </table>
+    <p><kbd>ctrl+b</kbd> <kbd>t</kbd> expands the script or the console over the space they share, and brings both back (<a href="#expand-the-script-or-the-console">below</a>). Some things open over the panes instead of in one: the table viewer (<code>View()</code>), the plots, and the popup where you approve an agent's request. Mirador, with every plot and table, opens in your browser (<kbd>ctrl+b</kbd> <kbd>f</kbd>).</p>
+
     <h2>The two layouts</h2>
     <table>
     <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+a</kbd>)</th></tr></thead>
@@ -62,8 +99,9 @@
     <pre><code><span class="p">$ </span>corral layout
 <span class="p">$ </span>corral layout --focus code
 <span class="p">$ </span>corral layout --shell
-<span class="p">$ </span>corral layout --ratio 0.6</code></pre>
-    <p><code>--focus code</code> opens the layout focused on the code. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
+<span class="p">$ </span>corral layout --ratio 0.6
+<span class="p">$ </span>corral layout --lang python</code></pre>
+    <p><code>--focus code</code> opens the layout focused on the code. <code>--lang python</code> starts it with the Python console and a Python draft instead of R; to make that the rule, use <code>corral config start python</code>, or "Corral: start with Python" in the palette. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
 
     <h3>Another agent</h3>
     <p>The agent pane runs Claude Code. To run another agent there every time, set its command:</p>
@@ -94,7 +132,7 @@
     <p>If you set up your own tab and marked a pane as the R console (<kbd>ctrl+b</kbd> <kbd>m</kbd>), you can add the other panes to it:</p>
     <pre><code><span class="p">$ </span>corral script
 <span class="p">$ </span>corral vars --split</code></pre>
-    <p><code>corral script</code> adds the editor over the console, with a new draft or with the file you name. <code>corral vars --split</code> adds the variables pane under the R console. Both need an R console in the workspace.</p>
+    <p><code>corral script</code> adds the editor over the console in view, R or Python, with a new draft in that language or with the file you name. <code>corral vars --split</code> adds the variables pane under the R console, so it needs an R console in the workspace.</p>
     <p>Corral finds its panes by their herdr labels: <code>corral:script</code>, <code>corral:r</code>, <code>corral:python</code>, <code>corral:vars</code> and <code>corral:shell</code>. A workspace has one of each; a new layout takes the labels away from older panes.</p>
 
     <h2>Sessions live in herdr panes</h2>

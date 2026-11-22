@@ -53,12 +53,13 @@
     <table>
     <thead><tr><th>Option</th><th>What it does</th></tr></thead>
     <tbody>
-    <tr><td><code>--focus agent|codigo</code></td><td>Focused on the agent (the default) or on the code, with the script on the left and the agent over the console</td></tr>
+    <tr><td><code>--focus agent|code</code></td><td>Focused on the agent (the default) or on the code, with the script on the left and the agent over the console</td></tr>
+    <tr><td><code>--lang r|python</code></td><td>The console it starts with, and the language of the draft (<code>corral config start</code>, else R)</td></tr>
     <tr><td><code>--shell</code></td><td>Adds a shell next to the variables</td></tr>
     <tr><td><code>--ratio N</code></td><td>Width of the left pane, as a fraction (0.516)</td></tr>
     <tr><td><code>--agent COMMAND</code></td><td>The agent's command (<code>CORRAL_AGENT</code>, then <code>corral config agent</code>, else <code>claude</code>); <code>''</code> leaves a shell</td></tr>
     <tr><td><code>--editor COMMAND</code></td><td>The editor (<code>fresh</code>, or <code>CORRAL_EDITOR</code>); <code>''</code> leaves out the script</td></tr>
-    <tr><td><code>--console COMMAND</code></td><td>The console's command (<code>CORRAL_R</code>, or <code>corral _console r</code>)</td></tr>
+    <tr><td><code>--console COMMAND</code></td><td>The console's command (for R, <code>CORRAL_R</code>; else <code>corral _console r</code> or <code>corral _console python</code>)</td></tr>
     <tr><td><code>--cwd FOLDER</code></td><td>The folder to open it in (the pane's current folder)</td></tr>
     <tr><td><code>--label NAME</code></td><td>The tab's name (<code>corral</code>)</td></tr>
     </tbody>
