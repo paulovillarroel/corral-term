@@ -79,13 +79,7 @@ impl Screen {
     }
 
     pub fn size(&self) -> (usize, usize) {
-        let mut ws = Winsize::default();
-        // SAFETY: TIOCGWINSZ fills a winsize struct.
-        if unsafe { ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0 && ws.cols > 0 {
-            (ws.cols as usize, ws.rows as usize)
-        } else {
-            (80, 24)
-        }
+        size()
     }
 
     /// Is there input waiting (queued keys, or bytes on the terminal)?
@@ -224,6 +218,53 @@ fn name(t: &str) -> String {
         t.to_string()
     } else {
         String::new()
+    }
+}
+
+/// A console's line-editing mode: keys one by one, no echo, and Ctrl+C, Ctrl+Z
+/// and Ctrl+S as plain keys (the console interrupts the kernel itself). Output
+/// processing stays on, so "\n" still starts a new line.
+pub struct Raw {
+    saved: Termios,
+}
+
+const ISIG: u32 = 0o1;
+const IEXTEN: u32 = 0o100000;
+const IXON: u32 = 0o2000;
+const ICRNL: u32 = 0o400;
+
+impl Raw {
+    pub fn enter() -> Option<Raw> {
+        let mut t = Termios { c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0, c_cc: [0; 32], c_ispeed: 0, c_ospeed: 0 };
+        // SAFETY: plain C calls on stdin with a correctly laid out struct.
+        if unsafe { tcgetattr(0, &mut t) } != 0 {
+            return None;
+        }
+        let saved = t;
+        t.c_lflag &= !(ICANON | ECHO | ISIG | IEXTEN);
+        t.c_iflag &= !(IXON | ICRNL);
+        t.c_cc[VMIN] = 1;
+        t.c_cc[VTIME] = 0;
+        unsafe { tcsetattr(0, TCSADRAIN, &t) };
+        Some(Raw { saved })
+    }
+}
+
+impl Drop for Raw {
+    fn drop(&mut self) {
+        // SAFETY: restore the settings read in enter().
+        unsafe { tcsetattr(0, TCSADRAIN, &self.saved) };
+    }
+}
+
+/// Columns and rows of the terminal on stdout.
+pub fn size() -> (usize, usize) {
+    let mut ws = Winsize::default();
+    // SAFETY: TIOCGWINSZ fills a winsize struct.
+    if unsafe { ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0 && ws.cols > 0 {
+        (ws.cols as usize, ws.rows as usize)
+    } else {
+        (80, 24)
     }
 }
 

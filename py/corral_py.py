@@ -151,6 +151,25 @@ def describe(name: str, x) -> dict:
             "size": size if kind != "plotobj" else None, "hash": fingerprint}
 
 
+def state_of(x):
+    """What describe() shows that can change while the object stays the same one."""
+    try:
+        if is_plot(x):
+            return object()  # titles change in place: always describe again
+        t = type(x)
+        mod = t.__module__.split(".")[0]
+        if mod in ("pandas", "polars") and t.__name__ == "DataFrame":
+            return x.shape, tuple(str(d) for d in x.dtypes)
+        if mod in ("numpy", "pyarrow", "pandas", "polars"):
+            shape = getattr(x, "shape", None)
+            return shape, str(getattr(x, "dtype", ""))
+        if isinstance(x, (list, dict, set, bytearray)):
+            return len(x)
+        return None  # immutable, or shown only by its class
+    except Exception:
+        return object()
+
+
 def has_content(fig) -> bool:
     """Something drawn: a figure that only has empty axes (plt.subplots()) waits for data."""
     try:
@@ -338,6 +357,8 @@ class Session:
         self.tmp = Path(tempfile.mkdtemp(prefix="corral-py-"))
         self.rendered: dict[int, str] = {}  # figures sent during this cell: id(figure) -> plot id
         self.pages_before = 0
+        self.described: dict[str, tuple] = {}  # name -> (object, state_of, description)
+        self.vars_written = False
         self.plots = PlotServer(self)
         self.write_meta()
         atexit.register(self.close)
@@ -359,19 +380,37 @@ class Session:
             self.write_meta()
         ns = self.shell.user_ns
         hidden = set(getattr(self.shell, "user_ns_hidden", {}))
-        out = []
+        # Describing is skipped for objects seen before and unchanged in shape, and
+        # the file is only rewritten when something changed. The cache holds the
+        # object itself, so a freed id cannot be mistaken for the old value.
+        cache = self.described
+        out, seen, changed = [], set(), False
         for name in sorted(ns):
             if name.startswith("_") or name in HIDDEN or name in hidden:
                 continue
             x = ns[name]
             if isinstance(x, types.ModuleType):
                 continue
+            seen.add(name)
+            state = state_of(x)
+            hit = cache.get(name)
+            if hit is not None and hit[0] is x and hit[1] == state:
+                out.append(hit[2])
+                continue
             try:
-                out.append(describe(name, x))
+                d = describe(name, x)
             except Exception:
-                out.append({"name": name, "kind": "other", "class": type(x).__name__,
-                            "preview": "", "size": None, "hash": None})
-        write_json_atomic(self.dir / "vars.json", {"updated": time.time(), "vars": out})
+                d = {"name": name, "kind": "other", "class": type(x).__name__,
+                     "preview": "", "size": None, "hash": None}
+            cache[name] = (x, state, d)
+            out.append(d)
+            changed = True
+        gone = [name for name in cache if name not in seen]
+        for name in gone:
+            del cache[name]
+        if changed or gone or not self.vars_written:
+            write_json_atomic(self.dir / "vars.json", {"updated": time.time(), "vars": out})
+            self.vars_written = True
 
     # ---- cells
 

@@ -154,6 +154,21 @@ local({
   started <- as.numeric(Sys.time())
   last_cwd <- ""
 
+  # After every command the environment is described again, but only objects
+  # that changed: each one keeps a cheap signature (address in memory, length,
+  # rows, and the value itself when it is a single number or string, since R
+  # can modify an object in place without moving it) together with its
+  # description and JSON. If no signature changed, nothing is done at all.
+  has_rlang <- requireNamespace("rlang", quietly = TRUE)
+  described <- new.env(hash = TRUE, parent = emptyenv())
+  last_signature <- NULL
+
+  signature_of <- function(x) {
+    paste(rlang::obj_address(x), length(x),
+          if (is.data.frame(x)) .row_names_info(x, 2L) else "",
+          if (is.atomic(x) && length(x) == 1L) format(x) else "")
+  }
+
   snapshot <- function() {
     if (!identical(getwd(), last_cwd)) {
       last_cwd <<- getwd()
@@ -161,9 +176,34 @@ local({
     }
     genv <- globalenv()
     names <- sort(ls(genv))
-    vars <- lapply(names, function(n) describe(n, get(n, envir = genv)))
-    write_json_atomic(list(updated = as.numeric(Sys.time()), vars = vars),
-                      file.path(session_dir, "vars.json"))
+    if (!has_rlang) {
+      vars <- lapply(names, function(n) describe(n, get(n, envir = genv)))
+      return(write_json_atomic(list(updated = as.numeric(Sys.time()), vars = vars),
+                               file.path(session_dir, "vars.json")))
+    }
+    sigs <- vapply(names, function(n) signature_of(get(n, envir = genv)), character(1), USE.NAMES = FALSE)
+    whole <- paste(names, sigs, sep = "=", collapse = "|")
+    if (identical(whole, last_signature)) return(invisible())
+    parts <- character(length(names))
+    for (i in seq_along(names)) {
+      hit <- described[[names[i]]]
+      if (is.null(hit) || !identical(hit$sig, sigs[i])) {
+        d <- describe(names[i], get(names[i], envir = genv))
+        json <- jsonlite::toJSON(d, auto_unbox = TRUE, na = "null", null = "null", digits = NA)
+        hit <- list(sig = sigs[i], json = json)
+        assign(names[i], hit, envir = described)
+      }
+      parts[i] <- hit$json
+    }
+    gone <- setdiff(ls(described), names)
+    if (length(gone)) rm(list = gone, envir = described)
+    path <- file.path(session_dir, "vars.json")
+    tmp <- paste0(path, ".tmp")
+    writeLines(paste0('{"updated":', format(as.numeric(Sys.time()), digits = 15), ',"vars":[',
+                      paste(parts, collapse = ","), "]}"), tmp, useBytes = TRUE)
+    file.rename(tmp, path)
+    last_signature <<- whole
+    invisible()
   }
 
   # The httpgd device (it shows up as "unigd" in dev.list() since httpgd 2).

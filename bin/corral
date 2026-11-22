@@ -418,10 +418,16 @@ def ark_binary() -> Path | None:
     return max(found, key=key) if found else None
 
 
+def jupyter_frontend() -> bool:
+    """Ark through jupyter-console (ark_frontend: jupyter, or Corral's Rust console not built)."""
+    return corral_config().get("ark_frontend") == "jupyter" or not RUST_CORRAL.is_file()
+
+
 def r_flavor() -> str:
     """How the R console runs: "ark" (Positron's kernel, the default when installed) or "r"."""
     choice = corral_config().get("r_console") or "ark"
-    if choice == "ark" and ark_binary() and shutil.which("jupyter-console") and shutil.which("R"):
+    frontend = not jupyter_frontend() or shutil.which("jupyter-console")
+    if choice == "ark" and frontend and ark_binary() and shutil.which("R"):
         return "ark"
     return "r"
 
@@ -473,6 +479,8 @@ def cmd_console_run(args: argparse.Namespace) -> None:
     custom = cfg.get("r_console")
     if custom and custom not in ("ark", "r"):
         os.execvpe("sh", ["sh", "-c", custom], env)  # your own command
+    if r_flavor() == "ark" and not jupyter_frontend():
+        os.execve(str(RUST_CORRAL), [str(RUST_CORRAL), "_console", "r"], env)  # Corral's own console
     if r_flavor() == "ark":
         # Ark through jupyter-console. The connection file goes where corral.R can
         # announce it, so `corral _lsp r` can reach Ark's language server.
@@ -752,7 +760,7 @@ def cmd_console(args: argparse.Namespace) -> None:
         procs = []
     names = [str(p.get("name", "")) for p in procs]
     known = next((s.get("lang", "r") for s in r_sessions() if s.get("pane_id") == pane), None)
-    is_ark = any(n.startswith("jupyter-consol") for n in names)
+    is_ark = any(n.startswith("jupyter-consol") or n == "ark" for n in names)
     is_python = not is_ark and any(n in ("ipython", "python", "python3") or n.startswith("python3.") for n in names)
     lang = args.lang or known or ("python" if is_python else "r")
     label = console_label(lang)
@@ -1151,7 +1159,8 @@ def cmd_config(args: argparse.Namespace) -> None:
     if args.value is None:
         print(json.dumps(cfg.get(args.key) if args.key else cfg, ensure_ascii=False))
         return
-    allowed = {"images": {"auto", "kitty", "symbols"}, "mirador_window": {"derecha", "libre"}}
+    allowed = {"images": {"auto", "kitty", "symbols"}, "mirador_window": {"derecha", "libre"},
+               "ark_frontend": {"corral", "jupyter"}}
     if args.key in allowed and args.value not in allowed[args.key]:
         raise CorralError(f"{args.key} acepta: {', '.join(sorted(allowed[args.key]))}")
     cfg[args.key] = args.value
@@ -1352,9 +1361,10 @@ def cmd_ark(args: argparse.Namespace) -> None:
     ark = ark_binary()
     console = shutil.which("jupyter-console")
     print(f"Ark:             {ark or 'no instalado (corral ark --instalar ' + ARK_VERSION + ')'}")
-    print(f"jupyter-console: {console or 'no instalado (uv tool install jupyter-console)'}")
+    print(f"jupyter-console: {console or 'no instalado (opcional: corral config ark_frontend jupyter)'}")
     print(f"consola de R:    {r_flavor()}  (corral config r_console ark|r)")
-    if ark and console:
+    print(f"frente de Ark:   {'jupyter-console' if jupyter_frontend() else 'consola de Corral (Rust)'}")
+    if ark:
         print(f"kernel:          {ark_kernelspec() / 'kernels' / 'ark' / 'kernel.json'}")
 
 
@@ -1784,7 +1794,8 @@ def cmd_doctor(_: argparse.Namespace) -> None:
     ark = ark_binary()
     check(bool(ark), "Ark (consola de R)", str(ark) if ark else f"corral ark --instalar  (sin Ark, la consola es R normal)")
     console = shutil.which("jupyter-console")
-    check(bool(console), "jupyter-console (para Ark)", console or "uv tool install jupyter-console")
+    if jupyter_frontend():
+        check(bool(console), "jupyter-console (para Ark)", console or "uv tool install jupyter-console")
     check(True, "consola de R", "Ark" if r_flavor() == "ark" else "R normal (corral config r_console)")
     rscript = shutil.which("Rscript")
     check(bool(rscript), "R", rscript or "no está en el PATH")

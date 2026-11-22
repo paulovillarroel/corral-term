@@ -1,5 +1,6 @@
 //! Just enough ZeroMQ (ZMTP 3.0 over TCP, NULL security) and Jupyter messaging
-//! to talk to a kernel: a DEALER for the shell channel and a SUB for IOPub.
+//! to talk to a kernel: DEALERs for the shell, stdin and control channels and a
+//! SUB for IOPub.
 
 use crate::json::{self, obj, Value};
 use crate::sha256::hmac_hex;
@@ -12,6 +13,13 @@ pub struct Socket {
 
 impl Socket {
     pub fn connect(addr: &str, socket_type: &str) -> io::Result<Socket> {
+        Socket::connect_as(addr, socket_type, None)
+    }
+
+    /// With an identity, the kernel's ROUTER knows this connection by it: the
+    /// shell and stdin sockets share one, so the kernel can ask for input
+    /// (`readline()`) on the stdin channel of whoever sent the request.
+    pub fn connect_as(addr: &str, socket_type: &str, identity: Option<&[u8]>) -> io::Result<Socket> {
         let mut stream = TcpStream::connect(addr)?;
         stream.set_nodelay(true)?;
         // Greeting: signature, version 3.0, mechanism NULL, as-server 0, filler.
@@ -33,6 +41,12 @@ impl Socket {
         ready.extend_from_slice(b"Socket-Type");
         ready.extend_from_slice(&(socket_type.len() as u32).to_be_bytes());
         ready.extend_from_slice(socket_type.as_bytes());
+        if let Some(id) = identity {
+            ready.push(8);
+            ready.extend_from_slice(b"Identity");
+            ready.extend_from_slice(&(id.len() as u32).to_be_bytes());
+            ready.extend_from_slice(id);
+        }
         let mut sock = Socket { stream };
         sock.write_frame(&ready, false, true)?;
         loop {
@@ -98,6 +112,11 @@ impl Socket {
         }
     }
 
+    /// A second handle on the same connection (one thread reads, another writes).
+    pub fn try_clone(&self) -> io::Result<Socket> {
+        Ok(Socket { stream: self.stream.try_clone()? })
+    }
+
     /// SUB: receive everything the kernel publishes.
     pub fn subscribe_all(&mut self) -> io::Result<()> {
         self.send(&[&[1u8]])
@@ -110,6 +129,8 @@ pub struct Connection {
     pub key: Vec<u8>,
     pub shell: u16,
     pub iopub: u16,
+    pub stdin: u16,
+    pub control: u16,
 }
 
 impl Connection {
@@ -122,6 +143,8 @@ impl Connection {
             key: v.get("key").str().unwrap_or("").as_bytes().to_vec(),
             shell: port("shell_port")?,
             iopub: port("iopub_port")?,
+            stdin: v.get("stdin_port").num().unwrap_or(0.0) as u16,
+            control: v.get("control_port").num().unwrap_or(0.0) as u16,
         })
     }
 
@@ -135,10 +158,16 @@ pub fn uuid() -> String {
     format!("{}-{}-4{}-a{}-{}", &h[0..8], &h[8..12], &h[13..16], &h[17..20], &h[20..32])
 }
 
-/// A signed Jupyter message on a DEALER socket.
-pub fn send_message(sock: &mut Socket, key: &[u8], session: &str, msg_type: &str, content: &Value) -> io::Result<()> {
+/// A signed Jupyter message on a DEALER socket; returns its id.
+pub fn send_message(sock: &mut Socket, key: &[u8], session: &str, msg_type: &str, content: &Value) -> io::Result<String> {
+    send_reply(sock, key, session, msg_type, content, &Value::obj())
+}
+
+/// The same, answering `parent` (an input_reply answers the kernel's input_request).
+pub fn send_reply(sock: &mut Socket, key: &[u8], session: &str, msg_type: &str, content: &Value, parent: &Value) -> io::Result<String> {
+    let id = uuid();
     let header = obj(vec![
-        ("msg_id", uuid().into()),
+        ("msg_id", id.as_str().into()),
         ("session", session.into()),
         ("username", "corral".into()),
         ("date", iso_now().into()),
@@ -146,21 +175,27 @@ pub fn send_message(sock: &mut Socket, key: &[u8], session: &str, msg_type: &str
         ("version", "5.3".into()),
     ])
     .to_json();
-    let (parent, metadata, content) = ("{}".to_string(), "{}".to_string(), content.to_json());
+    let (parent, metadata, content) = (parent.to_json(), "{}".to_string(), content.to_json());
     let signature = if key.is_empty() {
         String::new()
     } else {
         hmac_hex(key, &[header.as_bytes(), parent.as_bytes(), metadata.as_bytes(), content.as_bytes()])
     };
     sock.send(&[b"<IDS|MSG>", signature.as_bytes(), header.as_bytes(), parent.as_bytes(),
-                metadata.as_bytes(), content.as_bytes()])
+                metadata.as_bytes(), content.as_bytes()])?;
+    Ok(id)
 }
 
 /// Header and content of a Jupyter message (the signature isn't checked: local kernel).
 pub fn parse_message(parts: &[Vec<u8>]) -> Option<(Value, Value)> {
+    parse_full(parts).map(|(header, _, content)| (header, content))
+}
+
+/// Header, parent header and content.
+pub fn parse_full(parts: &[Vec<u8>]) -> Option<(Value, Value, Value)> {
     let i = parts.iter().position(|p| p.as_slice() == b"<IDS|MSG>")?;
     let text = |k: usize| std::str::from_utf8(parts.get(i + k)?).ok().and_then(|t| json::parse(t).ok());
-    Some((text(2)?, text(5)?))
+    Some((text(2)?, text(3).unwrap_or(Value::obj()), text(5)?))
 }
 
 /// UTC time as ISO 8601, without a date library.

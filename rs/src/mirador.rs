@@ -57,7 +57,7 @@ fn mtime(path: &Path) -> Option<f64> {
 
 // --------------------------------------------------------------------------- small HTTP client (httpgd)
 
-fn http_get(host: &str, target: &str) -> Option<(Vec<u8>, String)> {
+pub(crate) fn http_get(host: &str, target: &str) -> Option<(Vec<u8>, String)> {
     let mut s = TcpStream::connect(host).ok()?;
     s.set_read_timeout(Some(Duration::from_secs(10))).ok();
     write!(s, "GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").ok()?;
@@ -108,7 +108,7 @@ fn plots_base(sid: &str) -> Option<(String, String)> {
     Some((host.to_string(), token))
 }
 
-fn plots_raw(sid: &str, path: &str, params: &[(&str, String)]) -> Option<(Vec<u8>, String)> {
+pub(crate) fn plots_raw(sid: &str, path: &str, params: &[(&str, String)]) -> Option<(Vec<u8>, String)> {
     let (host, token) = plots_base(sid)?;
     let mut q: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", encode(v))).collect();
     if !token.is_empty() {
@@ -117,7 +117,7 @@ fn plots_raw(sid: &str, path: &str, params: &[(&str, String)]) -> Option<(Vec<u8
     http_get(&host, &format!("/{path}?{}", q.join("&")))
 }
 
-fn plots_json(sid: &str, path: &str) -> Value {
+pub(crate) fn plots_json(sid: &str, path: &str) -> Value {
     plots_raw(sid, path, &[]).and_then(|(b, _)| json::parse(&String::from_utf8_lossy(&b)).ok()).unwrap_or(Value::Null)
 }
 

@@ -25,10 +25,16 @@ pub fn ark_binary(cfg: &Value) -> Option<PathBuf> {
         .max_by_key(|p| version(p))
 }
 
-/// "ark" (the default when Ark and jupyter-console are installed) or "r".
+/// Ark's front end: Corral's own console, or jupyter-console (`ark_frontend: "jupyter"`).
+pub fn jupyter_frontend(cfg: &Value) -> bool {
+    cfg.get("ark_frontend").str() == Some("jupyter")
+}
+
+/// "ark" (the default when Ark is installed) or "r".
 pub fn r_flavor(cfg: &Value) -> &'static str {
     let choice = cfg.get("r_console").str().unwrap_or("ark");
-    if choice == "ark" && ark_binary(cfg).is_some() && env::which("jupyter-console").is_some() && env::which("R").is_some() {
+    let frontend = !jupyter_frontend(cfg) || env::which("jupyter-console").is_some();
+    if choice == "ark" && frontend && ark_binary(cfg).is_some() && env::which("R").is_some() {
         "ark"
     } else {
         "r"
@@ -56,6 +62,7 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
     } else {
         match cfg.get("r_console").str() {
             Some(custom) if custom != "ark" && custom != "r" => shell(custom),
+            _ if r_flavor(&cfg) == "ark" && !jupyter_frontend(&cfg) => return crate::ark::run(),
             _ if r_flavor(&cfg) == "ark" => {
                 let jupyter = env::data_dir().join("jupyter");
                 if !jupyter.join("kernels/ark/kernel.json").is_file() {

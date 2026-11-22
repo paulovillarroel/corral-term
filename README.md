@@ -73,12 +73,13 @@ Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, 
 
 8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto y el autocompletado con `uv run --with python-lsp-server`; la primera vez uv descarga IPython y python-lsp-server a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff, con `uvx ruff`.
 
-9. Para la consola de R con Ark (recomendado), el kernel de Ark y el cliente de consola de Jupyter. Sin ellos, Corral usa R normal:
+9. Para la consola de R con Ark (recomendado), el kernel de Ark. Sin él, Corral usa R normal:
 
    ```bash
    corral ark --instalar
-   uv tool install jupyter-console
    ```
+
+   La consola es la de Corral (en Rust). Si prefieres el cliente de Jupyter, `uv tool install jupyter-console` y `corral config ark_frontend jupyter`.
 
    `corral ark --instalar` descarga Ark 0.1.252 (unos 7 MB) desde las versiones publicadas de `posit-dev/ark` a `~/.local/share/corral/ark/`, y Corral escribe su propia definición de kernel en `~/.local/share/corral/jupyter/`, sin tocar tu instalación de Jupyter.
 
@@ -201,9 +202,35 @@ Fresh mantiene un servicio de fondo con la configuración y los plugins cargados
 
 La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin en [`fresh/plugins/corral.ts`](fresh/plugins/corral.ts). Fresh viene con las búsquedas de actualizaciones y la telemetría desactivadas (`check_for_updates: false`).
 
-### Rendimiento: corral en Rust
+### Rendimiento
 
-Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. De Corral están en Rust lo que corre a cada tecla y los procesos que quedan abiertos, en un solo binario de `rs/` (unos 760 KB, sin dependencias):
+#### Frente a Positron
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/graficos/positron-oscuro.svg">
+  <img alt="Corral frente a Positron: R listo en 0,49 s frente a 14,6 s; 181 MB frente a 3,0 GB; 0,7 % de CPU en reposo frente a 18,7 %" src="docs/graficos/positron-claro.svg" width="760">
+</picture>
+
+Medido el 21 de noviembre de 2026 en el mismo equipo, con la carpeta `test-codigo` y R en WSL. Positron es la versión 2026.11.1 en Windows, conectada a WSL; Corral es un layout completo (editor, consola de Ark, panel de variables y servidor de lenguaje). De Positron se usa el valor más bajo que medí y de Corral el más alto.
+
+| Qué | Positron | Corral |
+|---|---|---|
+| Desde que lo abres hasta tener R listo | 14,6–17,6 s | 0,41–0,49 s |
+| Memoria en uso | 3,0–3,4 GB (1,2–1,4 GB en Windows y 1,6–2,3 GB en WSL) | 181 MB |
+| CPU en reposo | 15 % de un núcleo en Windows y 3,5 % en WSL | 0,7 % |
+| R (Ark) | 117 MB | 112 MB |
+| De Ctrl+R a ver el resultado | sin medir | 9–17 ms |
+
+R pesa lo mismo en los dos, porque ambos usan Ark. La diferencia es la interfaz: en WSL, el proceso de extensiones de Positron ocupa 660 MB, su servidor 293 MB y Copilot 241 MB, y la ventana de Windows suma otros 1,2–1,4 GB. En una de las dos aperturas Positron también arrancó Python con su servidor de lenguaje (unos 440 MB), porque la carpeta tiene `pyproject.toml`; Corral abre Python solo cuando lo usas. Para Corral no cuento herdr ni la terminal, que están abiertos de todos modos para Claude. El tiempo de ejecución dentro de Positron no lo medí, porque habría que manejar su interfaz con clics. El tiempo de Positron incluye menos de 1 s que tarda PowerShell en lanzarlo, y su CPU se midió entre 30 y 60 s después de abrirlo, cuando puede que todavía no se hubiera asentado.
+
+#### corral en Rust
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/graficos/mejoras-oscuro.svg">
+  <img alt="Antes y ahora, en escala logarítmica: tiempos y memoria de cada pieza de Corral; los valores están en las tablas de abajo" src="docs/graficos/mejoras-claro.svg" width="760">
+</picture>
+
+Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. De Corral están en Rust lo que corre a cada tecla, lo que usa Claude y los procesos que quedan abiertos, en un solo binario de `rs/` (aproximadamente 1 MB, sin dependencias):
 
 | Pieza | Rust | Python |
 |---|---|---|
@@ -212,10 +239,23 @@ Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. De Corral est�
 | Panel de variables (`corral vars --pane`) | 3 MB, 0,1 % de CPU | 26 MB |
 | Puente del servidor de lenguaje de Ark (`corral _lsp r`) | 3 MB | 45 MB |
 | Servidor de Mirador (`corral _mirador`) | 3 MB | 26 MB |
+| `corral eval` (Claude ejecuta código en tu consola) | 20–40 ms | unos 210 ms |
+| Consola de Ark (`corral _console r`) | 3 MB, arranca en 0,33 s | `jupyter-console`: 55 MB, 0,47 s |
 
-El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo poco frecuente (abrir la consola de Python por primera vez, el portapapeles, dibujar un objeto gráfico) y los demás comandos (`eval`, `layout`, `close`, `doctor`…) pasan a `bin/corral`. Sin el binario, `bin/corral` y `mirador/server.py` hacen todo igual, con Python.
+También bajó lo que se repite después de cada comando y lo que queda corriendo en el editor:
 
-Queda en Python el cliente de la consola de Ark (`jupyter-console`, unos 55 MB). Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
+| Qué | Antes | Ahora |
+|---|---|---|
+| Variables de R después de cada comando | 79 ms | 3 ms, o 4 ms si cambió una variable |
+| Variables de Python después de cada comando | 2,4 ms | 0,4–0,6 ms |
+| Plugin de Fresh en reposo (CPU del editor) | 1,0 % | 0,56 % |
+| El editor sigue un cambio de tema de herdr | hasta 2 s | 0,4 s |
+
+Las variables se describen de nuevo solo si el objeto cambió (otra dirección en memoria, otro largo, otras dimensiones o, en las tablas, otros tipos de columna), y el archivo que lee el panel se reescribe solo cuando algo cambió. El plugin de Fresh ya no revisa nada a intervalos: copia el borrador 0,4 s después de la última edición, vigila los archivos de tema con el sistema de archivos y abre la vista de carpetas cuando aparece un borrador. Lo que queda de CPU en reposo es de Fresh mismo, que revisa cada 2 s si cambiaron los archivos abiertos (por ejemplo, cuando Claude los edita) y cada 3 s la carpeta del proyecto.
+
+El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo poco frecuente (abrir una consola o cambiar de lenguaje desde `eval`, el portapapeles, dibujar un objeto gráfico) y los demás comandos (`layout`, `close`, `doctor`…) pasan a `bin/corral`. Sin el binario, `bin/corral` y `mirador/server.py` hacen todo igual, con Python.
+
+Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
 
 ### Tablas
 
@@ -238,16 +278,21 @@ Los filtros se suman entre sí y con la búsqueda, y la línea de arriba dice cu
 
 ### La consola de R: Ark
 
-Cuando Ark está instalado, la consola de R es Ark, el kernel de R de Positron, con el cliente `jupyter-console`. Se ve así:
+Cuando Ark está instalado, la consola de R es Ark, el kernel de R de Positron. Corral lo lanza y le habla directamente por el protocolo de Jupyter, con su propia consola en Rust (3 MB). Se ve así:
 
-- El prompt es `In [1]:` y los resultados salen como `Out[1]:`, como en IPython. El código de Ctrl+R llega como un bloque pegado y se ve completo en el prompt.
+- El prompt es `In [1]:`, y `...:` en las líneas que siguen. El código de Ctrl+R llega como un bloque pegado y se ve completo en el prompt.
+- Enter ejecuta cuando la expresión está completa; si falta cerrar un paréntesis o una llave, pasa a la línea siguiente con sangría. `Alt+Enter` ejecuta de todos modos.
+- `↑` `↓` recorren el historial (si ya escribiste algo, solo las entradas que empiezan igual); el historial se guarda en `~/.local/state/corral/historial-r.jsonl`. `Tab` completa con el autocompletado de R (funciones, argumentos, columnas con `$`, paquetes).
+- `Ctrl+C` interrumpe lo que está corriendo, o borra lo escrito; `Ctrl+D` en una línea vacía cierra la consola, igual que `q()`. También funcionan `Ctrl+A` `Ctrl+E` `Ctrl+K` `Ctrl+U` `Ctrl+W` `Ctrl+L`.
+- `readline()` y `menu()` preguntan en la consola, como en R.
 - `?mean` o `help(mean)` abren la ayuda en una ventana del navegador, como el panel de ayuda de Positron.
-- `Ctrl+C` interrumpe lo que está corriendo.
 - Variables, gráficos en Mirador, `View()`, `corral eval` y el resto de Corral funcionan igual que con R normal. Ark cambia algunas opciones de R para Positron (dispositivo gráfico, navegador, editor); `corral.R` las protege con `ark.protected_options` para que sigan siendo las de Corral.
 
-La ganancia está en el editor y en los recursos. El autocompletado sale del mismo R de la consola, así que no hace falta un segundo R para el servidor de lenguaje. Medido con los mismos paquetes cargados (dplyr y ggplot2) y un gráfico: Ark ocupa unos 330 MB con el servidor de lenguaje incluido, más unos 100 MB del cliente de consola y el puente, frente a unos 250 MB de R normal más unos 450 MB de `languageserver`. En reposo, Ark usa 0,1 % de CPU y `languageserver` 3 %.
+La ganancia está en el editor y en los recursos. El autocompletado sale del mismo R de la consola, así que no hace falta un segundo R para el servidor de lenguaje. Medido con los mismos paquetes cargados (dplyr y ggplot2) y un gráfico: Ark ocupa unos 330 MB con el servidor de lenguaje incluido, más unos 6 MB de la consola y el puente, frente a unos 250 MB de R normal más unos 450 MB de `languageserver`. En reposo, Ark usa 0,1 % de CPU y `languageserver` 3 %.
 
-Para volver a R normal, `corral config r_console r`; para volver a Ark, `corral config r_console ark`. El cambio rige para las consolas que abras después. `corral ark` muestra qué está instalado.
+El servidor de lenguaje lee todos los archivos de R de la carpeta del proyecto, que Fresh busca subiendo desde el archivo abierto hasta encontrar `.corral`, `.git`, `DESCRIPTION`, `renv.lock` u otro marcador. Antes uno de esos marcadores era `.Rprofile`, y en un proyecto sin `.git` la búsqueda llegaba hasta tu `~/.Rprofile`: Ark leía todo tu home y pasaba de unos 110 MB a más de 600 MB.
+
+Para volver a R normal, `corral config r_console r`; para volver a Ark, `corral config r_console ark`. El cambio rige para las consolas que abras después. `corral ark` muestra qué está instalado. Para usar Ark con `jupyter-console` en vez de la consola de Corral, `corral config ark_frontend jupyter` (y `corral config ark_frontend corral` para volver).
 
 ### Python
 
@@ -361,7 +406,8 @@ Opciones de R:
 - Para objetos con más de un millón de elementos no se muestra el tamaño en memoria, porque calcularlo en cada comando sería lento.
 - Si el servidor de herdr se detiene (reinicio de Windows, `wsl --shutdown`), las sesiones de R y Python se pierden. herdr restaura los paneles, pero no su memoria.
 - Ark todavía es una versión 0.1 y Corral habla con su servidor de lenguaje por un canal interno de Positron (`positron.lsp`), que puede cambiar entre versiones; por eso `corral ark --instalar` instala la versión probada. Si una versión nueva falla, `corral config r_console r` vuelve a R normal.
-- Con Ark no probé todavía depurar con `browser()` ni funciones que piden datos por teclado (`readline()`, `menu()`).
+- Con Ark no probé todavía depurar con `browser()`.
+- La consola de Ark cuenta cada carácter como una columna: con emojis o caracteres asiáticos en una línea larga, el cursor puede quedar corrido hasta que la línea se vuelva a dibujar.
 - Si reinicias la consola de Ark, el autocompletado del editor se reconecta cuando Fresh vuelve a arrancar el servidor de lenguaje (al cerrar y abrir el archivo, o al reiniciar Fresh).
 
 ## Próximos pasos

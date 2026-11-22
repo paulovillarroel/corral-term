@@ -3,8 +3,10 @@
 //! herdr's socket directly; everything else, and the rare cases (starting a
 //! console, reading the clipboard), goes to the Python version in bin/corral.
 
+mod ark;
 mod console;
 mod env;
+mod eval;
 mod herdr;
 mod json;
 mod layout;
@@ -22,6 +24,7 @@ fn main() {
     let rest = args.get(1..).unwrap_or(&[]);
     let result = match args.first().map(String::as_str) {
         Some("send") => send::run(rest, &args),
+        Some("eval") => eval::run(rest, &args),
         Some("_console") => console::run(rest, &args),
         Some("toggle") => layout::toggle(rest, &args),
         Some("switch") => layout::switch(rest, &args),

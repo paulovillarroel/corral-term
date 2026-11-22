@@ -292,27 +292,49 @@ registerHandler("corral_run_file", async function () {
 
 // Scratch files: Fresh does not let outside programs read unsaved buffers, so
 // mirror each Corral scratch buffer to ".actual.R" next to it. `corral script
-// --guardar/--leer` (and Claude) read that copy.
+// --guardar/--leer` (and Claude) read that copy. It is written a moment after
+// an edit (several keys in a row make one write) and when the buffer shows up.
 const mirrored: Record<string, string> = {};
-let mirrorTicks = 0;
+const dirty: Record<number, boolean> = {};
+let mirrorPending = false;
+
+function scratchCopy(id: number): [string, string] | null {
+  const path = editor.getBufferPath(id) || "";
+  if (!isScratch(path) || !path.endsWith("borrador.R")) return null;
+  return [path, path.replace(/borrador\.R$/, ".actual.R")];
+}
+
+async function mirror(id: number): Promise<void> {
+  const paths = scratchCopy(id);
+  if (!paths) return;
+  const [path, copy] = paths;
+  const text = await editor.getBufferText(id);
+  if (mirrored[path] === text && editor.fileExists(copy)) return;
+  mirrored[path] = text;
+  // writeFile only creates new files; replaceFile overwrites.
+  editor.replaceFile(copy, text);
+}
+
+registerHandler("corral_scratch_modified", function (args: { buffer_id: number }) {
+  if (!scratchCopy(args.buffer_id)) return;
+  dirty[args.buffer_id] = true;
+  if (mirrorPending) return;
+  mirrorPending = true;
+  editor.setTimeout(400, "corral_mirror_scratch");
+});
+editor.on("buffer_modified", "corral_scratch_modified");
+
 registerHandler("corral_mirror_scratch", async function () {
-  try {
-    // The active buffer is the one on screen (listBuffers can return other
-    // windows' copies of the same file).
-    const id = editor.getActiveBufferId();
-    const path = editor.getBufferPath(id) || "";
-    if (!isScratch(path) || !path.endsWith("borrador.R")) return;
-    const text = await editor.getBufferText(id);
-    mirrorTicks = (mirrorTicks + 1) % 20;  // rewrite now and then even if unchanged
-    if (mirrored[path] === text && mirrorTicks !== 0) return;
-    mirrored[path] = text;
-    // writeFile only creates new files; replaceFile overwrites.
-    editor.replaceFile(path.replace(/borrador\.R$/, ".actual.R"), text);
-  } catch (e) {
-    // A failed copy only delays the next one.
+  mirrorPending = false;
+  for (const key of Object.keys(dirty)) {
+    delete dirty[Number(key)];
+    try {
+      await mirror(Number(key));
+    } catch (e) {
+      // A failed copy is retried on the next edit.
+    }
   }
 });
-editor.setInterval(1500, "corral_mirror_scratch");
 
 // Ctrl+S: a Corral scratch file is temporary, so saving it means choosing a place
 // in the project. Fresh's own "Save as" would start in the scratch folder, so ask
@@ -375,15 +397,24 @@ try {
 }
 
 // Live: when herdr's config changes (you switched its theme), regenerate the
-// Corral palette; when the Corral theme file changes, reload it here.
+// Corral palette; when the Corral theme file changes, reload it here. Both
+// folders are watched (a file replaced by a rename would lose a file watch).
 const homeDir = editor.getEnv("HOME") || "";
 const herdrConfig = editor.getEnv("HERDR_CONFIG_PATH")
   || ((editor.getEnv("XDG_CONFIG_HOME") || homeDir + "/.config") + "/herdr/config.toml");
+const themesDir = editor.getThemesDir();
 let lastHerdrConfig: string | null = null;
 let lastCorralTheme: string | null = null;
 let syncing = false;
+let themePending = false;
 registerHandler("corral_theme_sync", async function () {
-  if (syncing) return;
+  themePending = false;
+  if (syncing) {
+    // Busy with the previous change: look again once it is done.
+    themePending = true;
+    editor.setTimeout(300, "corral_theme_sync");
+    return;
+  }
   syncing = true;
   try {
     const herdr = editor.readFile(herdrConfig);
@@ -391,7 +422,7 @@ registerHandler("corral_theme_sync", async function () {
       await editor.spawnProcess("corral", ["theme"]);
     }
     if (herdr !== null) lastHerdrConfig = herdr;
-    const theme = editor.readFile(editor.getThemesDir() + "/corral.json");
+    const theme = editor.readFile(themesDir + "/corral.json");
     if (theme !== null && lastCorralTheme !== null && theme !== lastCorralTheme) {
       editor.reloadThemes();
       editor.applyTheme("corral");
@@ -403,7 +434,28 @@ registerHandler("corral_theme_sync", async function () {
     syncing = false;
   }
 });
-editor.setInterval(2000, "corral_theme_sync");
+const watches: Record<number, string> = {};  // handle -> the file it is for
+registerHandler("corral_theme_watch", function (args: { handle: number; path: string }) {
+  const file = watches[args.handle];
+  if (!file || !(args.path === file || args.path.endsWith("/" + file.split("/").pop()))) return;
+  if (themePending) return;
+  themePending = true;
+  editor.setTimeout(150, "corral_theme_sync");  // one sync for a burst of writes
+});
+editor.on("path_changed", "corral_theme_watch");
+(async function () {
+  let watching = 0;
+  for (const file of [herdrConfig, themesDir + "/corral.json"]) {
+    try {
+      watches[await editor.watchPath(file.slice(0, file.lastIndexOf("/")))] = file;
+      watching++;
+    } catch (e) {
+      // Folder missing: covered by the slow check below.
+    }
+  }
+  editor.setTimeout(10, "corral_theme_sync");  // remember the current contents
+  if (watching < 2) editor.setInterval(5000, "corral_theme_sync");
+})();
 
 // Open the folder view the first time a Corral scratch file shows up, then
 // give the focus back to the code.
@@ -421,6 +473,21 @@ registerHandler("corral_show_explorer", async function () {
   }
 });
 editor.on("buffer_activated", "corral_show_explorer");
+editor.on("after_file_open", "corral_show_explorer");
+editor.on("ready", "corral_show_explorer");
+editor.setTimeout(800, "corral_show_explorer");  // the file Fresh opened at start
+
+// A scratch buffer that shows up gets its copy right away.
+registerHandler("corral_scratch_shown", async function (args?: { buffer_id: number }) {
+  try {
+    await mirror(args && typeof args.buffer_id === "number" ? args.buffer_id : editor.getActiveBufferId());
+  } catch (e) {
+    // Retried on the next edit.
+  }
+});
+editor.on("buffer_activated", "corral_scratch_shown");
+editor.on("after_file_open", "corral_scratch_shown");
+editor.setTimeout(800, "corral_scratch_shown");
 
 // Fresh's own "Save as" (File menu) starts in the scratch folder. A file saved
 // there under another name would stay hidden, git-ignored and be deleted in two
@@ -449,7 +516,6 @@ registerHandler("corral_after_save", async function (args: { path: string; buffe
   }
 });
 editor.on("after_file_save", "corral_after_save");
-editor.setInterval(1000, "corral_show_explorer");
 
 editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola (R o Python, según el archivo)", "corral_run_line", null);
 editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola (R o Python, según el archivo)", "corral_run_file", null);
