@@ -52,9 +52,9 @@
     <thead><tr><th>What</th><th>Who can see it</th></tr></thead>
     <tbody>
     <tr><td>Your files, your data and the objects in your sessions</td><td>Only your machine, until something prints or reads them.</td></tr>
-    <tr><td>What <code>corral eval</code> prints: results, errors and warnings (up to 20,000 characters by default)</td><td>The agent, and so its model provider. With restricted output, only whether it worked, the error's first line and the shape of the objects.</td></tr>
-    <tr><td>New plots from an agent's request, saved as PNG for it</td><td>The agent's provider, when the agent opens them. With restricted output they aren't shared.</td></tr>
-    <tr><td><code>corral vars --json</code>: names, classes, dimensions and short previews</td><td>The agent's provider. With restricted output, previews of values are removed.</td></tr>
+    <tr><td>What <code>corral eval</code> prints: results, errors and warnings (up to 20,000 characters by default)</td><td>The agent, and so its model provider. With review, only what you choose to share. With restricted output, only whether it worked, the error's first line and the shape of the objects.</td></tr>
+    <tr><td>New plots from an agent's request, saved as PNG for it</td><td>The agent's provider, when the agent opens them. With review, only if you share them; with restricted output, never.</td></tr>
+    <tr><td><code>corral vars --json</code>: names, classes, dimensions and short previews</td><td>The agent's provider. With review or restricted output, previews of values are removed.</td></tr>
     <tr><td>The script draft, when the agent reads it with <code>corral script --read</code></td><td>The agent's provider.</td></tr>
     <tr><td>Files the agent opens with its own tools</td><td>Governed by the agent's own permissions, not by Corral (see below).</td></tr>
     <tr><td>Corral itself</td><td>Sends nothing, except one anonymous ping when an installation finishes (<a href="install.html#install-count">install count</a>).</td></tr>
@@ -99,10 +99,34 @@
 [corral] 1 new plot(s) for the user (ctrl+b f); not shared with the agent (restricted output)</code></pre>
     <p><code>full</code> (the default) returns everything.</p>
 
+    <h3>Review mode</h3>
+    <pre><code><span class="p">$ </span>corral config agent_output review</code></pre>
+    <p>The middle ground, for when the agent should help you draw conclusions but you want to see what it reads first. The code runs; then a popup shows you the result exactly as the agent would get it, with any new plots. <kbd>Enter</kbd> shares it. <kbd>n</kbd> keeps it to you, and the agent gets only the structure, plus a note to ask you what you found. You might share a table of counts and keep a listing of patients, for example.</p>
+    <figure class="tui-shot" role="img" aria-label="Corral's review popup: the result of a count by region and one new plot, with Enter to share it and n to keep it">
+      <div class="tui-bar"><span>Corral: share this result with the agent?</span><span>agent_output review</span></div>
+      <pre>
+  <span style="color:#ffc799;font-weight:700;">Share this result with the agent?</span>
+  <span style="color:#a0a0a0;">from pane w1:p2 · exactly what it would get; keep it and it gets only the structure</span>
+
+  <span style="color:#ffffff;">&gt; pacientes |&gt; dplyr::count(region)</span>
+  <span style="color:#ffffff;">  region      n</span>
+  <span style="color:#ffffff;">1 Norte     412</span>
+  <span style="color:#ffffff;">2 Centro   1035</span>
+  <span style="color:#ffffff;">3 Sur       688</span>
+
+  <span style="color:#ffffff;">+ 1 new plot(s), shared as PNG if you share this</span>
+
+  <span style="color:#ffffff;font-weight:700;">Enter</span><span style="color:#a0a0a0;"> share it   </span><span style="color:#ffffff;font-weight:700;">n</span><span style="color:#a0a0a0;"> keep it to myself</span></pre>
+    </figure>
+    <p>Code that prints nothing, like an assignment, doesn't ask. With no answer in 5 minutes, the result is kept. <code>corral vars --json</code> leaves out previews of values in this mode, since they would skip your review.</p>
+
     <h3>Sensitive sessions</h3>
     <p>One session can be stricter than the rest. In R or Python:</p>
     <pre><code>corral_sensitive()</code></pre>
-    <p>From then on every request from an agent to that session needs your approval and gets restricted output, whatever the settings above say. It lasts until that console ends; <code>corral_sensitive(FALSE)</code> lifts it, and since that is a request too, you see it before it runs.</p>
+    <p>From then on every request from an agent to that session needs your approval, and its result goes through review if you chose <code>review</code>, or comes back restricted otherwise; full output never applies. It lasts until that console ends; <code>corral_sensitive(FALSE)</code> lifts it, and since that is a request too, you see it before it runs.</p>
+
+    <h3>From the palette</h3>
+    <p>All of these are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, type <code>agents</code>): run without asking, ask before each request, can't run code; see full results, review results first, see only the structure. A notification says what is on.</p>
 
     <h3>Audit log</h3>
     <pre><code><span class="p">$ </span>corral audit
@@ -128,7 +152,7 @@
     <h2>For sensitive data</h2>
     <p>A setup for health records or anything that must not leave your organization:</p>
     <ol>
-      <li><strong>Turn on Corral's controls:</strong> <code>corral config agents ask</code> and <code>corral config agent_output structure</code>, or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Use <code>off</code> when no agent should touch them.</li>
+      <li><strong>Turn on Corral's controls:</strong> <code>corral config agents ask</code>, and <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (the agent never sees values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Use <code>off</code> when no agent should touch them.</li>
       <li><strong>Limit the agent's own tools.</strong> Let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
 <pre><code>{
   "permissions": {
@@ -147,7 +171,7 @@
     <table>
     <thead><tr><th>Part</th><th>Its job</th></tr></thead>
     <tbody>
-    <tr><td>Corral</td><td>Run code only where and when you allow it, return only what the output mode allows, record every request.</td></tr>
+    <tr><td>Corral</td><td>Run code only where and when you allow it, return only what the output mode (or your review) allows, record every request.</td></tr>
     <tr><td>The agent</td><td>Its own permissions and sandbox: which commands and files it may use.</td></tr>
     <tr><td>The model provider</td><td>What happens to what the agent sends: retention, training, region, contracts.</td></tr>
     <tr><td>Your organization</td><td>Which data goes into which sessions, the network, the machines, and which providers are approved.</td></tr>

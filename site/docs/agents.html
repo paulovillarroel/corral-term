@@ -77,7 +77,7 @@
     <table>
     <thead><tr><th>Tool</th><th>What the agent gets</th><th>What happens in your session</th><th>Who decides</th></tr></thead>
     <tbody>
-    <tr><td><code>corral eval</code></td><td>What the code printed, errors, warnings and new plots as PNG; or, with restricted output, only whether it worked and the shape of the objects</td><td>The code runs in your console, in view, and its objects stay</td><td>You: <code>agents</code>, <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
+    <tr><td><code>corral eval</code></td><td>What the code printed, errors, warnings and new plots as PNG; with review, what you choose to share; with restricted output, only whether it worked and the shape of the objects</td><td>The code runs in your console, in view, and its objects stay</td><td>You: <code>agents</code>, <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
     <tr><td><code>corral eval --check</code></td><td>Which console, R or Python, its version and whether it is in view</td><td>Nothing</td><td>—</td></tr>
     <tr><td><code>corral vars --json</code></td><td>Names, classes, dimensions and short previews of your objects (no previews of values with restricted output)</td><td>Nothing: it reads, it doesn't run code</td><td>You: <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
     <tr><td><code>corral script --read</code>, <code>--write</code>, <code>--save</code></td><td>Your draft's text; a way to write into it or save it in the project</td><td>Changes to the draft show in your editor, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes them</td><td>The skill asks you first; the agent's own permissions</td></tr>
@@ -92,7 +92,7 @@
       <li><strong>In plain sight.</strong> Code is typed into your console after a <code># corral eval</code> line; nothing runs in a hidden process.</li>
       <li><strong>One at a time.</strong> Requests to a console queue; several agents never interleave.</li>
       <li><strong>Bounded.</strong> Each request has a time limit, and its output is clipped before it reaches the agent.</li>
-      <li><strong>Yours to decide.</strong> <code>agents on</code>, <code>ask</code> or <code>off</code>; full or restricted output; one session marked sensitive. Corral enforces these in its own code, whatever the model was told.</li>
+      <li><strong>Yours to decide.</strong> <code>agents on</code>, <code>ask</code> or <code>off</code>; full results, your review first, or structure only; one session marked sensitive. All in the palette, and enforced in Corral's own code, whatever the model was told.</li>
       <li><strong>Recorded.</strong> Every request lands in the local audit log: <code>corral audit</code>.</li>
       <li><strong>Any agent.</strong> Claude Code, Codex, Gemini CLI, opencode or another: the harness is shell commands plus a skill in the open <a href="https://agentskills.io">Agent Skills</a> format.</li>
     </ul>
