@@ -365,9 +365,17 @@ local({
     if (!is.data.frame(x)) x <- as.data.frame(x)
     # Keep meaningful row names (mtcars) as a column; parquet has no row names.
     if (.row_names_info(x) > 0L) x <- cbind(.rownames = rownames(x), x, stringsAsFactors = FALSE)
+    # A duration as a number in its own units: 1.5 hours shows 1.5, not nanoseconds.
+    durations <- vapply(x, inherits, logical(1), "difftime")
+    if (any(durations)) {
+      x <- as.data.frame(x)
+      x[durations] <- lapply(x[durations], as.numeric)
+    }
+    # nanoparquet first: faster than arrow and lighter on memory (bench/view.R).
+    # arrow takes what nanoparquet can't write, such as POSIXlt.
     writers <- list(
-      arrow = function(f) arrow::write_parquet(x, f),
-      nanoparquet = function(f) nanoparquet::write_parquet(x, f)
+      nanoparquet = function(f) nanoparquet::write_parquet(x, f),
+      arrow = function(f) arrow::write_parquet(x, f)
     )
     for (pkg in names(writers)) {
       if (!requireNamespace(pkg, quietly = TRUE)) next

@@ -269,13 +269,15 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                                &[tr("Install the R packages (httpgd draws the plots, jsonlite carries the variables):",
                                     "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]));
             }
-            let extra: Vec<&str> = [("nanoparquet", has[2] || has[3]), ("rlang", has[4])].into_iter().filter(|(_, ok)| !ok).map(|(p, _)| p).collect();
+            // nanoparquet even with arrow there: View() with arrow is slower, and in a
+            // long session R's memory keeps growing with each table (bench/repeat.R).
+            let extra: Vec<&str> = [("nanoparquet", has[2]), ("rlang", has[4])].into_iter().filter(|(_, ok)| !ok).map(|(p, _)| p).collect();
             if !extra.is_empty() {
                 let cmd = format!("  {}", install_r(&extra));
                 let list = extra.join(", ");
                 out.push(check("optional", State::Warn, tr("More R packages", "Más paquetes de R"), trf!("missing {list}", "faltan {list}"),
-                               &[tr("nanoparquet opens large tables faster; rlang avoids redrawing a plot:",
-                                    "nanoparquet abre tablas grandes más rápido; rlang evita volver a dibujar un gráfico:"), &cmd]));
+                               &[tr("nanoparquet opens large tables faster and keeps R's memory steady; rlang avoids redrawing a plot:",
+                                    "nanoparquet abre tablas grandes más rápido y mantiene estable la memoria de R; rlang evita volver a dibujar un gráfico:"), &cmd]));
             }
         }
     }

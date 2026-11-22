@@ -158,9 +158,16 @@ pub fn cmd_doctor(_args: &[String]) -> Result<(), String> {
         let has = r_packages(r, &["httpgd", "jsonlite", "arrow", "nanoparquet"]);
         check(has[0], "R: httpgd", tr("plots", "gráficos").into());
         check(has[1], "R: jsonlite", tr("variables in Mirador", "variables en Mirador").into());
-        let parquet = if has[2] { Some("arrow") } else if has[3] { Some("nanoparquet") } else { None };
-        check(parquet.is_some(), "R: parquet", parquet.map(String::from).unwrap_or_else(|| {
-            tr("install nanoparquet or arrow; until then View() uses CSV", "instala nanoparquet o arrow; mientras tanto View() usa CSV").into()
+        let parquet = if has[3] {
+            Some("nanoparquet".to_string())
+        } else if has[2] {
+            Some(tr("arrow; nanoparquet is faster and keeps R's memory steady", "arrow; nanoparquet es más rápido y mantiene estable la memoria de R").into())
+        } else {
+            None
+        };
+        let ok = parquet.is_some();
+        check(ok, "R: parquet", parquet.unwrap_or_else(|| {
+            tr("install nanoparquet; until then View() uses CSV", "instala nanoparquet; mientras tanto View() usa CSV").into()
         }));
     }
     let wanted = theme::palette().get("name").str().unwrap_or("").to_string();
