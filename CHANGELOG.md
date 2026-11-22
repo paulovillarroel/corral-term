@@ -9,6 +9,8 @@ What changed in each version of Corral. The release workflow publishes each vers
 ### Fixes
 
 - The skill told agents to pass `agente`, `consola` or `ambos` to `corral toggle`, which refuses them; it now says `agent`, `console` and `both`.
+- Docs: `corral toggle` takes `console`, `both` and `agent` (the page still said `consola`, `ambos` and `agente`), and `corral help` lists the commands, not `corral ayuda`.
+- The comment Corral writes above its theme in herdr's config is in English, and the docs' examples use English names.
 
 ## 0.1.8
 
