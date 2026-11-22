@@ -69,7 +69,7 @@
 <span class="p">$ </span>corral config agents off
 <span class="p">$ </span>corral config agents on</code></pre>
     <ul>
-      <li><code>on</code> (the default): an agent's <code>corral eval</code> runs in your console, where you watch it.</li>
+      <li><code>on</code> (the default): an agent's <code>corral eval</code> runs in your console, where you watch it, without asking first. Whatever can call <code>corral eval</code> as you, an agent or a script, can run any code in your session. Choose <code>ask</code> if no code should run before you read it.</li>
       <li><code>ask</code>: every request opens a popup with the exact code, which agent pane asked and what it will see back. <kbd>Enter</kbd> runs it; <kbd>n</kbd> or <kbd>Esc</kbd> refuses, and the agent is told not to try again unless you ask. With no answer in 5 minutes, nothing runs.</li>
       <li><code>off</code>: <code>corral eval</code> refuses everything.</li>
     </ul>
@@ -143,16 +143,16 @@
 
     <h2>What Corral doesn't do</h2>
     <ul>
-      <li><strong>It is not a sandbox.</strong> <code>corral eval</code> runs with your user's permissions, in your real session: whatever R or Python can do, an approved request can do, including reading files or using the network.</li>
+      <li><strong>It is not a sandbox.</strong> <code>corral eval</code> runs arbitrary code; that is what it is for. It runs with your user's permissions, in your real session: whatever R or Python can do, an approved request can do, including reading files or using the network.</li>
       <li><strong>An agent with a free shell can go around it.</strong> It runs as you, so it could change Corral's settings, write files or use other tools. Corral's controls hold when the agent's own permissions only let it call <code>corral eval</code> and <code>corral vars</code> (next section).</li>
       <li><strong>Restricted output hides values in replies, not in actions.</strong> Approved code could still write data somewhere the agent can read; that is why approval shows you the code first.</li>
-      <li><strong>Error messages can carry values.</strong> With restricted output only their first line is returned, but it is returned.</li>
+      <li><strong>Restricted output guards against accidents, not against an agent trying to get the values.</strong> The agent writes the code, so it can put a value where the structure still shows: in the first line of an error (<code>stop(pacientes$nombre[1])</code>), in an object's name, in a table's dimensions, in whether the code worked or how many warnings it gave. A result you keep to yourself in review mode has the same limit. Against that, the control is approval: with <code>ask</code> you read the code before it runs, and sensitive sessions always ask. An agent can also be steered into this by text it read somewhere else, a file or a web page, without anyone meaning it.</li>
     </ul>
 
     <h2>For sensitive data</h2>
     <p>A setup for health records or anything that must not leave your organization:</p>
     <ol>
-      <li><strong>Turn on Corral's controls:</strong> <code>corral config agents ask</code>, and <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (the agent never sees values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Use <code>off</code> when no agent should touch them.</li>
+      <li><strong>Turn on Corral's controls:</strong> <code>corral config agents ask</code>, and <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
       <li><strong>Limit the agent's own tools.</strong> Let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
 <pre><code>{
   "permissions": {
@@ -166,6 +166,9 @@
       <li><strong>Keep identifiers out of reach.</strong> Work with de-identified or synthetic data in the sessions an agent can touch.</li>
       <li><strong>Review what happened</strong> with <code>corral audit</code>.</li>
     </ol>
+
+    <h2>What the installer checks</h2>
+    <p>Every download is checked before anything uses it: Corral's package by its SHA-256 and, if you have the GitHub CLI, by its build provenance attestation; Fresh, DuckDB, Air and Ark by SHA-256s written into Corral's code. The installer never uses <code>sudo</code> and never falls back to unreleased code. Details in <a href="install.html#how-the-download-is-checked">How the download is checked</a>.</p>
 
     <h2>Who is responsible for what</h2>
     <table>

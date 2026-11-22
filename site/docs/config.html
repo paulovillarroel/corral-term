@@ -95,7 +95,10 @@
     <tr><td><code>CORRAL_CLIPBOARD</code></td><td>A command that prints the clipboard, for <kbd>ctrl+b</kbd> <kbd>enter</kbd></td><td><code>wl-paste</code>, <code>xclip</code> or PowerShell</td></tr>
     <tr><td><code>CORRAL_OPEN_PLOTS</code></td><td><code>0</code> keeps Python's first plot from opening anything</td><td><code>1</code></td></tr>
     <tr><td><code>CORRAL_DIR</code></td><td>The folder the installer puts Corral in</td><td><code>~/.local/share/corral-term</code></td></tr>
-    <tr><td><code>CORRAL_URL</code></td><td>The package <code>install.sh</code> downloads</td><td>the latest published version</td></tr>
+    <tr><td><code>CORRAL_VERSION</code></td><td>The version <code>install.sh</code> installs, such as <code>v0.1.3</code></td><td>the latest published version</td></tr>
+    <tr><td><code>CORRAL_URL</code></td><td>A package for <code>install.sh</code> to download instead of a published version (a mirror, a test). It needs <code>CORRAL_SHA256</code></td><td>unset</td></tr>
+    <tr><td><code>CORRAL_SHA256</code></td><td>The SHA-256 the <code>CORRAL_URL</code> package must have; <code>skip</code> installs it without checking</td><td>unset</td></tr>
+    <tr><td><code>CORRAL_NO_ATTESTATION</code></td><td>Set to <code>1</code> so <code>install.sh</code> doesn't check the build provenance attestation, for when <code>gh</code> doesn't work on that machine. The SHA-256 is still checked</td><td>unset</td></tr>
     <tr><td><code>CORRAL_BIN</code></td><td>The <code>corral</code> command that R and Python call</td><td>the one on the <code>PATH</code></td></tr>
     <tr><td><code>CORRAL_REPO</code></td><td>Corral's folder, for the files the binary reads (the plugin, the R and Python sides)</td><td>the folder the binary sits in</td></tr>
     </tbody>

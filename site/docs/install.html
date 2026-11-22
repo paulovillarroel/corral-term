@@ -111,9 +111,10 @@ Optional
     <h3 id="how-the-download-is-checked">How the download is checked</h3>
     <ul>
       <li>It installs a published version, the latest unless you pick one with <code>CORRAL_VERSION=v0.1.3</code>, and says which. It never falls back to unreleased code: if the download fails, it stops and says why.</li>
-      <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ.</li>
-      <li>Each package also carries a build provenance attestation, which proves it was built by the project's GitHub workflow from that version's code. With the <a href="https://cli.github.com">GitHub CLI</a> you can check it yourself:
+      <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ. That catches a download that arrived broken or changed on the way. Both files come from the same release, though, so someone able to publish there could replace both.</li>
+      <li>The attestation covers that case. Each package carries a build provenance attestation, signed by GitHub when the project's workflow builds it, which proves the package came from that workflow and that version's code. If you have the <a href="https://cli.github.com">GitHub CLI</a> (<code>gh</code> 2.49 or later, logged in), the installer checks it and stops if it doesn't hold; without it, it says the attestation wasn't checked. You can also check it yourself:
 <pre><code><span class="p">$ </span>gh attestation verify corral-term-x86_64-linux.tar.gz --repo paulovillarroel/corral-term</code></pre></li>
+      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
       <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
     </ul>
 
@@ -151,7 +152,7 @@ Optional
     <p>Once Corral is installed, <code>corral install --check</code> does the same.</p>
 
     <h2>Install from a clone</h2>
-    <p>From a copy of the repository, the installer uses that copy where it is, without downloading anything. This is the way to install while the repository is private: the <code>curl</code> line downloads Corral from GitHub, which works once the repository is public.</p>
+    <p>From a copy of the repository, the installer uses that copy where it is, without downloading Corral. It's the way to work on Corral itself, or to try something that isn't published yet.</p>
     <pre><code><span class="p">$ </span>git clone https://github.com/paulovillarroel/corral-term.git
 <span class="p">$ </span>sh corral-term/install.sh</code></pre>
     <p>If the copy has no compiled <code>corral</code>, the installer builds it with <code>cargo</code>. When you change something in <code>rs/</code>, build it again with <code>cargo build --release</code>; <code>corral --version</code> tells you which folder the binary you are using comes from.</p>
@@ -170,7 +171,9 @@ Optional
     <pre><code><span class="p">$ </span>git tag v0.1.4
 <span class="p">$ </span>git push origin v0.1.4</code></pre>
     <p>The binary is static (musl), so it runs on any x86_64 Linux, WSL included.</p>
-    <p>Without a published version, the installer downloads the code from <code>main</code> and compiles <code>corral</code> with <code>cargo</code>. If there is no <code>cargo</code>, it stops before changing anything and gives you the command to install Rust.</p>
+    <p>The package appears on the release a few minutes after the tag, when the workflow finishes; until then the installer keeps installing the previous version. A version without its package or its SHA-256 doesn't install: the installer stops and says so, and never builds from <code>main</code> instead.</p>
+    <p>When Fresh, DuckDB, Air or Ark move to a new version, its SHA-256 changes too: put it next to the version in <code>rs/src/install.rs</code> (<code>rs/src/setup.rs</code> for Ark). GitHub shows it on the release page, and this prints it:</p>
+    <pre><code><span class="p">$ </span>gh api repos/posit-dev/air/releases/tags/0.13.0 --jq '.assets[] | .name + "  " + .digest'</code></pre>
 
     <h2>macOS</h2>
     <div class="note warn"><p>Corral doesn't work on macOS yet. herdr runs on a Mac, but some pieces of Corral use features only Linux has. <a href="troubleshooting.html#known-limits">Known limits</a> lists them.</p></div>

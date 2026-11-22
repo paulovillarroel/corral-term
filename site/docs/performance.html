@@ -43,7 +43,7 @@
 
   <main class="content">
     <h1>Performance</h1>
-    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB. These are the measurements against Positron, and the gains of each piece of Corral since it became one Rust binary.</p>
+    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB, or about 200 MB counting herdr. These are the measurements against Positron, and the gains of each piece of Corral since it became one Rust binary.</p>
 
     <h2>Corral and Positron</h2>
     <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="all"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
@@ -52,7 +52,7 @@
     <ul>
     <li>November 22, 2026, on the same machine: Windows with WSL (Ubuntu 24.04), the project folder <code>test-codigo</code>, R 4.6.1, two runs each.</li>
     <li>Positron is version 2026.11.1, on Windows, connected to WSL.</li>
-    <li>Corral is a full layout: the editor, the Ark console, the variables pane and the language server. herdr and the terminal aren't counted, because they are open anyway for the agent.</li>
+    <li>Corral is a full layout: the editor, the Ark console, the variables pane and the language server. herdr isn't in this column, because it is open anyway for the agent; it is measured on its own <a href="#herdr">below</a>. The terminal app isn't counted at all: it depends on which one you use, while Positron's figures include its own window.</li>
     <li>The chart sets Positron's best run against Corral's worst.</li>
     </ul>
 
@@ -94,6 +94,17 @@
     <p>R weighs about the same in both, because both run Ark. The difference is the interface. In Corral, <code>corral</code> runs as a few small processes: the console, the bridge to the language server, the variables pane.</p>
     <p>In an earlier measurement, Positron also started Python with its language server (about 440 MB), because the folder has a <code>pyproject.toml</code>. Corral opens Python only when you use it. Positron's time from <kbd>Ctrl</kbd>+<kbd>R</kbd> to the result wasn't measured, because that would mean driving its interface with clicks.</p>
     <p>An earlier measurement, before Fresh, loading R and the language servers were optimized, gave Corral 181 MB and 0.7 % CPU at rest.</p>
+
+    <h3 id="herdr">herdr</h3>
+    <p>Measured on its own the same day, with herdr 0.9.5: a herdr with only a Corral layout open, and its screen in a terminal of 200 × 50 characters, after 15 seconds and then 30 seconds at rest.</p>
+    <table>
+    <thead><tr><th>herdr</th><th>Memory</th><th>CPU at rest</th></tr></thead>
+    <tbody>
+    <tr><td>The server (keeps the panes)</td><td>23 MB</td><td>0.20 %</td></tr>
+    <tr><td>The client (the screen you look at)</td><td>23 MB</td><td>0.20 %</td></tr>
+    </tbody>
+    </table>
+    <p>With herdr, Corral uses about 200 MB and 0.76 % of one core at rest. herdr grows with what it holds: in a day-to-day session with 10 workspaces and 16 panes, its server used 47 MB and its client 17 MB.</p>
 
     <h2>Corral in Rust</h2>
     <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="all"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
