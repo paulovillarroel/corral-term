@@ -42,5 +42,5 @@ The files behind it, for reference: herdr's bindings are in `~/.config/herdr/con
 
 - `ctrl+b space`: the searchable list; Enter runs the actions.
 - In Mirador: `?`.
-- In the editor: `Ctrl+P`, then "Corral: atajos de teclado".
+- In the editor: `Ctrl+P`, then "Corral: keyboard shortcuts" ("Corral: atajos de teclado" in Spanish).
 - `ctrl+b ?` shows herdr's own keys (panes, tabs, workspaces).
