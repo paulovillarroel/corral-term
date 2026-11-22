@@ -26,7 +26,7 @@ Written in Rust. DuckDB for your data.</p>
 
 | You need | How to get it |
 |---|---|
-| Linux x86_64, or Windows with WSL | On Windows: `wsl --install` in PowerShell, then do everything inside Ubuntu. macOS is not supported yet. |
+| Linux x86_64, or Windows with WSL | On Windows: `wsl --install` in PowerShell, then do everything inside Ubuntu. The macOS version is in development. |
 | `curl` and `tar` | Ubuntu has them; otherwise `sudo apt install curl tar`. |
 | [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. `herdr update` updates it. |
 | R, with the `httpgd` and `jsonlite` packages | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig), then `Rscript -e 'install.packages(c("httpgd", "jsonlite"))'`. |
@@ -111,4 +111,4 @@ For transparency: the installer sends one anonymous ping when an installation fi
 
 ---
 
-Version 0.1.8 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
+Version 0.1.8 · Linux and WSL; macOS in development · [MIT license](LICENSE).
