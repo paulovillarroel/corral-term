@@ -1,6 +1,6 @@
 ---
 name: corral-r
-description: Runs R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at; also arranges the Corral panes (script, console, variables), reads or changes Corral's keyboard shortcuts, and answers questions about Corral from its settings and docs. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example "corre esto en R", "hazlo en Python", "analiza estos datos", "haz un gráfico", "¿qué tiene ventas?", "ajusta un modelo", and when the user asks to show only the script or the console, switch to Python, or see or change a shortcut ("¿cuál es el atajo para…?", "cambia el atajo de…"), or asks how Corral works ("¿cómo cambio el idioma?"). Prefer it over Rscript or a separate python for anything that touches the user's data or session.
+description: Runs R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at; also arranges the Corral panes (script, console, variables), reads or changes Corral's keyboard shortcuts, and answers questions about Corral from its settings and docs. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example (in any language) "run this in R", "do it in Python", "analyze this data", "make a plot", "what's in sales?", "fit a model", and when the user asks to show only the script or the console, switch to Python, or see or change a shortcut ("what's the shortcut for…?", "change the shortcut for…"), or asks how Corral works ("how do I change the language?"). Prefer it over Rscript or a separate python for anything that touches the user's data or session.
 ---
 
 # Corral: the user's live R and Python sessions
@@ -32,19 +32,19 @@ Lists the objects in the session (name, kind, class, dimensions or preview, size
 ## Run code
 
 ```bash
-corral eval 'summary(ventas)'
+corral eval 'summary(sales)'
 
 corral eval <<'EOF'
-modelo <- lm(monto ~ region, data = ventas)
-summary(modelo)
+model <- lm(amount ~ region, data = sales)
+summary(model)
 EOF
 
-corral eval --file analisis.R
+corral eval --file analysis.R
 
 corral eval --lang python <<'EOF'
 import pandas as pd
-ventas = pd.read_csv("datos/ventas.csv")
-ventas.describe()
+sales = pd.read_csv("data/sales.csv")
+sales.describe()
 EOF
 ```
 
@@ -65,7 +65,7 @@ Each new plot is saved as PNG and reported as `[corral] plot N saved to <path>`.
 Every drawing stays in the user's plot history. When you redraw to fix a plot your previous `corral eval` drew (labels overlapping, wrong scale, a typo), add `--replace`: the new version replaces your draft, so the user sees one plot instead of near-identical copies.
 
 ```bash
-corral eval --replace 'print(grafico)'
+corral eval --replace 'print(p)'
 ```
 
 Don't use it when the user asked for a new or different plot, or wants to compare versions.
@@ -82,7 +82,7 @@ To put code into it, pass the text on stdin. It goes at the end, on a new line, 
 
 ```bash
 corral script --write <<'EOF'
-resumen <- ventas |> summarise(total = sum(monto))
+totals <- sales |> summarise(total = sum(amount))
 EOF
 ```
 
@@ -91,7 +91,7 @@ Add `--replace` to replace the whole draft, only when the user asks for it (read
 When the user asks you to save it, write it into their project (it refuses to overwrite unless you add `--force`, so ask first if the file exists):
 
 ```bash
-corral script --save analisis/modelo.R
+corral script --save analysis/model.R
 ```
 
 Don't save the scratch file on your own initiative; it is temporary on purpose.
