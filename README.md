@@ -18,7 +18,7 @@ Written in Rust. DuckDB for your data.</p>
 - **Script, console, variables, tables and plots** in a [herdr TUI](https://herdr.dev/tui/) workspace: R on [Ark](https://github.com/posit-dev/ark), Python in IPython.
 - **Big tables at once.** `View()` asks DuckDB only for what's on screen: ten million rows show up in about 34 ms.
 - **Agents in your session.** Corral is the harness between your agent and your live session: the agent runs code in your console with `corral eval`, guided by an [Agent Skills](https://agentskills.io) skill, within rules you set ([the agent harness](https://corral-term.dev/docs/agents.html#the-agent-harness)).
-- **Light.** R ready in 0.45 s and 155 MB in use, against 13.3 s and 3.2 GB for Positron ([how it was measured](https://corral-term.dev/docs/performance.html)).
+- **Light.** R ready in 0.45 s and 155 MB in use (200 MB counting herdr), against 13.3 s and 3.2 GB for Positron ([how it was measured](https://corral-term.dev/docs/performance.html)).
 
 ## Install
 
@@ -39,9 +39,9 @@ Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…), [uv](https://d
 curl -LsSf https://corral-term.dev/install.sh | sh
 ```
 
-The installer downloads the latest published version, says which, and checks its SHA-256 before opening it (each package also has a [build provenance attestation](https://corral-term.dev/docs/install.html#how-the-download-is-checked)); it never falls back to unreleased code. It prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
+The installer downloads the latest published version, says which, and checks its SHA-256 before opening it and, if you have the GitHub CLI, its [build provenance attestation](https://corral-term.dev/docs/install.html#how-the-download-is-checked); it never falls back to unreleased code. It prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
 
-- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, checking the checksum when one is published;
+- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, each checked against a SHA-256 written into Corral's code;
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
@@ -99,7 +99,7 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 ## Security
 
-Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, never values), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
+Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, not values; keep `ask` on with it, since the agent writes the code), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
 
 ## Problems and ideas
 
