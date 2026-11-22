@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.8
+
+Corral's files move to English names, and nothing is lost on upgrade.
 
 - Corral's own files have English names: the R console's history is `~/.local/state/corral/history-r.jsonl`, and drafts outside a project go to `$XDG_RUNTIME_DIR/corral/drafts/`. Nothing is lost on upgrade: the history, the layout state and the installer's record move to their new names the first time Corral reads them, so `corral uninstall` still undoes an earlier install.
 - An editor that was open while you updated needs to be closed (Ctrl+Q) and opened again before `corral script --write` reaches its draft; until then it says the editor did not answer.
