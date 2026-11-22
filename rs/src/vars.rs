@@ -74,6 +74,11 @@ impl Colors {
         }
     }
 
+    /// The theme changed since these were read (herdr's theme follows into palette.json).
+    pub fn changed(&self) -> bool {
+        mtime(&palette_file()) != self.seen
+    }
+
     fn icon(&self, kind: &str) -> (&str, &str) {
         match kind {
             "data" => (&self.blue, "▦"),

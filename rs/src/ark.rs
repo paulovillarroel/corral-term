@@ -8,6 +8,7 @@ use crate::console;
 use crate::env;
 use crate::json::{self, obj, Value};
 use crate::term::{self, Raw};
+use crate::vars::Colors;
 use crate::zmtp::{self, Connection, Socket};
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
@@ -437,6 +438,8 @@ struct Editor {
     buf: Vec<char>,
     cur: usize,
     prompt: Prompt,
+    /// The prompt in the theme's colors (Corral's palette, which follows herdr's theme).
+    colors: Colors,
     /// Rows between the top of the input and the cursor, as last drawn.
     rows_above: usize,
 }
@@ -447,7 +450,7 @@ fn is_word(c: char) -> bool {
 
 impl Editor {
     fn new(prompt: Prompt) -> Editor {
-        Editor { buf: Vec::new(), cur: 0, prompt, rows_above: 0 }
+        Editor { buf: Vec::new(), cur: 0, prompt, colors: Colors::load(), rows_above: 0 }
     }
 
     fn text(&self) -> String {
@@ -536,10 +539,11 @@ impl Editor {
             Prompt::In(n) => {
                 let first = format!("In [{n}]: ");
                 let w = first.chars().count();
+                let c = &self.colors;
                 if i == 0 {
-                    (format!("\x1b[32mIn [\x1b[1m{n}\x1b[22m]: \x1b[0m"), w)
+                    (format!("{}In [{}\x1b[1m{n}\x1b[22m{}]: \x1b[0m", c.muted, c.accent, c.muted), w)
                 } else {
-                    (format!("\x1b[32m{:>1$}: \x1b[0m", "...", w - 2), w)
+                    (format!("{}{:>2$}: \x1b[0m", c.dim, "...", w - 2), w)
                 }
             }
             Prompt::Ask(p, _) => (if i == 0 { p.clone() } else { String::new() }, if i == 0 { p.chars().count() } else { 0 }),
@@ -552,6 +556,9 @@ impl Editor {
 
     /// Draw the input again, from its first row, and put the cursor in place.
     fn render(&mut self) {
+        if self.colors.changed() {
+            self.colors = Colors::load();
+        }
         let width = term::size().0.max(10);
         let mut s = String::from("\r");
         if self.rows_above > 0 {
