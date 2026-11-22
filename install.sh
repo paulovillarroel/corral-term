@@ -3,7 +3,11 @@
 #
 #   curl -LsSf https://corral-term.dev/install.sh | sh
 #
-# From a copy of the repository it installs that copy, without downloading anything:
+# It installs the latest published version (CORRAL_VERSION=v0.1.3 picks another),
+# checks the package's SHA-256 before opening it, and says which version it is.
+# It never falls back to an unreleased copy: if something fails, it stops and
+# says why. From a copy of the repository it installs that copy, without
+# downloading anything:
 #   sh install.sh
 # To only check the requirements, without installing anything:
 #   sh install.sh --check          (or, with the curl line: ... | sh -s -- --check)
@@ -11,18 +15,22 @@
 # Before changing anything it checks that everything needed is there and says
 # what to do about whatever is missing. It never uses sudo: it only writes
 # inside your home folder. This script only gets the `corral` command (already
-# built, or it builds it with cargo); `corral install` does the checking and
-# the installing. It speaks English; CORRAL_LANG=es (or `corral config
-# language es` from an earlier install) makes it speak Spanish.
+# built, or it builds it with cargo from a clone); `corral install` does the
+# checking and the installing. It speaks English; CORRAL_LANG=es (or `corral
+# config language es` from an earlier install) makes it speak Spanish.
+#
+# Everything runs from main() at the very end, so a download cut halfway runs
+# nothing.
 set -eu
 
 REPO=paulovillarroel/corral-term
 LINE="curl -LsSf https://corral-term.dev/install.sh | sh"
+PACKAGE=corral-term-x86_64-linux.tar.gz
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-    red=$(printf '\033[31m'); bold=$(printf '\033[1m'); off=$(printf '\033[0m')
+    red=$(printf '\033[31m'); green=$(printf '\033[32m'); bold=$(printf '\033[1m'); off=$(printf '\033[0m')
 else
-    red=""; bold=""; off=""
+    red=""; green=""; bold=""; off=""
 fi
 
 # The language: CORRAL_LANG, else `language` in Corral's config (on an update), else English.
@@ -49,34 +57,6 @@ stop() {
     exit 1
 }
 
-case "$(uname -s)" in
-    Linux) ;;
-    Darwin) stop "$(t "Corral doesn't work on macOS yet." "Corral todavía no funciona en macOS.")" \
-                 "$(t "herdr does work on a Mac, but several parts of Corral use features only Linux has." \
-                      "herdr sí funciona en Mac, pero varias piezas de Corral usan funciones propias de Linux.")" \
-                 "$(t "For now Corral works on Linux and on Windows with WSL." \
-                      "Por ahora Corral funciona en Linux y en Windows con WSL.")" ;;
-    *) stop "$(t "Corral works on Linux and on Windows with WSL, and this system is $(uname -s)." \
-                 "Corral funciona en Linux y en Windows con WSL, y este sistema es $(uname -s).")" \
-            "$(t "On Windows, open a WSL (Ubuntu) terminal and run the installation there." \
-                 "En Windows, abre una terminal de WSL (Ubuntu) y corre ahí la instalación.")" ;;
-esac
-case "$(uname -m)" in
-    x86_64 | amd64) ;;
-    *) stop "$(t "For now Corral only installs on x86_64 machines (Intel or AMD), and this one is $(uname -m)." \
-                 "Corral por ahora se instala solo en equipos x86_64 (Intel o AMD), y este es $(uname -m).")" ;;
-esac
-
-missing=""
-for tool in curl tar; do
-    command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
-done
-if [ -n "$missing" ]; then
-    stop "$(t "Some basic programs are missing:" "Faltan programas básicos:")$missing" \
-         "$(t "On Ubuntu or Debian:" "En Ubuntu o Debian:")  ${bold}sudo apt install$missing$off" \
-         "" "$(t "Then run the installation again:" "Después vuelve a correr la instalación:")" "  $LINE"
-fi
-
 # corral_of DIR AGAIN: make sure DIR has the `corral` command, compiling it if needed.
 corral_of() {
     exe="$1/rs/target/release/corral"
@@ -100,35 +80,118 @@ corral_of() {
     fi
 }
 
-# From a clone (sh install.sh): install that copy where it is.
-here=""
-case "$0" in
-    *install.sh) here=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true) ;;
-esac
-if [ -n "$here" ] && [ -f "$here/rs/Cargo.toml" ] && [ -f "$here/herdr/herdr-plugin.toml" ]; then
-    corral_of "$here" "sh $here/install.sh"
-    exec "$here/rs/target/release/corral" install --from "$here" --in-place --rerun "sh $here/install.sh" "$@"
-fi
+# sha256 FILE: the file's SHA-256, with whichever tool the system has.
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d' ' -f1
+    else
+        stop "$(t "There's no tool here to check the download's SHA-256 (sha256sum or shasum)." \
+                  "No hay una herramienta para comprobar el SHA-256 de la descarga (sha256sum o shasum).")" \
+             "$(t "On Ubuntu or Debian:" "En Ubuntu o Debian:")  ${bold}sudo apt install coreutils${off}"
+    fi
+}
 
-# Piped from curl: download Corral to a temporary folder; `corral install`
-# checks everything else and copies it in place only if nothing is missing.
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/corral.XXXXXX")
-trap 'rm -rf "$tmp"' EXIT
-trap 'exit 130' INT TERM
-printf '%s\n' "$(t 'Downloading Corral...' 'Descargando Corral...')"
-release="${CORRAL_URL:-https://github.com/$REPO/releases/latest/download/corral-term-x86_64-linux.tar.gz}"
-if ! curl -fsSL "$release" -o "$tmp/corral.tar.gz" 2>/dev/null &&
-   ! curl -fsSL "https://github.com/$REPO/archive/refs/heads/main.tar.gz" -o "$tmp/corral.tar.gz" 2>/dev/null; then
-    stop "$(t "Couldn't download Corral from GitHub." "No pude descargar Corral de GitHub.")" \
-         "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")" \
-         "$(t "If the repository is private, the download needs access: clone it with git" \
-              "Si el repositorio es privado, la descarga necesita acceso: clónalo con git")" \
-         "$(t "and run ${bold}sh install.sh${off} inside the copy." "y corre ${bold}sh install.sh${off} dentro de la copia.")"
-fi
-tar -xzf "$tmp/corral.tar.gz" -C "$tmp"
-found=$(find "$tmp" -maxdepth 3 -path '*/rs/Cargo.toml' | head -n 1)
-[ -n "$found" ] || stop "$(t "What I downloaded isn't Corral." "Lo que descargué no es Corral.")" \
-                        "$(t "Let whoever gave you the installation know." "Avísale a quien te pasó la instalación.")"
-src=$(dirname "$(dirname "$found")")
-corral_of "$src" "$LINE"
-"$src/rs/target/release/corral" install --from "$src" --rerun "$LINE" "$@"
+# latest_tag: the tag of the latest published version (v0.1.3), from GitHub's redirect.
+latest_tag() {
+    url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null) || return 0
+    case "$url" in
+        */releases/tag/v*) printf '%s' "${url##*/tag/}" ;;
+    esac
+}
+
+main() {
+    case "$(uname -s)" in
+        Linux) ;;
+        Darwin) stop "$(t "Corral doesn't work on macOS yet." "Corral todavía no funciona en macOS.")" \
+                     "$(t "herdr does work on a Mac, but several parts of Corral use features only Linux has." \
+                          "herdr sí funciona en Mac, pero varias piezas de Corral usan funciones propias de Linux.")" \
+                     "$(t "For now Corral works on Linux and on Windows with WSL." \
+                          "Por ahora Corral funciona en Linux y en Windows con WSL.")" ;;
+        *) stop "$(t "Corral works on Linux and on Windows with WSL, and this system is $(uname -s)." \
+                     "Corral funciona en Linux y en Windows con WSL, y este sistema es $(uname -s).")" \
+                "$(t "On Windows, open a WSL (Ubuntu) terminal and run the installation there." \
+                     "En Windows, abre una terminal de WSL (Ubuntu) y corre ahí la instalación.")" ;;
+    esac
+    case "$(uname -m)" in
+        x86_64 | amd64) ;;
+        *) stop "$(t "For now Corral only installs on x86_64 machines (Intel or AMD), and this one is $(uname -m)." \
+                     "Corral por ahora se instala solo en equipos x86_64 (Intel o AMD), y este es $(uname -m).")" ;;
+    esac
+
+    missing=""
+    for tool in curl tar; do
+        command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+    done
+    if [ -n "$missing" ]; then
+        stop "$(t "Some basic programs are missing:" "Faltan programas básicos:")$missing" \
+             "$(t "On Ubuntu or Debian:" "En Ubuntu o Debian:")  ${bold}sudo apt install$missing$off" \
+             "" "$(t "Then run the installation again:" "Después vuelve a correr la instalación:")" "  $LINE"
+    fi
+
+    # From a clone (sh install.sh): install that copy where it is.
+    here=""
+    case "$0" in
+        *install.sh) here=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true) ;;
+    esac
+    if [ -n "$here" ] && [ -f "$here/rs/Cargo.toml" ] && [ -f "$here/herdr/herdr-plugin.toml" ]; then
+        corral_of "$here" "sh $here/install.sh"
+        exec "$here/rs/target/release/corral" install --from "$here" --in-place --rerun "sh $here/install.sh" "$@"
+    fi
+
+    # Piped from curl: a published version, checked, in a temporary folder; `corral
+    # install` checks everything else and copies it in place only if nothing is missing.
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/corral.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT
+    trap 'exit 130' INT TERM
+
+    if [ -n "${CORRAL_URL:-}" ]; then
+        # A package from elsewhere (tests, a mirror): checked only if CORRAL_SHA256 says against what.
+        printf '%s\n' "$(t "Downloading Corral from $CORRAL_URL..." "Descargando Corral desde $CORRAL_URL...")"
+        curl -fsSL "$CORRAL_URL" -o "$tmp/$PACKAGE" ||
+            stop "$(t "Couldn't download $CORRAL_URL." "No pude descargar $CORRAL_URL.")"
+        expected=${CORRAL_SHA256:-}
+    else
+        tag=${CORRAL_VERSION:-$(latest_tag)}
+        [ -n "$tag" ] || stop "$(t "Couldn't find out which version of Corral is the latest." "No pude averiguar cuál es la última versión de Corral.")" \
+                             "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")"
+        case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+        base="https://github.com/$REPO/releases/download/$tag"
+        printf '%s\n' "$(t "Downloading Corral ${tag#v}..." "Descargando Corral ${tag#v}...")"
+        curl -fsSL "$base/$PACKAGE" -o "$tmp/$PACKAGE" 2>/dev/null ||
+            stop "$(t "Couldn't download Corral $tag from GitHub." "No pude descargar Corral $tag de GitHub.")" \
+                 "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")" \
+                 "$(t "Published versions: https://github.com/$REPO/releases" "Versiones publicadas: https://github.com/$REPO/releases")"
+        curl -fsSL "$base/$PACKAGE.sha256" -o "$tmp/$PACKAGE.sha256" 2>/dev/null ||
+            stop "$(t "Corral $tag has no published SHA-256 to check the download against." "Corral $tag no tiene un SHA-256 publicado para comprobar la descarga.")" \
+                 "$(t "Versions from 0.1.3 on have one: install the latest, or pick one with CORRAL_VERSION." \
+                      "Las versiones desde la 0.1.3 lo tienen: instala la última, o elige una con CORRAL_VERSION.")"
+        expected=$(cut -d' ' -f1 "$tmp/$PACKAGE.sha256")
+    fi
+
+    if [ -n "$expected" ]; then
+        actual=$(sha256 "$tmp/$PACKAGE")
+        [ "$actual" = "$expected" ] ||
+            stop "$(t "The download doesn't match its published SHA-256, so I didn't open it." "La descarga no coincide con su SHA-256 publicado, así que no la abrí.")" \
+                 "$(t "expected" "esperado")  $expected" "$(t "got     " "obtenido")  $actual" \
+                 "" "$(t "Try again; if it keeps happening, tell the project: https://github.com/$REPO/issues" \
+                         "Vuelve a intentarlo; si se repite, avísale al proyecto: https://github.com/$REPO/issues")"
+        printf '%s✓%s %s\n' "$green" "$off" "$(t "SHA-256 checked" "SHA-256 comprobado")"
+    else
+        printf '%s\n' "$(t "! Not checked: CORRAL_URL without CORRAL_SHA256." "! Sin comprobar: CORRAL_URL sin CORRAL_SHA256.")"
+    fi
+
+    tar -xzf "$tmp/$PACKAGE" -C "$tmp"
+    found=$(find "$tmp" -maxdepth 3 -path '*/rs/Cargo.toml' | head -n 1)
+    [ -n "$found" ] || stop "$(t "What I downloaded isn't Corral." "Lo que descargué no es Corral.")" \
+                            "$(t "Let whoever gave you the installation know." "Avísale a quien te pasó la instalación.")"
+    src=$(dirname "$(dirname "$found")")
+    [ -x "$src/rs/target/release/corral" ] ||
+        stop "$(t "This package doesn't come with corral built." "Este paquete no trae corral compilado.")" \
+             "$(t "Published versions always do; tell the project: https://github.com/$REPO/issues" \
+                  "Las versiones publicadas siempre lo traen; avísale al proyecto: https://github.com/$REPO/issues")"
+    "$src/rs/target/release/corral" install --from "$src" --rerun "$LINE" "$@"
+}
+
+main "$@"
