@@ -103,4 +103,4 @@ Agents run code in your real session, so the user stays in control, and Corral e
 
 ---
 
-Version 0.1.1 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
+Version 0.1.2 · Linux and WSL; macOS not yet · [MIT license](LICENSE).

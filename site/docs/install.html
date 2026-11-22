@@ -86,7 +86,7 @@
     <h2>Install with one line</h2>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
-    <pre><code>Corral 0.1.1: what it needs, without changing anything.
+    <pre><code>Corral 0.1.2: what it needs, without changing anything.
 
 Required
   ✓ System            Linux x86_64 (WSL)
@@ -95,7 +95,7 @@ Required
   ✓ R packages        httpgd and jsonlite
 
 Provided by the installer
-  ✓ corral            0.1.1, built
+  ✓ corral            0.1.2, built
   ↓ Fresh             will download 0.5.9 (script editor)
   ↓ DuckDB            will download 1.4.4 (View() tables)
   ✓ Air               0.13.0, you already have it
@@ -125,7 +125,7 @@ Optional
     <h2 id="install-count">Anonymous install count</h2>
     <p>When an installation finishes, the installer sends one anonymous ping to <code>corral-term.dev</code>, so the project knows how many people install Corral and from which countries. The ping says only:</p>
     <ul>
-      <li>the version of Corral (<code>0.1.1</code>);</li>
+      <li>the version of Corral (<code>0.1.2</code>);</li>
       <li>the system: Linux or WSL;</li>
       <li>whether it is a new install or an update;</li>
       <li>whether it came from the published package or a clone.</li>
@@ -156,8 +156,8 @@ Optional
 
     <h2>Publish a version</h2>
     <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, then tag it with that number:</p>
-    <pre><code><span class="p">$ </span>git tag v0.1.2
-<span class="p">$ </span>git push origin v0.1.2</code></pre>
+    <pre><code><span class="p">$ </span>git tag v0.1.3
+<span class="p">$ </span>git push origin v0.1.3</code></pre>
     <p>The binary is static (musl), so it runs on any x86_64 Linux, WSL included.</p>
     <p>Without a published version, the installer downloads the code from <code>main</code> and compiles <code>corral</code> with <code>cargo</code>. If there is no <code>cargo</code>, it stops before changing anything and gives you the command to install Rust.</p>
 
