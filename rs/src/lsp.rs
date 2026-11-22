@@ -99,7 +99,7 @@ fn tool_path(package: &str, program: &str) -> Option<PathBuf> {
     if let Some(p) = env::which(program) {
         return Some(p);
     }
-    let known_file = env::state_dir().join("herramientas.json");
+    let known_file = env::state_file("tools.json", "herramientas.json");
     let mut known = env::read_json(&known_file);
     if let Some(p) = known.get(package).str().map(PathBuf::from).filter(|p| p.is_file()) {
         return Some(p);

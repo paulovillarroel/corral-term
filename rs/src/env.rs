@@ -22,6 +22,17 @@ pub fn state_dir() -> PathBuf {
     xdg("XDG_STATE_HOME", ".local/state").join("corral")
 }
 
+/// A file in the state folder that Corral 0.1.7 and earlier kept under a Spanish
+/// name (`old`): it moves to `name` the first time, so nothing is lost on upgrade.
+pub fn state_file(name: &str, old: &str) -> PathBuf {
+    let path = state_dir().join(name);
+    let old = state_dir().join(old);
+    if !path.exists() && old.exists() {
+        let _ = std::fs::rename(&old, &path);
+    }
+    path
+}
+
 pub fn data_dir() -> PathBuf {
     xdg("XDG_DATA_HOME", ".local/share").join("corral")
 }
@@ -117,7 +128,7 @@ pub fn session_for(pane: &str) -> Option<Value> {
 
 /// The layout state of all workspaces (the active console, what ctrl+b t hid).
 pub fn layout_file() -> PathBuf {
-    state_dir().join("expandido.json")
+    state_file("layout.json", "expandido.json")
 }
 
 pub fn ws_key(ws: Option<&str>) -> String {

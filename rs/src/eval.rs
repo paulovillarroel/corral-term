@@ -448,7 +448,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let indexes: Vec<usize> = if new > old { (old..new).collect() } else if changed && new > 0 { vec![new - 1] } else { Vec::new() };
         let mut current = plot_ids(&sid);
         let drawn: Vec<String> = indexes.iter().filter_map(|&i| current.get(i).cloned()).collect();
-        let last_file = edir.join("ultimos-graficos.json");
+        let last_file = edir.join("last-plots.json");
         let mut removed = 0;
         if o.replace && !drawn.is_empty() {
             let previous: Vec<String> = env::read_json(&last_file).get("ids").arr().iter().filter_map(|v| v.str().map(String::from)).collect();

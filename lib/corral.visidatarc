@@ -7,7 +7,7 @@
 BaseSheet.addCommand(
     'q', 'corral-quit',
     'vd.quit(*vd.sheets) if isinstance(sheet.source, Path) else vd.quit(sheet)',
-    'cerrar la tabla (Corral); en otras vistas, volver atrás',
+    'close the table (Corral); on other views, go back',
 )
 
 
