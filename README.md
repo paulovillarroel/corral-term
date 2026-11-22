@@ -101,6 +101,10 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, never values), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
 
+## Problems and ideas
+
+If something doesn't work, or you have an idea, please [open an issue](https://github.com/paulovillarroel/corral-term/issues). It helps to include `corral --version`, your system (Linux or WSL) and what `corral doctor` prints; for an installation problem, the output of the install line with `sh -s -- --check` at the end.
+
 ## Telemetry
 
 For transparency: the installer sends one anonymous ping when an installation finishes, only to measure how many times Corral is installed and from which countries. It carries the version, the system (Linux or WSL), whether it is a new install or an update, and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Corral itself sends nothing else, ever. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `CORRAL_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) turns it off; the code that receives it is [`api/installed.js`](api/installed.js).
