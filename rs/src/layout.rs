@@ -1,17 +1,18 @@
 //! `corral toggle` (ctrl+b t) and `corral switch` (ctrl+b y): which pane gets
-//! the area above the variables. herdr won't shrink a split below 10 %, so a
+//! the area above the variables (script or console; agent or console in the
+//! layout focused on code). herdr won't shrink a split below 10 %, so a
 //! pane that has to disappear moves to the workspace's hidden tab, where it
 //! keeps running, and comes back to its place later.
 
-use crate::env::{self, python_fallback};
+use crate::console;
+use crate::env;
 use crate::herdr;
 use crate::json::{obj, Value};
-use crate::send::main_tab;
 
-const PARKING_TAB: &str = "corral (oculto)";
+pub const PARKING_TAB: &str = "corral (oculto)";
 const SCRIPT_SHARE: f64 = 0.57;
 
-fn hidden_tab(ws: Option<&str>) -> Result<(Option<String>, Option<String>), String> {
+pub fn hidden_tab(ws: Option<&str>) -> Result<(Option<String>, Option<String>), String> {
     let Some(ws) = ws else { return Ok((None, None)) };
     let tab = herdr::tabs(ws)?.into_iter().find(|t| t.get("label").str() == Some(PARKING_TAB))
         .and_then(|t| t.get("tab_id").str().map(String::from));
@@ -24,7 +25,7 @@ fn hidden_tab(ws: Option<&str>) -> Result<(Option<String>, Option<String>), Stri
 }
 
 /// Move a pane out of sight, to the hidden tab (created when needed).
-fn park(pane: &str, ws: Option<&str>) -> Result<(), String> {
+pub fn park(pane: &str, ws: Option<&str>) -> Result<(), String> {
     let destination = match hidden_tab(ws)? {
         (Some(tab), Some(other)) => obj(vec![("type", "tab".into()), ("tab_id", tab.into()),
                                              ("split", "right".into()), ("target_pane_id", other.into())]),
@@ -40,7 +41,7 @@ fn park(pane: &str, ws: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn move_next_to(pane: &str, tab: &str, target: &str, ratio: f64) -> Result<(), String> {
+pub fn move_next_to(pane: &str, tab: &str, target: &str, ratio: f64) -> Result<(), String> {
     let destination = obj(vec![("type", "tab".into()), ("tab_id", tab.into()), ("target_pane_id", target.into()),
                                ("split", "down".into()), ("ratio", ratio.into())]);
     herdr::call("pane.move", obj(vec![("pane_id", pane.into()), ("focus", false.into()), ("destination", destination)]))?;
@@ -91,34 +92,54 @@ fn set_ratio(tab: &str, path: &[bool], ratio: f64) -> Result<(), String> {
     Ok(())
 }
 
-fn label_of(mode: &str) -> &'static str {
+fn label_of(mode: &str, code: bool) -> &'static str {
     match mode {
         "script" => "Script",
+        "agente" => "Agente",
         "consola" => "Consola",
+        _ if code => "Agente y consola",
         _ => "Script y consola",
     }
 }
 
-pub fn toggle(args: &[String], all: &[String]) -> Result<(), String> {
+pub fn toggle(args: &[String]) -> Result<(), String> {
     let wanted = match args.first().map(String::as_str) {
         None => None,
-        Some(m @ ("ambos" | "script" | "consola")) => Some(m.to_string()),
-        Some(_) => python_fallback(all),
+        Some(m @ ("ambos" | "script" | "agente" | "consola")) => Some(m.to_string()),
+        Some(_) => return Err("uso: corral toggle [ambos|script|agente|consola]".into()),
     };
     let ws = env::current_workspace();
     let panes = herdr::panes(ws.as_deref())?;
     let lang = env::active_lang(ws.as_deref(), &panes);
-    let (Some(script), Some(console)) = (herdr::labeled(&panes, "corral:script"), herdr::labeled(&panes, &format!("corral:{lang}"))) else {
-        env::notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'");
-        return Ok(());
-    };
-    let (script_tab, console_tab) = (herdr::tab_id(script).to_string(), herdr::tab_id(console).to_string());
-    let (script, console) = (herdr::pane_id(script).to_string(), herdr::pane_id(console).to_string());
 
     let path = env::layout_file();
     let mut saved = env::read_json(&path);
     let key = env::ws_key(ws.as_deref());
     let mut state = saved.get(&key).clone();
+
+    // The pane above the console: the script, or the agent in the layout focused on code
+    // (`corral layout --foco codigo`). Below, `script` is that pane, whichever it is.
+    let code = state.get("foco").str() == Some("codigo");
+    let upper_mode = if code { "agente" } else { "script" };
+    if let Some(w) = wanted.as_deref().filter(|w| matches!(*w, "script" | "agente") && *w != upper_mode) {
+        env::notify("Corral", &format!("{}: ya está a la izquierda", label_of(w, code)));
+        return Ok(());
+    }
+    let upper = if code {
+        state.get("agente").str().and_then(|id| panes.iter().find(|p| herdr::pane_id(p) == id))
+    } else {
+        herdr::labeled(&panes, "corral:script")
+    };
+    let (Some(script), Some(console)) = (upper, herdr::labeled(&panes, &format!("corral:{lang}"))) else {
+        if code {
+            env::notify("Sin agente", "No encontré el panel del agente; abre el espacio de nuevo desde la paleta (ctrl+b space)");
+        } else {
+            env::notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'");
+        }
+        return Ok(());
+    };
+    let (script_tab, console_tab) = (herdr::tab_id(script).to_string(), herdr::tab_id(console).to_string());
+    let (script, console) = (herdr::pane_id(script).to_string(), herdr::pane_id(console).to_string());
 
     let (current, parked) = if script_tab == console_tab {
         ("ambos", None)
@@ -129,7 +150,7 @@ pub fn toggle(args: &[String], all: &[String]) -> Result<(), String> {
             let home = herdr::labeled(&panes, "corral:vars").map(|p| herdr::tab_id(p).to_string());
             if Some(&console_tab) == home.as_ref() { script.clone() } else { console.clone() }
         });
-        (if parked == console { "script" } else { "consola" }, Some(parked))
+        (if parked == console { upper_mode } else { "consola" }, Some(parked))
     };
     let focused = env::current_pane();
     let mode = wanted.unwrap_or_else(|| {
@@ -138,11 +159,11 @@ pub fn toggle(args: &[String], all: &[String]) -> Result<(), String> {
         } else if focused.as_deref() == Some(console.as_str()) {
             "consola".into()
         } else {
-            "script".into()
+            upper_mode.into()
         }
     });
     if mode == current {
-        env::notify("Corral", label_of(&mode));
+        env::notify("Corral", label_of(&mode, code));
         return Ok(());
     }
 
@@ -169,7 +190,7 @@ pub fn toggle(args: &[String], all: &[String]) -> Result<(), String> {
     }
 
     if mode != "ambos" {
-        let (keep, hide) = if mode == "script" { (&script, &console) } else { (&console, &script) };
+        let (keep, hide) = if mode == upper_mode { (&script, &console) } else { (&console, &script) };
         let mut share = script_split(&script, &console).map(|s| s.3).unwrap_or(SCRIPT_SHARE);
         if !(0.15..=0.85).contains(&share) {
             share = SCRIPT_SHARE;
@@ -183,55 +204,24 @@ pub fn toggle(args: &[String], all: &[String]) -> Result<(), String> {
     saved.set(&key, state);
     env::write_json(&path, &saved);
     let suffix = if mode != "ambos" { " (ctrl+b t para volver)" } else { "" };
-    env::notify("Corral", &format!("{}{suffix}", label_of(&mode)));
+    env::notify("Corral", &format!("{}{suffix}", label_of(&mode, code)));
     Ok(())
 }
 
-pub fn switch(args: &[String], all: &[String]) -> Result<(), String> {
+/// `corral switch [r|python]` (ctrl+b y): the console spot shows that language;
+/// without one, the other. Starts it the first time.
+pub fn switch(args: &[String]) -> Result<(), String> {
     let ws = env::current_workspace();
     let panes = herdr::panes(ws.as_deref())?;
     let current = env::active_lang(ws.as_deref(), &panes);
     let lang = match args.first().map(String::as_str) {
-        None => if current == "r" { "python".to_string() } else { "r".to_string() },
-        Some(l @ ("r" | "python")) => l.to_string(),
-        Some(_) => python_fallback(all),
+        None => if current == "r" { "python" } else { "r" },
+        Some(l @ ("r" | "python")) => l,
+        Some(_) => return Err("uso: corral switch [r|python]".into()),
     };
-    let Some(target) = herdr::labeled(&panes, &format!("corral:{lang}")) else { python_fallback(all) }; // start it
-    let target_id = herdr::pane_id(target).to_string();
-    if env::session_for(&target_id).is_none() {
-        python_fallback(all); // still starting, or quit: Python knows how to restart it
-    }
-    let name = if lang == "python" { "Python" } else { "R" };
-
-    let path = env::layout_file();
-    let mut saved = env::read_json(&path);
-    let key = env::ws_key(ws.as_deref());
-    let mut state = saved.get(&key).clone();
-
-    if lang != current {
-        let other = herdr::labeled(&panes, &format!("corral:{current}"));
-        let main = main_tab(&panes);
-        let visible = other.filter(|o| main.as_deref() == Some(herdr::tab_id(o))).map(|o| herdr::pane_id(o).to_string());
-        let focused = env::current_pane();
-        if let (Some(visible), Some(main)) = (&visible, &main) {
-            if herdr::tab_id(target) != main {
-                move_next_to(&target_id, main, visible, 0.5)?;
-                park(visible, ws.as_deref())?;
-            }
-        }
-        // With the script expanded (ctrl+b t), the console stays hidden; ctrl+b t brings back this one.
-        if let Some(other) = other {
-            if state.get("parked").str() == Some(herdr::pane_id(other)) {
-                state.set("parked", target_id.as_str().into());
-            }
-        }
-        if visible.is_some() && focused == visible {
-            herdr::focus(&target_id)?;
-        }
-    }
-    state.set("active", lang.as_str().into());
-    saved.set(&key, state);
-    env::write_json(&path, &saved);
-    env::notify("Consola", name);
+    let (pane, started) = console::show(lang, true)?;
+    let started = started || pane.as_deref().is_some_and(|p| console::ensure_running(p, lang));
+    let note = if started { ": iniciando (la primera vez uv prepara el entorno)" } else { "" };
+    env::notify("Consola", &format!("{}{note}", console::lang_name(lang)));
     Ok(())
 }

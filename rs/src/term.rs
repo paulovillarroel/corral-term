@@ -268,6 +268,17 @@ pub fn size() -> (usize, usize) {
     }
 }
 
+/// Width and height of the terminal in pixels, when the terminal reports them (else 0, 0).
+pub fn pixels() -> (usize, usize) {
+    let mut ws = Winsize::default();
+    // SAFETY: TIOCGWINSZ fills a winsize struct.
+    if unsafe { ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0 {
+        (ws.xpixel as usize, ws.ypixel as usize)
+    } else {
+        (0, 0)
+    }
+}
+
 impl Drop for Screen {
     fn drop(&mut self) {
         out(&format!("{}\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l", if self.mouse { "\x1b[?1006l\x1b[?1000l" } else { "" }));

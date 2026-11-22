@@ -1,12 +1,26 @@
-//! `corral _console <lang>`: what corral types in a console pane. It clears
-//! the screen and becomes the console (Ark, plain R or IPython).
+//! The consoles. `corral _console <lang>` is what corral types in a console
+//! pane: it clears the screen and becomes the console (Ark, plain R or
+//! IPython). The rest finds a console, brings it into the layout's console
+//! spot, starts it when it isn't there, and waits for its prompt.
 
-use crate::env::{self, python_fallback};
-use crate::json::Value;
+use crate::env;
+use crate::herdr;
+use crate::json::{obj, Value};
+use crate::layout;
+use crate::send::main_tab;
 use std::io::Write;
 use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
+
+pub fn label(lang: &str) -> String {
+    format!("corral:{lang}")
+}
+
+pub fn lang_name(lang: &str) -> &'static str {
+    if lang == "python" { "Python" } else { "R" }
+}
 
 /// The newest Ark under ~/.local/share/corral/ark (or corral config ark_bin).
 pub fn ark_binary(cfg: &Value) -> Option<PathBuf> {
@@ -41,10 +55,10 @@ pub fn r_flavor(cfg: &Value) -> &'static str {
     }
 }
 
-pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
+pub fn run(args: &[String]) -> Result<(), String> {
     let lang = args.first().map(String::as_str).unwrap_or("r");
     if lang != "r" && lang != "python" {
-        python_fallback(all);
+        return Err("uso: corral _console r|python".into());
     }
     print!("\x1b[H\x1b[2J\x1b[3J"); // the command corral typed goes away
     let _ = std::io::stdout().flush();
@@ -64,10 +78,7 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
             Some(custom) if custom != "ark" && custom != "r" => shell(custom),
             _ if r_flavor(&cfg) == "ark" && !jupyter_frontend(&cfg) => return crate::ark::run(),
             _ if r_flavor(&cfg) == "ark" => {
-                let jupyter = env::data_dir().join("jupyter");
-                if !jupyter.join("kernels/ark/kernel.json").is_file() {
-                    python_fallback(all); // it writes the kernel spec first
-                }
+                let jupyter = kernelspec(&cfg)?;
                 // The connection file goes where corral.R announces it, so
                 // `corral _lsp r` can reach Ark's language server.
                 let folder = env::state_dir().join("ark");
@@ -97,4 +108,265 @@ fn shell(command: &str) -> Command {
     let mut c = Command::new("sh");
     c.args(["-c", command]);
     c
+}
+
+/// Corral's own kernel spec for Ark, for jupyter-console: R_HOME and R's
+/// library path as the R script sets them. Your Jupyter setup stays as it is.
+pub fn kernelspec(cfg: &Value) -> Result<PathBuf, String> {
+    let ark = ark_binary(cfg).ok_or("Ark no está instalado (corral ark --instalar)")?;
+    let probe = Command::new("R").args(["--vanilla", "--no-echo", "-e", r#"cat(R.home(), Sys.getenv("LD_LIBRARY_PATH"), sep = "\n")"#])
+        .output().map_err(|e| format!("no pude ejecutar R: {e}"))?;
+    let text = String::from_utf8_lossy(&probe.stdout);
+    let mut lines = text.trim().splitn(2, '\n');
+    let r_home = lines.next().unwrap_or("").trim().to_string();
+    let ld = lines.next().unwrap_or("").trim().to_string();
+    let ld = if ld.is_empty() { format!("{r_home}/lib") } else { ld };
+    let argv: Vec<Value> = [ark.to_string_lossy().to_string(), "--connection_file".into(), "{connection_file}".into(),
+                            "--session-mode".into(), "console".into(), "--default-repos".into(), "none".into(),
+                            "--log".into(), env::state_dir().join("ark.log").to_string_lossy().to_string()]
+        .into_iter().map(Value::from).collect();
+    let spec = obj(vec![("argv", Value::Arr(argv)), ("display_name", "R (Ark, Corral)".into()), ("language", "R".into()),
+                        ("env", obj(vec![("R_HOME", r_home.into()), ("LD_LIBRARY_PATH", ld.into())]))]);
+    let jupyter = env::data_dir().join("jupyter");
+    env::write_json(&jupyter.join("kernels/ark/kernel.json"), &spec);
+    Ok(jupyter)
+}
+
+/// How to call this program from a pane: `corral` when that is this binary
+/// on the PATH, else its full path.
+pub fn program() -> String {
+    let me = std::env::current_exe().ok().and_then(|p| p.canonicalize().ok());
+    let on_path = env::which("corral").and_then(|p| p.canonicalize().ok());
+    match &me {
+        Some(m) if on_path.as_ref() != Some(m) => format!("'{}'", m.to_string_lossy().replace('\'', r"'\''")),
+        _ => "corral".to_string(),
+    }
+}
+
+/// How a pane starts its console: `corral _console <lang>`.
+pub fn command(lang: &str) -> String {
+    format!("{} _console {lang}", program())
+}
+
+/// The console pane for `lang`: this workspace first, then any.
+pub fn find(lang: &str, ws: Option<&str>) -> Option<String> {
+    let scopes: Vec<Option<&str>> = if ws.is_some() { vec![ws, None] } else { vec![None] };
+    scopes.into_iter().find_map(|scope| {
+        let panes = herdr::panes(scope).ok()?;
+        herdr::labeled(&panes, &label(lang)).map(|p| herdr::pane_id(p).to_string())
+    })
+}
+
+/// The console pane for `lang` and the Corral session in it.
+pub fn session(lang: &str, ws: Option<&str>) -> Result<(String, Value), String> {
+    let Some(console) = find(lang, ws) else {
+        return Err(if lang == "python" {
+            "no hay consola de Python: se abre sola al ejecutar código de Python, o con ctrl+b y".into()
+        } else {
+            format!("no hay consola {} en herdr; ábrela con ctrl+b a o márcala con ctrl+b m", label(lang))
+        });
+    };
+    match env::session_for(&console) {
+        Some(s) => Ok((console, s)),
+        None if lang == "python" => Err(format!("la consola {console} no tiene Corral activo (¿IPython sigue arrancando?)")),
+        None => Err(format!("la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activar() en ese R (ctrl+b m lo hace)")),
+    }
+}
+
+/// The session for this place: CORRAL_SESSION, the active console, the workspace, the newest.
+pub fn pick_session() -> Option<Value> {
+    let mut all = env::sessions();
+    if all.is_empty() {
+        return None;
+    }
+    if let Ok(wanted) = std::env::var("CORRAL_SESSION") {
+        if let Some(s) = all.iter().find(|s| s.get("id").str() == Some(wanted.as_str())) {
+            return Some(s.clone());
+        }
+    }
+    if env::in_herdr() {
+        let ws = env::current_workspace();
+        let lang = herdr::panes(ws.as_deref()).map(|p| env::active_lang(ws.as_deref(), &p)).unwrap_or_else(|_| "r".into());
+        if let Some(console) = find(&lang, ws.as_deref()) {
+            if let Some(s) = all.iter().find(|s| s.get("pane_id").str() == Some(console.as_str())) {
+                return Some(s.clone());
+            }
+        }
+        let same: Vec<Value> = all.iter().filter(|s| ws.is_some() && s.get("workspace_id").str() == ws.as_deref()).cloned().collect();
+        if !same.is_empty() {
+            all = same;
+        }
+    }
+    all.into_iter().max_by(|a, b| a.get("started").num().unwrap_or(0.0).total_cmp(&b.get("started").num().unwrap_or(0.0)))
+}
+
+pub fn last_line(pane: &str) -> String {
+    let params = obj(vec![("pane_id", pane.into()), ("source", "visible".into()), ("format", "text".into())]);
+    let text = herdr::call("pane.read", params).ok()
+        .and_then(|r| r.get("read").get("text").str().map(String::from)).unwrap_or_default();
+    text.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).last().unwrap_or("").to_string()
+}
+
+/// Is an earlier `corral eval` request still running? Its output file is there, its outcome is not yet.
+fn eval_running(edir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(edir) else { return false };
+    let newest = entries.flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "out"))
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+    newest.is_some_and(|e| !e.path().with_extension("json").exists())
+}
+
+/// Wait for an empty prompt (R's `>`, or `In [n]:` in IPython and Ark); refuse half-typed input.
+pub fn wait_for_prompt(pane: &str, timeout: f64, lang: &str, edir: Option<&Path>) -> Result<(), String> {
+    let end = Instant::now() + Duration::from_secs_f64(timeout);
+    loop {
+        let line = last_line(pane);
+        let (idle, half) = if let Some(rest) = line.strip_prefix("In [").and_then(|r| r.split_once("]:")).map(|(_, r)| r) {
+            (rest.trim().is_empty(), !rest.trim().is_empty())
+        } else if line.trim_start().starts_with("...:") || lang == "python" {
+            (false, line.trim_start().starts_with("...:"))
+        } else {
+            (line.trim() == ">", line.starts_with('+') || (line.starts_with("> ") && !line[2..].trim().is_empty()))
+        };
+        if idle {
+            return Ok(());
+        }
+        // An earlier request still running echoes its code like typed input: busy, not half-typed.
+        let half = half && !edir.is_some_and(eval_running);
+        if Instant::now() > end {
+            return Err(if half {
+                "la consola tiene una línea a medio escribir; termínala o bórrala y vuelve a intentar".into()
+            } else {
+                format!("la consola de {} está ocupada; espera a que termine o usa --wait-idle", lang_name(lang))
+            });
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Is this console a Jupyter-style one (IPython, or R through Ark)?
+pub fn is_jupyter(pane: &str, lang: &str) -> bool {
+    if lang == "python" {
+        return true;
+    }
+    match env::session_for(pane) {
+        Some(s) => !s.get("ark_connection").is_null(),
+        None => {
+            let line = last_line(pane);
+            line.starts_with("In [") || line.trim_start().starts_with("...:")
+        }
+    }
+}
+
+/// A new console pane: under `near`, or in the hidden tab.
+fn start_pane(lang: &str, ws: Option<&str>, cwd: &str, near: Option<&str>) -> Result<String, String> {
+    let pane = if let Some(near) = near {
+        herdr::split(near, "down", Some(0.5), Some(cwd))?
+    } else if let (_, Some(other)) = layout::hidden_tab(ws)? {
+        herdr::split(&other, "right", None, Some(cwd))?
+    } else {
+        let mut args = vec!["tab", "create", "--label", layout::PARKING_TAB, "--cwd", cwd];
+        if let Some(ws) = ws {
+            args.extend(["--workspace", ws]);
+        }
+        herdr::cli(&args)?.get("root_pane").get("pane_id").str().map(String::from).ok_or("herdr no creó la pestaña")?
+    };
+    herdr::rename(&pane, &label(lang))?;
+    herdr::run(&pane, &command(lang))?;
+    Ok(pane)
+}
+
+/// Put `lang`'s console in the layout's console spot, starting it if needed.
+/// The console it replaces goes to the hidden tab and keeps running. Returns
+/// the pane (None only when `start` is false and there is none) and whether
+/// it was just started.
+pub fn show(lang: &str, start: bool) -> Result<(Option<String>, bool), String> {
+    let ws = env::current_workspace();
+    let panes = herdr::panes(ws.as_deref())?;
+    let path = env::layout_file();
+    let mut saved = env::read_json(&path);
+    let key = env::ws_key(ws.as_deref());
+    let mut state = saved.get(&key).clone();
+    let current = env::active_lang(ws.as_deref(), &panes);
+    let target = herdr::labeled(&panes, &label(lang)).map(|p| herdr::pane_id(p).to_string());
+    let other = if current != lang { herdr::labeled(&panes, &label(&current)).cloned() } else { None };
+    let main = main_tab(&panes);
+    let visible = other.as_ref().filter(|o| main.as_deref() == Some(herdr::tab_id(o))).map(|o| herdr::pane_id(o).to_string());
+    let focused = env::current_pane();
+    let mut started = false;
+
+    let target = match target {
+        Some(t) => {
+            if let (Some(v), Some(m)) = (&visible, &main) {
+                layout::move_next_to(&t, m, v, 0.5)?;
+                layout::park(v, ws.as_deref())?;
+            }
+            t
+        }
+        None if !start => return Ok((None, false)),
+        None => {
+            let project = other.as_ref()
+                .and_then(|o| o.get("foreground_cwd").str().or_else(|| o.get("cwd").str()).map(String::from))
+                .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| ".".into());
+            // Without a Corral layout, the new console just goes under the other one.
+            let near = visible.clone().or_else(|| if main.is_none() { other.as_ref().map(|o| herdr::pane_id(o).to_string()) } else { None });
+            let t = start_pane(lang, ws.as_deref(), &project, near.as_deref())?;
+            started = true;
+            if let Some(v) = &visible {
+                layout::park(v, ws.as_deref())?;
+            }
+            t
+        }
+    };
+    // With the script expanded (ctrl+b t), the console stays hidden; ctrl+b t brings back this one.
+    if let Some(o) = &other {
+        if state.get("parked").str() == Some(herdr::pane_id(o)) {
+            state.set("parked", target.as_str().into());
+        }
+    }
+    if visible.is_some() && focused == visible {
+        herdr::focus(&target)?;
+    }
+    state.set("active", lang.into());
+    saved.set(&key, state);
+    env::write_json(&path, &saved);
+    Ok((Some(target), started))
+}
+
+/// If the console was quit (q() or exit) and only its shell is left, start it again.
+pub fn ensure_running(pane: &str, lang: &str) -> bool {
+    if env::session_for(pane).is_some() {
+        return false;
+    }
+    let Ok(info) = herdr::cli(&["pane", "process-info", "--pane", pane]) else { return false };
+    let names: Vec<String> = info.get("process_info").get("foreground_processes").arr().iter()
+        .map(|p| p.get("name").str().unwrap_or("").to_string()).collect();
+    let shells = ["bash", "zsh", "fish", "sh", "dash"];
+    // Only a shell waiting at an empty prompt: a command just typed there is still starting.
+    let at_prompt = last_line(pane).ends_with(['$', '#', '%', '❯']);
+    if !names.is_empty() && names.iter().all(|n| shells.contains(&n.as_str())) && at_prompt {
+        return herdr::run(pane, &command(lang)).is_ok();
+    }
+    false
+}
+
+/// The console for `lang`, in view and running, ready for input (started if needed).
+pub fn ready(lang: &str) -> Result<String, String> {
+    let (pane, started) = show(lang, true)?;
+    let pane = pane.ok_or_else(|| format!("No hay panel {}. Usa ctrl+b a", label(lang)))?;
+    let started = started || ensure_running(&pane, lang);
+    if started || env::session_for(&pane).is_none() {
+        // Just started, or still starting: wait for its Corral session, then an empty prompt.
+        // The first Python console can take a while (uv prepares its environment).
+        let end = Instant::now() + Duration::from_secs(if started { 180 } else { 30 });
+        while env::session_for(&pane).is_none() {
+            if Instant::now() > end {
+                return Err(format!("la consola {} ({pane}) no tiene Corral activo; ábrela con ctrl+b a o márcala con ctrl+b m", label(lang)));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        wait_for_prompt(&pane, 60.0, lang, None)?;
+    }
+    Ok(pane)
 }

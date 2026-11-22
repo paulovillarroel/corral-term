@@ -2,7 +2,8 @@
 //! inside the console's R. Fresh talks LSP over stdin/stdout; Ark starts its
 //! server when a client opens the `positron.lsp` comm and then listens on a
 //! local port. This asks the kernel for that server and copies bytes both
-//! ways. Without Ark, the Python version starts the usual one.
+//! ways. With plain R, it is the languageserver package, with lintr reporting
+//! real problems only (style is Air's job), like Positron.
 //!
 //! `corral _lsp python` and `corral _lsp ruff`: ty (or pylsp, with
 //! `python_lsp: pylsp`) and Ruff straight from the environment uv keeps for
@@ -10,7 +11,7 @@
 //! would stay alive as a waiting parent (about 45 MB each) for the whole session.
 
 use crate::console;
-use crate::env::{self, python_fallback};
+use crate::env;
 use crate::herdr;
 use crate::json::{obj, Value};
 use crate::zmtp::{self, Connection, Socket};
@@ -22,13 +23,13 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
+pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str).unwrap_or("r") {
         "r" => {}
         "ruff" => tool("ruff", "ruff", &["server"], false),
         "python" if env::config().get("python_lsp").str() == Some("pylsp") => tool("python-lsp-server", "pylsp", &[], true),
         "python" => tool("ty", "ty", &["server"], true),
-        _ => python_fallback(all),
+        other => return Err(format!("no hay servidor de lenguaje para {other}; uso: corral _lsp r|python|ruff")),
     }
     let mut conn = ark_connection();
     if conn.is_none() && console::r_flavor(&env::config()) == "ark" {
@@ -39,8 +40,31 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
             conn = ark_connection();
         }
     }
-    let Some(conn) = conn else { python_fallback(all) }; // plain R: languageserver
+    let Some(conn) = conn else { languageserver() };
     bridge(&conn)
+}
+
+/// Plain R: the languageserver package. lintr reports real problems only, unless
+/// the project (or the user) brings a lintr config of its own.
+fn languageserver() -> ! {
+    let mut code = "languageserver::run()".to_string();
+    if !lintr_config_found() {
+        let file = env::repo().join("lib/corral.lintr").to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
+        code = format!("options(lintr.linter_file = \"{file}\"); {code}");
+    }
+    let err = Command::new("R").args(["--no-echo", "--no-restore", "-e", &code]).exec();
+    eprintln!("corral: no pude iniciar el servidor de lenguaje de R: {err}");
+    std::process::exit(1)
+}
+
+/// Would lintr find a config of its own (a project .lintr, ~/.lintr or its user config)?
+fn lintr_config_found() -> bool {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if cwd.ancestors().any(|d| d.join(".lintr").is_file()) {
+        return true;
+    }
+    let config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| env::home().join(".config"));
+    env::home().join(".lintr").is_file() || config.join("R/lintr/config").is_file()
 }
 
 /// Run a Python tool's program from uv's cached environment for it (installed

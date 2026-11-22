@@ -1,7 +1,7 @@
 # corral.R: R side of Corral.
 #
-# Add to ~/.Rprofile:
-#   if (interactive()) try(source("~/workspace/personal/corral-term/r/corral.R"))
+# install.sh adds this line to ~/.Rprofile (the path is where Corral lives):
+#   if (interactive()) try(source("~/.local/share/corral-term/r/corral.R"))  # Corral
 #
 # Corral only acts in R sessions that ask for it: the console that `corral layout`
 # (ctrl+b a) starts, which sets CORRAL=1, or any session where you run
@@ -21,10 +21,14 @@ local({
   if (!interactive()) return(invisible())
   if (nzchar(Sys.getenv("RSTUDIO")) || nzchar(Sys.getenv("POSITRON"))) return(invisible())
 
-  # This file, found through the `corral` command (bin/corral -> ../r/corral.R).
+  # This file, found through the `corral` command: up from it to Corral's folder
+  # (the command is rs/target/release/corral there).
   this_file <- local({
     bin <- Sys.which("corral")
-    if (nzchar(bin)) file.path(dirname(dirname(normalizePath(bin))), "r", "corral.R") else NA_character_
+    if (!nzchar(bin)) return(NA_character_)
+    d <- dirname(normalizePath(bin))
+    while (!file.exists(file.path(d, "r", "corral.R")) && dirname(d) != d) d <- dirname(d)
+    file.path(d, "r", "corral.R")
   })
 
   # Attach right above utils so our functions mask utils ones (View). During
@@ -74,7 +78,7 @@ local({
     bin <- getOption("corral.bin", Sys.getenv("CORRAL_BIN"))
     if (!nzchar(bin)) bin <- Sys.which("corral")
     if (!nzchar(bin)) {
-      stop("`corral` is not on PATH; set options(corral.bin = '/path/to/corral-term/bin/corral')",
+      stop("`corral` is not on PATH; set options(corral.bin = '/path/to/corral-term/rs/target/release/corral')",
            call. = FALSE)
     }
     unname(bin)

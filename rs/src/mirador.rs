@@ -1,7 +1,7 @@
 //! Mirador's server (`corral _mirador`): the page and its JSON API on
 //! 127.0.0.1, behind a token. Sessions and variables come from the files the
 //! R and Python sessions write, plots from their httpgd-style servers, tables
-//! from the DuckDB CLI. Same API as mirador/server.py, without Python.
+//! from the DuckDB CLI.
 
 use crate::env;
 use crate::herdr;
@@ -223,18 +223,16 @@ fn palette_file() -> PathBuf {
 }
 
 fn palette(app: &Shared) -> Value {
-    let p = env::read_json(&palette_file());
-    let herdr_cfg = std::env::var_os("HERDR_CONFIG_PATH").map(PathBuf::from).unwrap_or_else(|| env::home().join(".config/herdr/config.toml"));
+    let mut p = env::read_json(&palette_file());
     // The palette follows herdr's config and Corral's own theme choice (corral config tema).
-    let corral_cfg = palette_file().with_file_name("config.json");
-    let newest = [mtime(&herdr_cfg), mtime(&corral_cfg)].into_iter().flatten().fold(None, |a: Option<f64>, b| Some(a.map_or(b, |a| a.max(b))));
-    if let Some(h) = newest {
+    let changed = crate::theme::sources_mtime();
+    let stale = changed > 0.0 && (changed - p.get("source_mtime").num().unwrap_or(0.0)).abs() > 1e-3;
+    if stale {
         let mut a = app.lock().unwrap();
-        let stale = (h - p.get("source_mtime").num().unwrap_or(0.0)).abs() > 1e-3;
-        if stale && a.theme_asked.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {
+        if a.theme_asked.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {
             a.theme_asked = Some(Instant::now());
-            let _ = Command::new("python3").arg(env::repo().join("bin/corral")).arg("theme")
-                .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+            drop(a);
+            p = crate::theme::apply();
         }
     }
     if matches!(p, Value::Obj(ref items) if items.is_empty()) { Value::Null } else { p }

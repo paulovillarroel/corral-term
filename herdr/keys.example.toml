@@ -24,7 +24,7 @@ description = "Corral: cerrar y volver a herdr normal"
 key = "prefix+t"
 type = "plugin_action"
 command = "corral.toggle"
-description = "Corral: expandir script o consola"
+description = "Corral: expandir script (o agente) o consola"
 
 [[keys.command]]
 key = "prefix+y"
@@ -48,7 +48,13 @@ description = "Corral: ver variables de R"
 key = "prefix+a"
 type = "plugin_action"
 command = "corral.layout"
-description = "Corral: abrir espacio de trabajo"
+description = "Corral: layout con foco en el agente"
+
+[[keys.command]]
+key = "prefix+shift+a"
+type = "plugin_action"
+command = "corral.layout-codigo"
+description = "Corral: layout con foco en el código"
 
 [[keys.command]]
 key = "prefix+m"

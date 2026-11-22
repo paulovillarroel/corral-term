@@ -1,15 +1,17 @@
-//! `corral send`: code from the editor (Ctrl+R, F5) or a selection to the
-//! console. The usual case is handled here; starting or moving a console, or
-//! reading the clipboard, goes to the Python version.
+//! `corral send`: code from the editor (Ctrl+R, F5), a selection or the
+//! clipboard to the console, which is brought into view (and started) if needed.
 
-use crate::env::{self, python_fallback};
+use crate::console;
+use crate::env;
 use crate::herdr;
 use crate::json::Value;
 use std::io::{IsTerminal, Read};
 
-pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
+const USAGE: &str = "uso: corral send [--lang r|python] [--source] [--name ARCHIVO] [--clipboard] [CÓDIGO…]";
+
+pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
     let mut parts: Vec<String> = Vec::new();
-    let (mut lang, mut source, mut name) = (None::<String>, false, None::<String>);
+    let (mut lang, mut source, mut name, mut clipboard) = (None::<String>, false, None::<String>, false);
     let mut it = args.iter();
     let mut rest = false;
     while let Some(a) = it.next() {
@@ -22,17 +24,22 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
             "--lang" => lang = it.next().cloned(),
             "--source" => source = true,
             "--name" => name = it.next().cloned(),
-            "--clipboard" => python_fallback(all),
-            s if s.starts_with("--") => python_fallback(all),
+            "--clipboard" => clipboard = true,
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                return Ok(());
+            }
+            s if s.starts_with("--") => return Err(format!("opción desconocida {s}\n{USAGE}")),
             _ => parts.push(a.clone()),
         }
     }
-    if let Some(l) = &lang {
-        if l != "r" && l != "python" {
-            python_fallback(all);
-        }
+    if lang.as_deref().is_some_and(|l| l != "r" && l != "python") {
+        return Err(USAGE.into());
     }
 
+    // Sources, in order: arguments, stdin, the herdr selection, the clipboard. herdr
+    // copies a selection to the clipboard and clears it on mouse release, so from a
+    // keybinding the clipboard is the usual source.
     let from_plugin = std::env::var_os("HERDR_PLUGIN_ID").is_some();
     let (mut text, mut origin) = (parts.join(" "), "argumentos");
     if text.trim().is_empty() && !from_plugin && !std::io::stdin().is_terminal() {
@@ -44,8 +51,13 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
         text = env::plugin_context().get("selected_text").str().unwrap_or("").to_string();
         origin = "selección";
     }
+    if text.trim().is_empty() && (from_plugin || clipboard) {
+        text = env::read_clipboard();
+        origin = "portapapeles";
+    }
     if text.trim().is_empty() {
-        python_fallback(all); // the clipboard, or the "nothing to send" notice
+        env::notify("Nada que enviar", "Selecciona código (se copia solo) y vuelve a intentar");
+        return Ok(());
     }
     let text = text.trim_end().to_string();
 
@@ -53,25 +65,32 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
     let panes = herdr::panes(ws.as_deref())?;
     let current = env::active_lang(ws.as_deref(), &panes);
     let lang = lang.unwrap_or_else(|| current.clone());
-    let Some(target) = herdr::labeled(&panes, &format!("corral:{lang}")) else { python_fallback(all) };
-    let pane = herdr::pane_id(target).to_string();
+    // The usual case: the console is there, in view and running.
+    let target = herdr::labeled(&panes, &console::label(&lang)).map(|t| herdr::pane_id(t).to_string());
     let main = main_tab(&panes);
-    let in_view = lang == current || main.is_none() || main.as_deref() == Some(herdr::tab_id(target));
-    if !in_view {
-        python_fallback(all); // the console has to come into view first
-    }
-    let Some(session) = env::session_for(&pane) else { python_fallback(all) }; // starting, or quit
-    if lang != current {
-        let path = env::layout_file();
-        let mut saved = env::read_json(&path);
-        let key = env::ws_key(ws.as_deref());
-        let mut state = saved.get(&key).clone();
-        state.set("active", lang.as_str().into());
-        saved.set(&key, state);
-        env::write_json(&path, &saved);
-    }
+    let in_view = |t: &str| lang == current || main.is_none()
+        || panes.iter().any(|p| herdr::pane_id(p) == t && main.as_deref() == Some(herdr::tab_id(p)));
+    let pane = match target {
+        Some(t) if in_view(&t) && env::session_for(&t).is_some() => {
+            if lang != current {
+                let path = env::layout_file();
+                let mut saved = env::read_json(&path);
+                let key = env::ws_key(ws.as_deref());
+                let mut state = saved.get(&key).clone();
+                state.set("active", lang.as_str().into());
+                saved.set(&key, state);
+                env::write_json(&path, &saved);
+            }
+            t
+        }
+        // Otherwise bring it into view, and start it if it isn't there or was quit.
+        _ => console::ready(&lang).map_err(|e| {
+            env::notify("Sin consola", &e);
+            e
+        })?,
+    };
 
-    let jupyter = lang == "python" || !session.get("ark_connection").is_null();
+    let jupyter = console::is_jupyter(&pane, &lang);
     if source {
         // A whole file: run a copy instead of pasting every line.
         let run_dir = env::state_dir().join("run");

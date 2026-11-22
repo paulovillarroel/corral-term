@@ -18,6 +18,8 @@ test "${HERDR_ENV:-}" = 1 && corral eval --check --lang python
 
 Exit 0 prints the console and session as JSON (`active` tells whether it is the one showing). For R, anything else means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activar()` in that R). For Python, no console yet is normal: `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
 
+If `corral` itself is not found, Corral is not installed: `corral instalar --revisar` (once installed) or `sh install.sh --revisar` from a clone lists what is missing and what to run; the install line is `curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh`.
+
 ## Look before you run
 
 ```bash
@@ -99,7 +101,7 @@ Don't save the scratch file on your own initiative; it is temporary on purpose.
 When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. The essentials:
 
 ```bash
-corral toggle script            # the right column shows: script, consola or ambos
+corral toggle script            # the right column shows: script (agente, if focused on code), consola or ambos
 corral switch python            # the console shows: r or python
 corral atajos --json            # every shortcut, with the id used to change it
 corral atajos --cambiar herdr:toggle shift+e

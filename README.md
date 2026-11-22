@@ -10,15 +10,12 @@ Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es [Ark](
 
 | Carpeta | Qué es |
 |---|---|
-| `bin/corral` | El comando, con la lógica. Python 3 sin dependencias. |
-| `rs/` | `corral` en Rust, sin dependencias: lo que se ejecuta a cada rato (Ctrl+R, F5, `ctrl+b t`, `ctrl+b y`, abrir una consola), el panel de variables, el puente al servidor de lenguaje de Ark y el servidor de Mirador. El resto pasa a `bin/corral`. |
-| `bin/corral-run` | Lo que ejecutan los atajos de herdr: el `corral` de Rust si está compilado, si no el de Python. |
-| `lib/corral_tui.py` | Los visores de gráficos y variables que corren dentro de herdr. |
-| `lib/corral_theme.py` | Toma el tema de herdr y lo aplica al editor, los visores, VisiData y Mirador. |
-| `herdr/` | Plugin de herdr: atajos, layout y popups. Solo llama a `bin/corral`. |
+| `rs/` | El comando `corral`, en Rust y sin dependencias: todo Corral. El layout y sus paneles, enviar y ejecutar código, las consolas, el panel de variables, las tablas, la paleta, los gráficos, Mirador, el tema, la instalación y `doctor`. |
+| `bin/corral-run` | Lo que ejecutan los atajos de herdr: el comando `corral`. |
+| `herdr/` | Plugin de herdr: atajos, layout y popups. Solo llama a `corral`. |
 | `r/corral.R` | Lado de R: registra la sesión, `View()` y gráficos con httpgd. |
-| `py/` | Lado de Python: la sesión de IPython publica sus variables, sirve las figuras de matplotlib con la misma interfaz que httpgd y agrega `View()`. `ark_lsp.py` conecta el editor con el servidor de lenguaje de Ark. |
-| `mirador/` | Mirador, la vista en el navegador: un servidor local (`server.py`) y una página (`index.html`). |
+| `py/` | Lado de Python: la sesión de IPython publica sus variables, sirve las figuras de matplotlib con la misma interfaz que httpgd y agrega `View()`. Corre dentro de tu IPython, así que es Python. |
+| `mirador/` | La página de Mirador, la vista en el navegador (`index.html`); su servidor está en el `corral` de Rust. |
 | `claude/skills/corral-r/` | Skill para Claude Code: le enseña a trabajar en tus consolas de R y Python con `corral eval`. |
 | `fresh/` | Configuración y plugin del editor [Fresh](https://getfresh.dev) para escribir scripts de R y Python. |
 
@@ -26,79 +23,60 @@ Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, 
 
 ## Instalación
 
-1. Compila el `corral` de Rust (necesita `cargo`; no descarga bibliotecas) y ponlo en el PATH:
+```bash
+curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh
+```
 
-   ```bash
-   cd ~/workspace/personal/corral-term/rs && cargo build --release
-   ln -sfn ~/workspace/personal/corral-term/rs/target/release/corral ~/.local/bin/corral
-   ```
+Antes de cambiar nada, el instalador revisa lo que Corral necesita y muestra una lista con lo que está (✓), lo que falta (✗), lo que va a descargar (↓) y lo opcional (!). Si falta algo necesario, dice qué comando corre cada cosa, no toca nada y termina; con eso resuelto, se vuelve a correr la misma línea. No usa `sudo` y solo escribe dentro de tu carpeta personal.
 
-   Sin Rust, enlaza la versión Python, que hace lo mismo un poco más lento: `ln -sfn ~/workspace/personal/corral-term/bin/corral ~/.local/bin/corral`.
+| | |
+|---|---|
+| Necesario | Linux x86_64 o Windows con WSL, [herdr](https://herdr.dev) 0.9.5 o más nuevo, R con los paquetes `httpgd` y `jsonlite`, y [Rust](https://rustup.rs) (`cargo`) solo si el paquete no trae `corral` compilado, que es lo que pasa mientras no haya una versión publicada |
+| Lo pone el instalador | `corral` ya compilado (o lo compila con `cargo`), y si te faltan, [Fresh](https://getfresh.dev) (el editor), [DuckDB](https://duckdb.org) (las tablas), [Air](https://posit-dev.github.io/air/) (el formato de R) y [Ark](https://github.com/posit-dev/ark) (la consola de R), todos en `~/.local` |
+| Opcional | [uv](https://docs.astral.sh/uv/) para la consola de Python, Claude Code para la skill, y los paquetes de R `nanoparquet` y `rlang` |
 
-2. Enlaza el plugin en herdr (queda donde está, no se copia). Si cambia `herdr-plugin.toml`, repite con `herdr plugin unlink corral` antes:
+Para ver la lista sin instalar nada:
 
-   ```bash
-   herdr plugin link ~/workspace/personal/corral-term/herdr
-   ```
+```bash
+curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh -s -- --revisar
+```
 
-3. Agrega esta línea a `~/.Rprofile`:
+Lo que cambia en tu equipo, siempre con una copia del archivo antes de tocarlo (`*.antes-de-corral-FECHA`):
 
-   ```r
-   if (interactive()) try(source("~/workspace/personal/corral-term/r/corral.R"))
-   ```
+- Corral queda en `~/.local/share/corral-term`, y el comando en `~/.local/bin/corral`.
+- herdr: enlaza el plugin de Corral y agrega sus atajos al final de `~/.config/herdr/config.toml`, entre dos comentarios de Corral. Si ya usas una de esas teclas, la deja como está y lo avisa.
+- R: una línea en `~/.Rprofile` que carga Corral. Solo se activa en las consolas que abre Corral; el resto de tus sesiones de R no cambia.
+- Fresh: agrega a tu `~/.config/fresh/config.json` los atajos y los servidores de lenguaje de Corral, sin borrar tus ajustes, y enlaza su plugin.
+- Claude Code: enlaza la skill de Corral en `~/.claude/skills/corral-r`.
 
-4. Copia los atajos de [`herdr/keys.example.toml`](herdr/keys.example.toml) a `~/.config/herdr/config.toml` y recarga:
+Para actualizar, vuelve a correr la misma línea: reemplaza la copia de Corral y no repite nada de lo que ya estaba. `corral instalar` revisa y repara la instalación sin descargar nada, y `corral instalar --revisar` solo revisa.
 
-   ```bash
-   herdr server reload-config
-   ```
+Desde una copia del repositorio, el instalador usa esa copia donde está, sin descargarla. Es la forma de instalarlo mientras el repositorio sea privado, porque la línea de `curl` necesita que sea público:
 
-5. Enlaza la skill para que Claude Code use tu consola de R:
+```bash
+git clone https://github.com/paulovillarroel/corral-term.git
+sh corral-term/install.sh
+```
 
-   ```bash
-   ln -s ~/workspace/personal/corral-term/claude/skills/corral-r ~/.claude/skills/corral-r
-   ```
-
-6. El editor de scripts: [Fresh](https://getfresh.dev), con `languageserver` para el autocompletado y los diagnósticos, y [Air](https://posit-dev.github.io/air/) para el formato.
-
-   ```bash
-   # Fresh: binario oficial de https://github.com/sinelaw/fresh/releases (x86_64-unknown-linux-musl) en ~/.local/bin
-   uv tool install air-formatter
-   Rscript -e 'install.packages("languageserver")'
-   cp ~/workspace/personal/corral-term/fresh/config.json ~/.config/fresh/config.json
-   ln -s ~/workspace/personal/corral-term/fresh/plugins/corral.ts ~/.config/fresh/plugins/corral.ts
-   ```
-
-7. [DuckDB](https://duckdb.org) (el binario `duckdb` en el PATH), que consulta las tablas de `View()` en la terminal y en Mirador. VisiData es opcional, si prefieres su visor: `uv tool install visidata --with pyarrow` y `corral config table_viewer visidata`.
-
-8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto, y el autocompletado con [ty](https://docs.astral.sh/ty/), de Astral, igual que uv y Ruff. La primera vez uv descarga IPython, ty y Ruff a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff.
-
-9. Para la consola de R con Ark (recomendado), el kernel de Ark. Sin él, Corral usa R normal:
-
-   ```bash
-   corral ark --instalar
-   ```
-
-   La consola es la de Corral (en Rust). Si prefieres el cliente de Jupyter, `uv tool install jupyter-console` y `corral config ark_frontend jupyter`.
-
-   `corral ark --instalar` descarga Ark 0.1.252 (unos 7 MB) desde las versiones publicadas de `posit-dev/ark` a `~/.local/share/corral/ark/`, y Corral escribe su propia definición de kernel en `~/.local/share/corral/jupyter/`, sin tocar tu instalación de Jupyter.
-
-10. Revisa que todo esté en orden:
-
-   ```bash
-   corral doctor
-   ```
-
-En R necesitas `httpgd` (gráficos), `jsonlite` (variables), `arrow` o `nanoparquet` (tablas), `languageserver` (autocompletado) y `rlang` (para no dibujar dos veces el mismo objeto gráfico). En el sistema, DuckDB y VisiData para las tablas, y `chafa` solo si usas una terminal que dibuje imágenes.
+En macOS todavía no funciona. herdr sí corre en Mac, pero algunas piezas de Corral usan funciones propias de Linux (ver [Límites conocidos](#límites-conocidos)).
 
 ### Desinstalar
 
 ```bash
-herdr plugin unlink corral
-rm ~/.local/bin/corral ~/.claude/skills/corral-r ~/.config/fresh/plugins/corral.ts
+corral desinstalar
 ```
 
-Después borra la línea de Corral de `~/.Rprofile` y el bloque `# Corral` de `~/.config/herdr/config.toml`.
+Quita el plugin y los atajos de herdr, la línea de `~/.Rprofile`, los atajos, el tema y los servidores de lenguaje de Corral en el editor (y te devuelve los atajos tuyos que había reemplazado), la skill, los programas que descargó y la copia de Corral. Una copia clonada del repositorio no la borra. Tus ajustes y sesiones quedan en `~/.config/corral` y `~/.local/state/corral`, por si vuelves.
+
+### Publicar una versión
+
+El instalador descarga el paquete de la última versión publicada en GitHub, que trae `corral` ya compilado para que nadie necesite Rust. Lo arma la acción [`.github/workflows/version.yml`](.github/workflows/version.yml) al subir una etiqueta:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Sin ninguna versión publicada, el instalador descarga el código de `main` y compila `corral` con `cargo`. Si no hay `cargo`, se detiene antes de cambiar nada y da el comando para instalar Rust.
 
 ### Salir de Corral
 
@@ -119,8 +97,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 
 | Quieres | Haces |
 |---|---|
-| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda (52 % del ancho) y, a la derecha, el script, la consola de R y las variables (el script y la consola se reparten el 73 % del alto, 57/43, y las variables el 27 % restante). El editor abre con el explorador de carpetas a la vista. Con `corral layout --shell` agrega una shell junto a las variables; `--ratio` cambia el ancho de Claude. |
-| Expandir el script o la consola | `ctrl+b t` expande el panel donde estás (script o consola) a toda la zona que comparten, sobre las variables. Otra vez `ctrl+b t` y vuelven los dos, con la misma proporción. herdr no achica un panel a menos del 10 %, así que el otro pasa a una pestaña propia, "consola (oculta)" o "script (oculto)", donde sigue corriendo: Ctrl+R y Claude siguen ejecutando en la consola aunque no la veas. También `corral toggle script\|consola\|ambos`. En un layout que ya tenías: `corral script`. |
+| Abrir el espacio de trabajo | `ctrl+b a`. Crea una pestaña con Claude Code a la izquierda (52 % del ancho) y, a la derecha, el script, la consola de R y las variables (el script y la consola se reparten el 73 % del alto, 57/43, y las variables el 27 % restante). El editor abre con el explorador de carpetas a la vista. Con `corral layout --shell` agrega una shell junto a las variables; `--ratio` cambia el ancho de Claude. Para trabajar en el código, `ctrl+b shift+a` abre el layout con foco en el código: los mismos paneles con el script a la izquierda y Claude arriba a la derecha, sobre la consola (`corral layout --foco codigo`). Los dos están en la paleta (`ctrl+b space`), en el grupo «Layouts». |
+| Expandir el script o la consola | `ctrl+b t` expande el panel donde estás (script o consola; en el layout con foco en el código, Claude o la consola) a toda la zona que comparten, sobre las variables. Otra vez `ctrl+b t` y vuelven los dos, con la misma proporción. herdr no achica un panel a menos del 10 %, así que el otro pasa a una pestaña propia, "consola (oculta)" o "script (oculto)", donde sigue corriendo: Ctrl+R y Claude siguen ejecutando en la consola aunque no la veas. También `corral toggle script\|consola\|ambos` (`agente` en vez de `script` en el layout con foco en el código). En un layout que ya tenías: `corral script`. |
 | Ver tus objetos y gráficos mientras trabajas | El panel de variables se actualiza después de cada comando, tuyo o de Claude, y sigue a la consola aunque reinicies R. Lista tus objetos, incluidos los gráficos guardados en variables (`ggplot`, `lattice`, `patchwork`). Enter sobre un data frame abre la tabla; sobre un objeto gráfico lo dibuja y lo abre en Mirador; sobre otro objeto corre `str()`. El historial de dibujos no aparece aquí: está en Mirador (`ctrl+b f`). En un layout que ya tenías: `corral vars --split`. |
 | Correr código en R | Selecciona texto con el mouse en cualquier panel (por ejemplo, código que escribió Claude); herdr lo copia solo. Después `ctrl+b enter`. Si no hay selección, se envía lo que tengas en el portapapeles. |
 | Ver los gráficos | El primer gráfico de cada sesión abre Mirador solo, como ventana normal a la derecha de la pantalla y al frente. Después se actualiza sin robarte el foco. `ctrl+b f` lo trae al frente en el último gráfico. En una terminal que dibuje imágenes (ver abajo), `ctrl+b f` muestra el gráfico dentro de herdr. |
@@ -138,7 +116,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | Atajo | Acción |
 |---|---|
 | `ctrl+b space` | Paleta de atajos y acciones de Corral |
-| `ctrl+b a` | Abrir el espacio de trabajo de Corral |
+| `ctrl+b a` | Layout con foco en el agente: Claude a la izquierda, el script sobre la consola a la derecha |
+| `ctrl+b shift+a` | Layout con foco en el código: el script a la izquierda, Claude sobre la consola a la derecha |
 | `ctrl+b shift+c` | Cerrar Corral: cierra script, consola y variables, y deja a Claude como panel normal |
 | `ctrl+b t` | Expandir el script o la consola (el panel donde estás); otra vez, ambos |
 | `ctrl+b y` | La consola pasa de R a Python, o de Python a R (Python se abre la primera vez) |
@@ -152,11 +131,11 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 
 | Comando | Qué hace |
 |---|---|
-| `corral layout` | Abre el espacio de trabajo (`--shell` agrega una shell, `--editor ''` sin script, `--agent ''` sin Claude). |
+| `corral layout` | Abre el espacio de trabajo (`--foco codigo` con el script a la izquierda y Claude sobre la consola, `--shell` agrega una shell, `--editor ''` sin script, `--agent ''` sin Claude). |
 | `corral close` | Cierra los paneles de Corral de la pestaña (script, consola, variables) y deja el resto, Claude incluido. La sesión de R se cierra con su panel. |
 | `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. `--leer` muestra el borrador actual, con lo que no has guardado; `--guardar ruta.R` lo guarda (con `--forzar` reemplaza); `--escribir` agrega al final el texto que recibe por stdin (con `--reemplazar`, reemplaza todo), como una sola edición que `Ctrl+Z` deshace. |
 | `corral atajos` | La paleta de atajos (`ctrl+b space`). `--lista` la imprime y `--json` la entrega para agentes; `--cambiar ID TECLA` cambia un atajo de herdr (`corral atajos --cambiar herdr:toggle shift+e`) o del editor (`editor:corral_run_line ctrl+e`), y rechaza teclas que ya están en uso salvo con `--forzar`. Claude puede leerlos y cambiarlos si se lo pides. |
-| `corral toggle [script\|consola\|ambos]` | Expande el script o la consola, o vuelve a mostrar ambos; sin argumento, expande el panel donde estás o vuelve a ambos. |
+| `corral toggle [script\|agente\|consola\|ambos]` | Expande el script o la consola, o vuelve a mostrar ambos; sin argumento, expande el panel donde estás o vuelve a ambos. |
 | `corral switch [r\|python]` | La consola del layout pasa a R o a Python; sin argumento, alterna. La otra sigue corriendo en la pestaña "corral (oculto)". |
 | `corral console` | Marca el panel actual como consola de R o de Python (según lo que corre en él) y activa Corral si hay un R o un IPython abierto. |
 | `corral send 'código'` | Envía código a la consola que se ve, o a la de `--lang r\|python`. También lee stdin, la selección o el portapapeles; `--source` lo ejecuta como archivo (`source()` en R, `%run -i` en Python). |
@@ -236,9 +215,9 @@ Una medición anterior del mismo día, antes de optimizar Fresh, la carga de R y
   <img alt="Antes y ahora, en escala logarítmica: tiempos y memoria de cada pieza de Corral; los valores están en las tablas de abajo" src="docs/graficos/mejoras-claro.svg" width="760">
 </picture>
 
-Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. De Corral están en Rust lo que corre a cada tecla, lo que usa Claude y los procesos que quedan abiertos, en un solo binario de `rs/` (aproximadamente 1 MB, sin dependencias):
+Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. Corral entero es un solo binario de `rs/`, sin dependencias. Primero pasaron a Rust lo que corre a cada tecla, lo que usa Claude y los procesos que quedan abiertos; estas son las mejoras de esa etapa:
 
-| Pieza | Rust | Python |
+| Pieza | Rust | Antes, en Python |
 |---|---|---|
 | `corral send` (Ctrl+R, F5, `ctrl+b enter`) | menos de 10 ms, 2,5 MB | unos 50 ms, 26 MB |
 | `toggle` y `switch` (`ctrl+b t`, `ctrl+b y`) | 10–30 ms | 50–60 ms |
@@ -268,9 +247,9 @@ Durante el uso, cada comando en la consola de R tarda unos 2,5 ms de Enter al si
 
 Las variables se describen de nuevo solo si el objeto cambió (otra dirección en memoria, otro largo, otras dimensiones o, en las tablas, otros tipos de columna), y el archivo que lee el panel se reescribe solo cuando algo cambió. El plugin de Fresh ya no revisa nada a intervalos: copia el borrador cuando dejas de escribir 0,4 s (al menos cada 2 s si sigues escribiendo), vigila los archivos de tema con el sistema de archivos y abre la vista de carpetas cuando aparece un borrador. Fresh trae unos 50 plugins; Corral desactiva en `fresh/config.json` los que no usa (orquestación de agentes, que ya hace herdr, pantallas de bienvenida, Kubernetes, devcontainers y lenguajes como C# o C++). Con eso Fresh abre con 48 MB en vez de 60 y en reposo usa 0,20 % de CPU en vez de 0,57 %. Revisar cada 2 s si cambiaron los archivos abiertos (por ejemplo, cuando Claude los edita) cuesta tan poco que no se nota al medirlo, así que se mantiene.
 
-El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo poco frecuente (abrir una consola o cambiar de lenguaje desde `eval`, el portapapeles, dibujar un objeto gráfico) y los demás comandos (`layout`, `close`, `doctor`…) pasan a `bin/corral`. Sin el binario, `bin/corral` y `mirador/server.py` hacen todo igual, con Python.
+El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo demás también está en el binario: lee la configuración de herdr con su propio lector de TOML, descomprime Ark (que se publica en zip), Fresh, DuckDB y Air con su propio descompresor, y escribe el tema del editor y la paleta. Lo único que no es Rust corre dentro de tus sesiones: `r/corral.R` en R y `py/` en IPython.
 
-Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
+Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice de qué carpeta viene el binario que estás usando.
 
 ### Tablas
 
@@ -324,7 +303,7 @@ Las figuras de matplotlib (y de seaborn o plotnine, que dibujan con matplotlib) 
 
 En el editor, el autocompletado, la ayuda y el salto a la definición vienen de ty, que lee el `.venv` del proyecto y por eso conoce tus paquetes. ty todavía es una versión 0.0; si algo falla, `corral config python_lsp pylsp` vuelve a python-lsp-server, y `corral config python_lsp ty` a ty (rige al reabrir el editor). ty también sabe revisar tipos, pero en Corral esos diagnósticos están apagados para no repetir los de Ruff. Los diagnósticos son de Ruff con sus reglas por defecto (errores reales: nombres sin definir, imports sin usar, errores de sintaxis), y Ruff formatea al guardar, igual que Air en R. Si el proyecto tiene configuración de Ruff en `pyproject.toml` o `ruff.toml`, se usa esa.
 
-Para usar otro comando en la consola de Python (por ejemplo, con más paquetes), `corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/workspace/personal/corral-term/py/startup.py'`.
+Para usar otro comando en la consola de Python (por ejemplo, con más paquetes), `corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/.local/share/corral-term/py/startup.py'`.
 
 ### Claude en tus consolas de R y Python
 
@@ -431,9 +410,9 @@ Opciones de R:
 
 ## Límites conocidos
 
+- Funciona en Linux x86_64 y en WSL. En macOS todavía no: el código en Rust habla con la terminal con los valores de Linux (el formato de `termios` y el código de `TIOCGWINSZ` son otros en Mac), Corral revisa procesos en `/proc`, que macOS no tiene, abre el navegador con `xdg-open` y el plugin de herdr se declara solo para Linux.
 - En Windows los gráficos no se ven nítidos dentro de herdr; van a Mirador (ver arriba).
 - Desde Warp, `Ctrl+Enter`, `Ctrl+Shift+…` y `Alt+…` no llegan al editor; por eso los atajos principales son `Ctrl+R`, `F5`, `Ctrl+L` y `Ctrl+U`.
-- Sin el binario de Rust, las tablas se abren con VisiData o, sin ella, con DuckDB y `less` (hasta 1000 filas, sin orden ni filtro).
 - Las tablas de `View()` se guardan en el directorio temporal de R (o de Python) y desaparecen al cerrar la consola.
 - La consola de Python necesita IPython; `ctrl+b m` sobre un `python` sin IPython marca el panel, pero no activa Corral.
 - Las figuras de Python se guardan al dibujarse (PNG y SVG) y Mirador las escala; no se vuelven a dibujar al cambiar el tamaño de la ventana, como sí hace httpgd en R.

@@ -2,12 +2,12 @@
 //! objects of the R or Python session, in tabs, refreshed as they change.
 //! The session writes vars.json after every command; this only reads it.
 
-use crate::env::{self, python_fallback};
+use crate::console;
+use crate::env;
 use crate::herdr;
-use crate::json::Value;
+use crate::json::{obj, Value};
 use crate::term::{clip, out, width, Screen};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 const TABS: [(&str, &str); 5] = [
@@ -43,10 +43,6 @@ fn palette_file() -> PathBuf {
     config.join("corral/palette.json")
 }
 
-fn herdr_config() -> PathBuf {
-    std::env::var_os("HERDR_CONFIG_PATH").map(PathBuf::from)
-        .unwrap_or_else(|| env::home().join(".config/herdr/config.toml"))
-}
 
 fn hex(p: &Value, key: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
     let Some(h) = p.get(key).str().and_then(|s| s.strip_prefix('#')) else { return fallback };
@@ -184,11 +180,10 @@ impl Viewer {
     fn palette_changed(&mut self) -> bool {
         let p = env::read_json(&palette_file());
         let source = p.get("source_mtime").num().unwrap_or(0.0);
-        let herdr = mtime(&herdr_config());
-        if herdr > 0.0 && (herdr - source).abs() > 1e-3 && self.theme_asked.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {
+        let changed = crate::theme::sources_mtime();
+        if changed > 0.0 && (changed - source).abs() > 1e-3 && self.theme_asked.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {
             self.theme_asked = Some(Instant::now());
-            let _ = Command::new("python3").arg(env::repo().join("bin/corral")).arg("theme")
-                .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+            crate::theme::apply();
         }
         if mtime(&palette_file()) != self.colors.seen {
             self.colors = Colors::load();
@@ -329,9 +324,7 @@ impl Viewer {
         let kind = v.get("kind").str().unwrap_or("");
         let Some(dir) = &self.session else { return String::new() };
         if kind == "plotobj" {
-            let res = Command::new("python3").arg(env::repo().join("bin/corral")).arg("_show-object").arg(dir).arg(&name).output();
-            let msg = res.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-            return format!("{name}: {msg}");
+            return format!("{name}: {}", crate::plots::show_plot_object(dir, &name));
         }
         let Some(pane) = self.meta.get("pane_id").str() else { return String::new() };
         let code = if self.meta.get("lang").str() == Some("python") {
@@ -377,13 +370,44 @@ pub fn message_screen(title: &str, body: &str) {
     }
 }
 
-/// `corral vars --pane` (permanent, follows the console) or `corral _vars` (popup).
-pub fn run(args: &[String], all: &[String], popup: bool) -> Result<(), String> {
-    let pane_mode = args.iter().any(|a| a == "--pane");
-    if !popup && (!pane_mode || args.len() != 1) {
-        python_fallback(all); // --json, --split, --inline, the popup launcher
+const USAGE: &str = "uso: corral vars [--json [--lang r|python]] [--split] [--pane] [--inline]";
+
+/// `corral vars`: the variables as a popup over the terminal (or here with
+/// --inline), as JSON for agents (--json), or as the layout's permanent pane
+/// (--pane, which --split adds under the R console). `corral _vars` is the popup itself.
+pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> {
+    let (mut json, mut split, mut pane_mode, mut inline, mut lang) = (false, false, false, false, None::<String>);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--split" => split = true,
+            "--pane" => pane_mode = true,
+            "--inline" => inline = true,
+            "--lang" => lang = it.next().cloned().filter(|l| l == "r" || l == "python"),
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                return Ok(());
+            }
+            other => return Err(format!("opción desconocida {other}\n{USAGE}")),
+        }
     }
-    let session = if popup { std::env::var_os("CORRAL_SESSION_DIR").map(PathBuf::from) } else { None };
+    if json {
+        return print_json(lang.as_deref());
+    }
+    if split {
+        return split_pane().map(|_| ());
+    }
+    if !popup && !pane_mode {
+        // The popup over the terminal (in herdr), or the viewer right here.
+        let dir = console::pick_session().and_then(|s| s.get("dir").str().map(String::from)).unwrap_or_default();
+        if env::in_herdr() && !inline {
+            return open_popup("vars", &[("CORRAL_SESSION_DIR", &dir)]);
+        }
+        std::env::set_var("CORRAL_SESSION_DIR", &dir);
+        return run(&[], &[], true);
+    }
+    let session = if popup { std::env::var_os("CORRAL_SESSION_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) } else { None };
     if popup && session.is_none() {
         message_screen("No hay una sesión de Corral", "Abre R o Python con ctrl+b a.");
         return Ok(());
@@ -530,4 +554,67 @@ pub fn run(args: &[String], all: &[String], popup: bool) -> Result<(), String> {
         }
         dirty = true;
     }
+}
+
+/// `corral vars --json`: the variables of the console's session (or the best match), for agents.
+fn print_json(lang: Option<&str>) -> Result<(), String> {
+    let ws = env::current_workspace();
+    let session = match console::session(lang.unwrap_or("r"), ws.as_deref()) {
+        Ok((_, s)) => Some(s),
+        Err(_) if lang.is_none() => console::pick_session(),
+        Err(_) => None,
+    };
+    let Some(session) = session else {
+        return Err(format!("no hay una sesión de {} con Corral", console::lang_name(lang.unwrap_or("r"))));
+    };
+    let dir = PathBuf::from(session.get("dir").str().unwrap_or(""));
+    let data = std::fs::read_to_string(dir.join("vars.json")).ok().and_then(|t| crate::json::parse(&t).ok())
+        .ok_or("esta sesión no publica variables (¿falta jsonlite?)")?;
+    let out = obj(vec![("session", session.get("id").clone()),
+                       ("lang", session.get("lang").str().unwrap_or("r").into()),
+                       ("console", session.get("pane_id").clone()),
+                       ("vars", data.get("vars").clone())]);
+    print!("{}", out.to_json_pretty(1));
+    Ok(())
+}
+
+/// The permanent variables pane under the R console, like Positron's Variables view.
+pub fn split_pane() -> Result<String, String> {
+    let ws = env::current_workspace();
+    let console = console::find("r", ws.as_deref()).ok_or("no hay consola corral:r en este workspace")?;
+    if let Some(p) = herdr::labeled(&herdr::panes(ws.as_deref())?, "corral:vars") {
+        let id = herdr::pane_id(p).to_string();
+        env::notify("Variables", &format!("ya está abierto en {id}"));
+        return Ok(id);
+    }
+    split_under(&console, 0.62)
+}
+
+/// A variables pane under `pane`, which keeps `ratio` of the height.
+pub fn split_under(pane: &str, ratio: f64) -> Result<String, String> {
+    let new = herdr::split(pane, "down", Some(ratio), None)?;
+    herdr::rename(&new, "corral:vars")?;
+    herdr::run(&new, &format!("{} vars --pane", console::program()))?;
+    Ok(new)
+}
+
+/// Open one of the plugin's popups. Retries while another modal is still closing.
+pub fn open_popup(entrypoint: &str, env_vars: &[(&str, &str)]) -> Result<(), String> {
+    let pairs: Vec<String> = env_vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    let mut args = vec!["plugin", "pane", "open", "--plugin", "corral", "--entrypoint", entrypoint, "--placement", "popup", "--focus"];
+    for p in &pairs {
+        args.extend(["--env", p.as_str()]);
+    }
+    let mut last = String::new();
+    for _ in 0..8 {
+        match herdr::cli(&args) {
+            Ok(_) => return Ok(()),
+            Err(e) if e.to_lowercase().contains("busy") => {
+                last = e;
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last)
 }

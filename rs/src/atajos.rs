@@ -21,6 +21,7 @@ extern "C" {
 }
 
 const RESET: &str = "\x1b[0m";
+const G_LAYOUT: &str = "Layouts";
 const G_HERDR: &str = "En cualquier panel (herdr)";
 const G_EDITOR: &str = "Editor de scripts";
 const G_CONSOLE: &str = "Consola de R";
@@ -190,9 +191,11 @@ pub fn entries() -> Vec<Entry> {
         let command = format!("corral.{id}");
         let keys = binds.iter().filter(|b| b.kind == "plugin_action" && b.command == command)
             .map(|b| herdr_key(&prefix, &b.key)).collect();
-        Entry { group: G_HERDR, keys, desc: tidy(&title), id: format!("herdr:{id}"), run: Some((id, args)) }
+        // The workspace layouts (layout, layout-codigo, …) get a group of their own, first.
+        let group = if id == "layout" || id.starts_with("layout-") { G_LAYOUT } else { G_HERDR };
+        Entry { group, keys, desc: tidy(&title), id: format!("herdr:{id}"), run: Some((id, args)) }
     }).collect();
-    herdr.sort_by_key(|e| e.keys.is_empty()); // the ones with a key first
+    herdr.sort_by_key(|e| (e.group != G_LAYOUT, e.keys.is_empty())); // layouts, then the ones with a key
     list.extend(herdr);
     list.push(Entry { group: G_HERDR, keys: vec![format!("{prefix} ?")], desc: "Todos los atajos de herdr (paneles, pestañas, espacios)".into(),
                       id: "herdr:ayuda".into(), run: None });

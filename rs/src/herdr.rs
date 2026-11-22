@@ -5,6 +5,7 @@ use crate::json::{self, obj, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Duration;
 
 fn socket_path() -> PathBuf {
@@ -58,4 +59,43 @@ pub fn pane_id(p: &Value) -> &str {
 
 pub fn tab_id(p: &Value) -> &str {
     p.get("tab_id").str().unwrap_or("")
+}
+
+/// herdr's command line, for what has no socket call here (split, rename, run,
+/// tab create, process info, plugin panes). Returns its JSON `result`.
+pub fn cli(args: &[&str]) -> Result<Value, String> {
+    let bin = std::env::var_os("HERDR_BIN_PATH").map(PathBuf::from)
+        .or_else(|| crate::env::which("herdr")).ok_or("herdr no está en el PATH")?;
+    let out = Command::new(bin).args(args).output().map_err(|e| format!("no pude ejecutar herdr: {e}"))?;
+    let data = json::parse(String::from_utf8_lossy(&out.stdout).trim()).unwrap_or_else(|_| Value::obj());
+    if !out.status.success() || !data.get("error").is_null() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let msg = data.get("error").get("message").str().map(String::from)
+            .unwrap_or(if stderr.is_empty() { format!("herdr {} falló", args.join(" ")) } else { stderr });
+        return Err(msg);
+    }
+    Ok(if data.get("result").is_null() { data } else { data.get("result").clone() })
+}
+
+/// Type a command in a pane and press Enter.
+pub fn run(pane: &str, command: &str) -> Result<(), String> {
+    cli(&["pane", "run", pane, command]).map(|_| ())
+}
+
+pub fn rename(pane: &str, label: &str) -> Result<(), String> {
+    cli(&["pane", "rename", pane, label]).map(|_| ())
+}
+
+/// Split `pane`; the new pane's id.
+pub fn split(pane: &str, direction: &str, ratio: Option<f64>, cwd: Option<&str>) -> Result<String, String> {
+    let ratio = ratio.map(|r| r.to_string());
+    let mut args = vec!["pane", "split", pane, "--direction", direction, "--no-focus"];
+    if let Some(r) = &ratio {
+        args.extend(["--ratio", r.as_str()]);
+    }
+    if let Some(c) = cwd {
+        args.extend(["--cwd", c]);
+    }
+    let res = cli(&args)?;
+    res.get("pane").get("pane_id").str().map(String::from).ok_or_else(|| "herdr no dijo qué panel creó".into())
 }

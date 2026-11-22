@@ -1,8 +1,8 @@
 #!/bin/sh
-# What herdr's plugin actions run: the Rust corral when it is built (fast
-# path, falls back to Python by itself), else the Python version.
-here=$(dirname "$0")
-if [ -x "$here/../rs/target/release/corral" ]; then
-    exec "$here/../rs/target/release/corral" "$@"
+# What herdr's plugin actions run: Corral's command (Rust).
+corral="$(dirname "$0")/../rs/target/release/corral"
+if [ ! -x "$corral" ]; then
+    echo "corral no está compilado: corre 'cargo build --release' en $(dirname "$0")/../rs, o vuelve a instalar Corral" >&2
+    exit 1
 fi
-exec python3 "$here/corral" "$@"
+exec "$corral" "$@"

@@ -1,4 +1,4 @@
-# Corral: thin herdr adapter. Every action calls ../bin/corral, which holds the logic.
+# Corral: thin herdr adapter. Every action calls Corral's command (../bin/corral-run runs it).
 # Runtime commands run with the plugin directory as their working directory.
 
 id = "corral"
@@ -10,9 +10,17 @@ platforms = ["linux"]
 
 [[actions]]
 id = "layout"
-title = "Corral: abrir espacio de trabajo"
+title = "Corral: layout con foco en el agente"
 contexts = ["global", "workspace"]
 command = ["../bin/corral-run", "layout"]
+
+# Layouts (a group of their own in the palette): the same panes, with the script on the
+# left and the agent over the console.
+[[actions]]
+id = "layout-codigo"
+title = "Corral: layout con foco en el código"
+contexts = ["global", "workspace"]
+command = ["../bin/corral-run", "layout", "--foco", "codigo"]
 
 [[actions]]
 id = "send"
@@ -34,7 +42,7 @@ command = ["../bin/corral-run", "close"]
 
 [[actions]]
 id = "toggle"
-title = "Corral: expandir script o consola"
+title = "Corral: expandir script (o agente) o consola"
 contexts = ["global", "workspace", "pane"]
 command = ["../bin/corral-run", "toggle"]
 
@@ -91,7 +99,7 @@ command = ["../bin/corral-run", "config", "tema", "herdr"]
 id = "open-url"
 title = "Corral: abrir enlace local en el navegador"
 contexts = ["global"]
-command = ["../bin/corral-run", "plots"]
+command = ["../bin/corral-run", "open"]
 
 # Viewers open on demand over the terminal and close with q or Esc.
 [[panes]]

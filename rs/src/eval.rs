@@ -1,10 +1,11 @@
 //! `corral eval`: an agent (Claude) runs R or Python code in the user's console
 //! and gets back what it printed. The code goes to a file, the console runs it
 //! with `.corral_eval()` / `_corral_eval()`, which writes the output and a
-//! status file; new plots are saved as PNG. Starting or moving a console goes
-//! to the Python version; the usual case is handled here, without its startup.
+//! status file; new plots are saved as PNG. A console that isn't there, isn't
+//! in view or was quit is started or brought into view first.
 
-use crate::env::{self, python_fallback};
+use crate::console;
+use crate::env;
 use crate::herdr;
 use crate::json::{self, obj, Value};
 use crate::mirador::{plots_json, plots_raw};
@@ -31,7 +32,9 @@ struct Opts {
     replace: bool,
 }
 
-fn parse(args: &[String], all: &[String]) -> Opts {
+const USAGE: &str = "uso: corral eval [--lang r|python] [--file ARCHIVO] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--reemplazar] [CÓDIGO…]";
+
+fn parse(args: &[String]) -> Opts {
     let mut o = Opts { code: Vec::new(), lang: "r".into(), file: None, timeout: 300.0, wait_idle: 20.0,
                        max_chars: 20000, check: false, replace: false };
     let mut it = args.iter();
@@ -56,92 +59,22 @@ fn parse(args: &[String], all: &[String]) -> Opts {
             "--max-chars" => o.max_chars = value("--max-chars").parse().unwrap_or(20000),
             "--check" => o.check = true,
             "--reemplazar" => o.replace = true,
-            s if s.starts_with("--") => python_fallback(all), // --help and anything new
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                std::process::exit(0)
+            }
+            s if s.starts_with("--") => fail(2, &format!("opción desconocida {s}\n{USAGE}")),
             _ => o.code.push(a.clone()),
         }
     }
     if o.lang != "r" && o.lang != "python" {
-        python_fallback(all);
+        fail(2, USAGE);
     }
     o
 }
 
 fn now() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
-}
-
-/// The console pane for `lang` and the session in it.
-fn console_session(lang: &str, ws: Option<&str>) -> Result<(String, Value), String> {
-    let label = format!("corral:{lang}");
-    let mut console = None;
-    for scope in [ws, None] {
-        if let Ok(panes) = herdr::panes(scope) {
-            if let Some(p) = herdr::labeled(&panes, &label) {
-                console = Some(herdr::pane_id(p).to_string());
-                break;
-            }
-        }
-        if scope.is_none() {
-            break;
-        }
-    }
-    let Some(console) = console else {
-        return Err(if lang == "python" {
-            "no hay consola de Python: se abre sola al ejecutar código de Python, o con ctrl+b y".into()
-        } else {
-            format!("no hay consola {label} en herdr; ábrela con ctrl+b a o márcala con ctrl+b m")
-        });
-    };
-    match env::session_for(&console) {
-        Some(s) => Ok((console, s)),
-        None if lang == "python" => Err(format!("la consola {console} no tiene Corral activo (¿IPython sigue arrancando?)")),
-        None => Err(format!("la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activar() en ese R (ctrl+b m lo hace)")),
-    }
-}
-
-fn last_line(pane: &str) -> String {
-    let params = obj(vec![("pane_id", pane.into()), ("source", "visible".into()), ("format", "text".into())]);
-    let text = herdr::call("pane.read", params).ok()
-        .and_then(|r| r.get("read").get("text").str().map(String::from)).unwrap_or_default();
-    text.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).last().unwrap_or("").to_string()
-}
-
-/// Wait for an empty prompt (R's `>`, or `In [n]:` in IPython and Ark); refuse half-typed input.
-/// Is an earlier request still running? Its output file is there, its outcome is not yet.
-fn eval_running(edir: &Path) -> bool {
-    let Ok(entries) = std::fs::read_dir(edir) else { return false };
-    let newest = entries.flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "out"))
-        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-    newest.is_some_and(|e| !e.path().with_extension("json").exists())
-}
-
-fn wait_for_prompt(pane: &str, timeout: f64, lang: &str, edir: &Path) -> Result<(), String> {
-    let end = Instant::now() + Duration::from_secs_f64(timeout);
-    let name = if lang == "python" { "Python" } else { "R" };
-    loop {
-        let line = last_line(pane);
-        let (idle, half) = if let Some(rest) = line.strip_prefix("In [").and_then(|r| r.split_once("]:")).map(|(_, r)| r) {
-            (rest.trim().is_empty(), !rest.trim().is_empty())
-        } else if line.trim_start().starts_with("...:") || lang == "python" {
-            (false, line.trim_start().starts_with("...:"))
-        } else {
-            (line.trim() == ">", line.starts_with('+') || (line.starts_with("> ") && !line[2..].trim().is_empty()))
-        };
-        if idle {
-            return Ok(());
-        }
-        // An earlier request still running echoes its code like typed input: busy, not half-typed.
-        let half = half && !eval_running(edir);
-        if Instant::now() > end {
-            return Err(if half {
-                "la consola tiene una línea a medio escribir; termínala o bórrala y vuelve a intentar".into()
-            } else {
-                format!("la consola de {name} está ocupada; espera a que termine o usa --wait-idle")
-            });
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn clip_output(text: &str, limit: usize, full: &Path) -> String {
@@ -167,11 +100,11 @@ fn fail(code: i32, msg: &str) -> ! {
     std::process::exit(code)
 }
 
-pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
-    let o = parse(args, all);
+pub fn run(args: &[String]) -> Result<(), String> {
+    let o = parse(args);
     let ws = env::current_workspace();
     if o.check {
-        let (pane, s) = console_session(&o.lang, ws.as_deref()).unwrap_or_else(|e| fail(1, &e));
+        let (pane, s) = console::session(&o.lang, ws.as_deref()).unwrap_or_else(|e| fail(1, &e));
         let panes = herdr::panes(ws.as_deref()).unwrap_or_default();
         let version = s.get(if o.lang == "python" { "python_version" } else { "r_version" }).clone();
         println!("{}", obj(vec![("console", pane.into()), ("lang", o.lang.as_str().into()), ("session", s.get("id").clone()),
@@ -195,16 +128,18 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
         fail(1, "no hay código que ejecutar");
     }
 
-    // The console has to be there, running, and in view; otherwise Python starts or moves it.
+    // The console has to be there, running, and in view: the usual case needs nothing;
+    // otherwise it is brought into view, or started, first.
     let panes = herdr::panes(ws.as_deref())?;
     let current = env::active_lang(ws.as_deref(), &panes);
-    let Some(target) = herdr::labeled(&panes, &format!("corral:{}", o.lang)) else { python_fallback(all) };
-    let pane = herdr::pane_id(target).to_string();
-    // Switching languages moves panes and layout state: the Python version does that.
-    if o.lang != current {
-        python_fallback(all);
-    }
-    let Some(session) = env::session_for(&pane) else { python_fallback(all) };
+    let found = herdr::labeled(&panes, &console::label(&o.lang)).map(|t| herdr::pane_id(t).to_string());
+    let pane = match found {
+        Some(p) if o.lang == current && env::session_for(&p).is_some() => p,
+        _ => console::ready(&o.lang).unwrap_or_else(|e| fail(1, &e)),
+    };
+    let session = env::session_for(&pane).unwrap_or_else(|| {
+        fail(1, &console::session(&o.lang, ws.as_deref()).err().unwrap_or_else(|| "la consola no tiene Corral activo".into()))
+    });
     let sdir = PathBuf::from(session.get("dir").str().unwrap_or(""));
     let sid = session.get("id").str().unwrap_or("").to_string();
     let edir = sdir.join("eval");
@@ -221,7 +156,7 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(20));
     }
 
-    if let Err(e) = wait_for_prompt(&pane, o.wait_idle, &o.lang, &edir) {
+    if let Err(e) = console::wait_for_prompt(&pane, o.wait_idle, &o.lang, Some(&edir)) {
         fail(2, &e);
     }
     let secs = now() as u64;

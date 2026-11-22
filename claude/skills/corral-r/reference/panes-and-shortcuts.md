@@ -2,22 +2,23 @@
 
 ## Panes
 
-A Corral layout has the agent pane on the left and, on the right, the script pane (Fresh) over the console, with the variables pane below them. Panes that are not showing (the other language's console, or the pane hidden by expanding) wait in a hidden tab named "corral (oculto)" and keep running.
+A Corral layout has the agent pane on the left and, on the right, the script pane (Fresh) over the console, with the variables pane below them. The layout focused on code (`corral layout --foco codigo`; the user opens it with `ctrl+b shift+a`, the default one with `ctrl+b a`) swaps the script and the agent: script on the left, agent over the console. Panes that are not showing (the other language's console, or the pane hidden by expanding) wait in a hidden tab named "corral (oculto)" and keep running.
 
 | Command | Effect | Ask first? |
 |---|---|---|
 | `corral toggle script` | The script takes the whole right column; the console is hidden. | No |
 | `corral toggle consola` | The console takes the whole right column; the script is hidden. | No |
 | `corral toggle ambos` | Script over console again, at the user's usual sizes. | No |
+| `corral toggle agente` | Layout focused on code only: the agent takes the right column (instead of `script`). | No |
 | `corral switch r` / `corral switch python` | The console spot shows that language (Python starts the first time). | No |
 | `corral script [archivo]` | Adds the editor over the console in a layout that has none, with a new draft or that file. | Yes |
 | `corral vars --json` | Reads the variables (no pane changes). | No |
 | `corral vars` | Opens the variables pane as a popup over the user's screen. | Yes |
 | `corral plots` / `corral mirador` | Brings the plot viewer to the front. | No |
-| `corral layout` | Opens a new Corral layout in the current tab. | Yes |
+| `corral layout [--foco codigo]` | Opens a new Corral layout in a new tab; `--foco codigo` puts the script on the left. | Yes |
 | `corral close` | Closes script, console and variables; the R or Python session ends and the draft is discarded. | Yes, always |
 
-`corral toggle` and `corral switch` change only what the user sees and can be undone with the same commands, so run them when asked. Without a value, `corral toggle` decides from the pane that has the focus (that is what `ctrl+b t` does for the user); from your pane always pass `script`, `consola` or `ambos`.
+`corral toggle` and `corral switch` change only what the user sees and can be undone with the same commands, so run them when asked. Without a value, `corral toggle` decides from the pane that has the focus (that is what `ctrl+b t` does for the user); from your pane always pass `script` (`agente` in the layout focused on code), `consola` or `ambos`.
 
 ## Shortcuts
 
