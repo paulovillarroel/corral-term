@@ -6,6 +6,10 @@
 # Next to the package: its SHA-256 (install.sh checks it before opening the
 # package) and a build provenance attestation, so anyone can check the package
 # came from this workflow: gh attestation verify FILE --repo paulovillarroel/corral-term
+#
+# The release notes are that version's section of CHANGELOG.md ("## 0.1.4"), with
+# GitHub's link to the full list of changes below; without a section, nothing is
+# published, so add it before tagging.
 name: Versión
 
 on:
@@ -22,6 +26,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+
+      - name: Notas de la versión (CHANGELOG.md)
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md" || { echo "::error::CHANGELOG.md has no section '## $v'"; exit 1; }
+          cat "$RUNNER_TEMP/notes.md"
 
       - name: Compilar corral (Rust, estático)
         run: |
@@ -46,4 +57,4 @@ jobs:
       - name: Publicar la versión
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 install.sh --title "Corral $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 install.sh --title "Corral $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
