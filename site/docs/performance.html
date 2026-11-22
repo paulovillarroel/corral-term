@@ -9,7 +9,7 @@
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Performance · Corral docs</title>
-<meta name="description" content="How fast Corral opens and how little it uses, measured against Positron on the same machine, and the gains of each piece of Corral after it moved to one Rust binary.">
+<meta name="description" content="How fast Corral opens and how little it uses, measured against Positron on the same machine, how long View() takes with a big table, and the gains of each piece of Corral after it moved to one Rust binary.">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +43,7 @@
 
   <main class="content">
     <h1>Performance</h1>
-    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB, or about 200 MB counting herdr. These are the measurements against Positron, and the gains of each piece of Corral since it became one Rust binary.</p>
+    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB, or about 200 MB counting herdr. These are the measurements against Positron, how long <code>View()</code> takes with a big table, and the gains of each piece of Corral since it became one Rust binary.</p>
 
     <h2>Corral and Positron</h2>
     <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="all"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
@@ -105,6 +105,46 @@
     </tbody>
     </table>
     <p>With herdr, Corral uses about 200 MB and 0.76 % of one core at rest. herdr grows with what it holds: in a day-to-day session with 10 workspaces and 16 panes, its server used 47 MB and its client 17 MB.</p>
+
+    <h2 id="view">A big table in View()</h2>
+    <p><code>View(df)</code> does two things: R saves the table as a Parquet file, and the viewer asks DuckDB only for what is on screen. Saving is the wait you notice, it grows with the table and it happens on every <code>View()</code>. After that, each screen takes milliseconds at any size.</p>
+
+    <h3 id="view-measured">How it was measured</h3>
+    <ul>
+    <li>November 22, 2026, on the same machine, with the script in the repository: <code>Rscript bench/view.R</code> (<a href="https://github.com/paulovillarroel/corral-term/blob/main/bench/view.R">bench/view.R</a>).</li>
+    <li>The sales table in the screenshots: 10,000,000 rows and 7 columns. R 4.6.1, DuckDB 1.4.4. Ten runs with each package, three with CSV.</li>
+    <li>Saving uses the same calls as <code>View()</code>. The first screen is the three queries the viewer runs before it draws: the columns, the row count and the first 200 rows. Opening the popup isn't counted, a few milliseconds.</li>
+    <li>Each figure is the median, with the fastest and slowest run in brackets. Python's <code>View()</code> wasn't measured.</li>
+    </ul>
+
+    <h3 id="view-results">Results</h3>
+    <table>
+    <thead><tr><th>What</th><th>nanoparquet 0.5.2</th><th>arrow 25.0.1</th><th>CSV, without either</th></tr></thead>
+    <tbody>
+    <tr><td>Saving the table</td><td>1.1 s (1.0–1.3 s)</td><td>1.8 s (1.6–4.1 s)</td><td>14.3 s (12.7–21.1 s)</td></tr>
+    <tr><td>The first screen</td><td>30 ms (29–32 ms)</td><td>33 ms (31–43 ms)</td><td>1.3 s (1.3–2.6 s)</td></tr>
+    <tr><td><code>View()</code> in all</td><td>1.1 s (1.1–1.3 s)</td><td>1.9 s (1.7–4.2 s)</td><td>15.6 s (14.0–23.7 s)</td></tr>
+    <tr><td>A page from the middle</td><td>16 ms (15–17 ms)</td><td>25 ms (23–31 ms)</td><td>705 ms (699–733 ms)</td></tr>
+    <tr><td>Sorting every row by a column</td><td>35 ms (34–37 ms)</td><td>49 ms (44–101 ms)</td><td>854 ms (785 ms–1.5 s)</td></tr>
+    <tr><td>The file</td><td>166 MB</td><td>172 MB</td><td>526 MB</td></tr>
+    </tbody>
+    </table>
+    <p><code>View()</code> uses nanoparquet when it is installed, and arrow when it isn't or for a column nanoparquet can't write, such as <code>POSIXlt</code>. With other tables (<code>bench/writers.R</code>, ten runs each, each one after <code>gc()</code>), nanoparquet was faster: 0.82 s against 1.31 s for 2 million rows of 50 numeric columns, 1.30 s against 4.29 s for 5 million rows of text, and 0.30 s against 0.39 s for 5 million rows of factors, dates and missing values.</p>
+
+    <h3 id="view-long-session">In a long session</h3>
+    <p>Corral is meant for a day's work, so what counts is that <code>View()</code> behaves the same the twentieth time as the first. <code>bench/repeat.R</code> writes the ten million rows 20 times in one session that also holds 5 million other strings, one R process for each package:</p>
+    <table>
+    <thead><tr><th>20 times in one session</th><th>nanoparquet</th><th>arrow</th></tr></thead>
+    <tbody>
+    <tr><td>Time, median (fastest–slowest)</td><td>1.20 s (0.98–3.23 s)</td><td>1.79 s (1.66–3.54 s)</td></tr>
+    <tr><td>R's memory before the first</td><td>1.0 GB</td><td>1.0 GB</td></tr>
+    <tr><td>After the first</td><td>1.2 GB</td><td>1.4 GB</td></tr>
+    <tr><td>After the twentieth</td><td>1.6 GB</td><td>6.4 GB</td></tr>
+    </tbody>
+    </table>
+    <p>With nanoparquet, R's memory settles at about 1.6 GB and stays there; 40 times gave the same. With arrow it grows by about 265 MB each time and isn't given back. That is why <code>corral doctor</code> and the installer suggest nanoparquet even when arrow is installed.</p>
+    <p>nanoparquet's time varies more when the session holds a lot, because it works inside R and R's garbage collector can run during the write. Calling <code>gc()</code> before each write doesn't help: counting the collection, it took 0.1 to 0.45 s longer, so <code>View()</code> doesn't do it.</p>
+    <p>Without either package, <code>View()</code> falls back to CSV, which is more than ten times slower to save, and then every page and sort reads the whole file again. nanoparquet has no dependencies, so it is the one to install.</p>
 
     <h2>Corral in Rust</h2>
     <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="all"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>

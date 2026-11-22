@@ -73,7 +73,7 @@
 
     <h2>The table viewer</h2>
     <p><code>View(df)</code> (in R or in Python), <kbd>Enter</kbd> on a data frame in the variables pane, or <code>corral view</code> on a file open the table over the terminal, in a viewer that queries the file with <a href="https://duckdb.org">DuckDB</a>.</p>
-    <p>The session saves the table as parquet, and the viewer asks DuckDB only for what is on screen: a page of rows, the row count, a sort or a search are each a query of a few milliseconds. A table of 10 million rows shows its first screen in about 34 ms, and the viewer itself uses about 3 MB.</p>
+    <p>The session saves the table as parquet, and the viewer asks DuckDB only for what is on screen: a page of rows, the row count, a sort or a search are each a query of a few milliseconds. With 10 million rows, saving the table takes about a second with nanoparquet (two with arrow), and the first screen about 30 ms more; the viewer itself uses about 3 MB (<a href="performance.html#view">measurements</a>).</p>
     <figure class="tui-shot" role="img" aria-label="The table viewer showing a 10,000,000-row sales table">
       <div class="tui-bar"><span>table: sales</span><span>10,000,000 rows</span></div>
       <pre> <span style="color:#ffc799;">▸▸</span> <span style="color:#ffffff;font-weight:700;">sales</span>                                                                           <span style="color:#a0a0a0;">10,000,000 rows · 7 columns</span>
@@ -104,7 +104,7 @@
  <span style="color:#5c5c5c;">/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Sh…</span></pre>
     </figure>
     <pre><code><span class="p">$ </span>corral view data/sales.parquet</code></pre>
-    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables. In R, it writes parquet with nanoparquet or arrow; without either, it uses CSV.</p>
+    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables. In R, it writes parquet with nanoparquet or arrow; without either, it uses CSV, which is much slower with big tables (about 15 s for ten million rows, and close to a second each screen), so install nanoparquet.</p>
 
     <h3>Keys</h3>
     <table>
