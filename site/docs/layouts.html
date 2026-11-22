@@ -93,7 +93,7 @@
     </tbody>
     </table>
     <p>On the right, the two upper panes share 73 % of the height, 57/43, and the variables take the other 27 %. The editor opens with the file explorer in view.</p>
-    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+a</kbd> when you spend more time in the code; it needs the editor (Fresh). Each one opens a new tab, and both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts» group.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+a</kbd> when you spend more time in the code; it needs the editor (Fresh). Each one opens a new tab, and both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts and panes» group.</p>
 
     <h3>From the command line</h3>
     <pre><code><span class="p">$ </span>corral layout
@@ -101,7 +101,7 @@
 <span class="p">$ </span>corral layout --shell
 <span class="p">$ </span>corral layout --ratio 0.6
 <span class="p">$ </span>corral layout --lang python</code></pre>
-    <p><code>--focus code</code> opens the layout focused on the code. <code>--lang python</code> starts it with the Python console and a Python draft instead of R; to make that the rule, use <code>corral config start python</code>, or "Corral: start with Python" in the palette. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
+    <p><code>--focus code</code> opens the layout focused on the code. <code>--lang python</code> starts it with the Python console and a Python draft instead of R; to make that the rule, use <code>corral config start python</code>, or "Layout: start with Python" in the palette. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
 
     <h3>Another agent</h3>
     <p>The agent pane runs Claude Code. To run another agent there every time, set its command:</p>

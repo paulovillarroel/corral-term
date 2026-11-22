@@ -9,7 +9,7 @@
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Keyboard shortcuts · Corral docs</title>
-<meta name="description" content="Every Corral shortcut, grouped by where you use it: herdr, the script editor, the console, the variables pane, tables and Mirador. How to search them and change them.">
+<meta name="description" content="Every Corral shortcut and action, grouped as in the palette: layouts and panes, the script editor, the console, the variables, tables, plots and Mirador, agents, appearance and help. How to search them and change them.">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,35 +43,24 @@
 
   <main class="content">
     <h1>Keyboard shortcuts</h1>
-    <p class="intro">Every Corral shortcut, grouped by where you use it. <kbd>ctrl+b</kbd> <kbd>space</kbd> shows the same list, searchable and with your own keys if you changed any.</p>
+    <p class="intro">Every Corral shortcut and action, grouped as in the palette: first the parts of the IDE, from the layout to the plots, then the agents, the appearance and help. <kbd>ctrl+b</kbd> <kbd>space</kbd> shows the same list, searchable and with your own keys if you changed any.</p>
 
     <h2>How ctrl+b shortcuts work</h2>
     <p>The shortcuts that work in any pane go through herdr, so they start with its prefix, <kbd>ctrl+b</kbd>: press it, let go, then press the next key. They only do something when you use them. If you changed herdr's prefix, Corral's shortcuts use yours.</p>
 
     <h2>The palette</h2>
-    <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by where it works (layouts, any pane, the script editor, the R console, the variables pane, tables and Mirador). Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing table: 23 of 66 entries, from the variables pane, the table viewer and Mirador, each with its keys">
+    <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Agents:</code>, <code>Theme:</code>…), so typing a category lists just that. Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
+    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 6 of 74 entries, the Agents group, each starting with Agents:">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">table</span><span style="color:#ffc799;">▏</span>                                                                                 <span style="color:#5c5c5c;">23 of 66</span>
-<span style="color:#5c5c5c;">────────────────────────────────────────────────────────────────────────────────────────────────────</span>
-  <span style="color:#a0a0a0;font-weight:700;">IN ANY PANE (HERDR)</span>
-<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Open Mirador (plots and tables in the browser) </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                 </span><span style="color:#ffc799;background:#343434;">ctrl+b shift+m</span><span style="background:#343434;">  </span>
-
-  <span style="color:#a0a0a0;font-weight:700;">VARIABLES PANE</span>
-   <span style="color:#ffffff;">Open: a table in the viewer, a plot in Mirador, a value with str()</span>                        <span style="color:#ffc799;">enter</span>
-   <span style="color:#ffffff;">Open the table in Mirador, in the browser</span>                                                     <span style="color:#ffc799;">m</span>
-
-  <span style="color:#a0a0a0;font-weight:700;">TABLES (VIEW)</span>
-   <span style="color:#ffffff;">Move through the rows</span>                                                    <span style="color:#ffc799;">↑  ↓  pgup  pgdn  g  G</span>
-   <span style="color:#ffffff;">Move through the columns (also the sideways wheel)</span>                                   <span style="color:#ffc799;">←  →  0  $</span>
-   <span style="color:#ffffff;">Sort by the column</span>                                                                            <span style="color:#ffc799;">s</span>
-   <span style="color:#ffffff;">Search for a text in every column</span>                                                             <span style="color:#ffc799;">/</span>
-   <span style="color:#ffffff;">Filter with a condition, in R or in SQL</span>                                                       <span style="color:#ffc799;">f</span>
-   <span style="color:#ffffff;">Keep only the rows with the cell&#x27;s value</span>                                                      <span style="color:#ffc799;">=</span>
-   <span style="color:#ffffff;">Clear the filters and the search</span>                                                              <span style="color:#ffc799;">x</span>
-   <span style="color:#ffffff;">Show the whole row</span>                                                                        <span style="color:#ffc799;">enter</span>
-   <span style="color:#ffffff;">Summary of each column</span>                                                                        <span style="color:#ffc799;">i</span>
-   <span style="color:#ffffff;">Open the table in Mirador, in the browser</span>                                                     <span style="color:#ffc799;">m</span>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                               <span style="color:#5c5c5c;">6 of 74</span>
+<span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
+  <span style="color:#a0a0a0;font-weight:700;">AGENTS</span>
+<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Agents: ask before each request ↵                                                              </span><span style="color:#ffc799;background:#343434;"></span>
+   <span style="color:#ffffff;">Agents: run code without asking</span>                                                                <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: can&#x27;t run code</span>                                                                         <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: see full results</span>                                                                       <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: you review results before they see them</span>                                                <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: see only the structure of results</span>                                                      <span style="color:#ffc799;"></span>
 
  <span style="color:#5c5c5c;">↑↓ select · Enter run · Esc close · type to search</span></pre>
     </figure>
@@ -80,7 +69,7 @@
     <table>
     <thead><tr><th>Key</th><th>Action</th></tr></thead>
     <tbody>
-    <tr><td>Type</td><td>Search names and keys at once: <code>plot</code>, <code>theme</code>, <code>python</code>, <code>ctrl+r</code>. Accents don't matter. The counter says how many entries match.</td></tr>
+    <tr><td>Type</td><td>Search names, categories and keys at once: <code>agents</code>, <code>theme</code>, <code>python</code>, <code>ctrl+r</code>. Accents don't matter. The counter says how many entries match.</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd>, <kbd>PgUp</kbd> <kbd>PgDn</kbd>, <kbd>Home</kbd> <kbd>End</kbd></td><td>Move through the list (the mouse wheel too)</td></tr>
     <tr><td><kbd>Enter</kbd></td><td>Run the selected entry when it's an action: a <kbd>↵</kbd> next to it says so. The other entries are keys that work in their own place (the editor, a table), listed so you can find them.</td></tr>
     <tr><td><kbd>Backspace</kbd></td><td>Delete a letter of the search</td></tr>
@@ -90,25 +79,18 @@
     <p>The list is read from your configuration every time it opens, so it shows your own keys after you change them, and actions that have no key yet, like the themes or the language, are one search away. It follows Corral's language too (see <a href="config.html#language">Language</a>).</p>
     <p>The same list is in the editor (<kbd>Ctrl</kbd>+<kbd>P</kbd>, then "Corral: keyboard shortcuts") and in any herdr terminal with <code>corral keys</code>. Mirador has its own short list of keys behind <kbd>?</kbd>.</p>
 
-    <h2>In any pane (herdr)</h2>
+    <h2>Layouts and panes</h2>
     <table>
     <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
     <tbody>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>space</kbd></td><td>The palette of Corral's shortcuts and actions</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>a</kbd></td><td>Layout focused on the agent: Claude on the left, the script over the console on the right</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+a</kbd></td><td>Layout focused on the code: the script on the left, Claude over the console on the right</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+c</kbd></td><td>Close Corral: closes the script, the console and the variables, and leaves Claude as a normal pane</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>t</kbd></td><td>Expand the script or the console (the pane you are in; Claude or the console in the layout focused on the code); again, both</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>y</kbd></td><td>The console switches from R to Python, or from Python to R (Python starts the first time)</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>enter</kbd></td><td>Send the selection or the clipboard to the console in view (R or Python)</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>f</kbd></td><td>See the latest plot in Mirador</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>d</kbd></td><td>See the variables over the terminal</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>m</kbd></td><td>Use this pane as the console (R or IPython, by what runs in it) and switch Corral on in it</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+m</kbd></td><td>Open Mirador</td></tr>
-    <tr><td><kbd>ctrl+b</kbd> <kbd>?</kbd></td><td>All of herdr's own shortcuts (panes, tabs, workspaces)</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>a</kbd></td><td>Layout focused on the agent: the agent on the left, the script over the console on the right</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+a</kbd></td><td>Layout focused on the code: the script on the left, the agent over the console on the right</td></tr>
+    <tr><td>palette</td><td>Layout: start with R, or start with Python (the console and draft a new layout opens)</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>t</kbd></td><td>Expand the script or the console (the pane you are in; the agent or the console in the layout focused on the code); again, both</td></tr>
+    <tr><td>palette</td><td>Layout: add the script editor above the console</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+c</kbd></td><td>Close Corral: closes the script, the console and the variables, and leaves the agent as a normal pane</td></tr>
     </tbody>
     </table>
-    <p>The palette also has actions with no key: add the script editor over the console, switch to the Dark 2026 theme, and go back to herdr's theme.</p>
 
     <h2>Script editor</h2>
     <p>The editor, <a href="https://getfresh.dev">Fresh</a>, uses VS Code's shortcuts. Corral adds the ones below. Some terminals drop keys on their way through herdr (see <a href="#terminals-that-drop-keys">below</a>), so each action has a key that always arrives and, under "Also", the key you may know from other IDEs, for terminals that send it.</p>
@@ -125,13 +107,23 @@
     <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td></td><td>The editor's command palette (all its actions)</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td></td><td>Find in the file</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td></td><td>Undo</td></tr>
-    <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td></td><td>Close the editor (the draft is discarded)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td></td><td>Close the editor (the drafts are discarded)</td></tr>
     </tbody>
     </table>
     <p><kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd> do nothing in a <code>.py</code> file.</p>
 
-    <h2>R console (Ark)</h2>
-    <p>These are the keys of Corral's console for Ark, the default R console. Plain R and IPython keep their own line editing.</p>
+    <h2>Console (R and Python)</h2>
+    <table>
+    <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+    <tbody>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>y</kbd></td><td>The console switches from R to Python, or from Python to R (Python starts the first time), and the editor shows that language's draft</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>enter</kbd></td><td>Send the selection or the clipboard to the console in view (R or Python)</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>m</kbd></td><td>Use this pane as the console (R or IPython, by what runs in it) and switch Corral on in it</td></tr>
+    </tbody>
+    </table>
+
+    <h3>R console (Ark)</h3>
+    <p>These are the keys of Corral's console for Ark, the default R console; in the palette they start with <code>R console:</code>. Plain R and IPython keep their own line editing.</p>
     <table>
     <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
     <tbody>
@@ -151,6 +143,7 @@
     <table>
     <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
     <tbody>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>d</kbd></td><td>See the variables over the terminal, in a bigger view</td></tr>
     <tr><td><kbd>←</kbd> <kbd>→</kbd>, <kbd>Tab</kbd>, <kbd>1</kbd>–<kbd>5</kbd></td><td>Change tab: Data, Plots, Values, Functions, Other. A click works too.</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd>, <kbd>PgUp</kbd> <kbd>PgDn</kbd></td><td>Move</td></tr>
     <tr><td><kbd>Enter</kbd></td><td>Open: a table in the viewer, a plot in Mirador, any other value with <code>str()</code></td></tr>
@@ -179,7 +172,16 @@
     </tbody>
     </table>
 
-    <h2>Mirador</h2>
+    <h2>Plots and Mirador</h2>
+    <table>
+    <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+    <tbody>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>f</kbd></td><td>See the latest plot in Mirador</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>shift+m</kbd></td><td>Open Mirador, in your browser</td></tr>
+    </tbody>
+    </table>
+
+    <h3>In Mirador</h3>
     <table>
     <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
     <tbody>
@@ -199,8 +201,41 @@
     </tbody>
     </table>
 
-    <h2>Plots inside herdr</h2>
+    <h3>Plots inside herdr</h3>
     <p>On terminals that draw images, <kbd>ctrl+b</kbd> <kbd>f</kbd> shows plots inside herdr instead (see <a href="plots.html">Plots and Mirador</a>). That viewer has three keys: <kbd>←</kbd> <kbd>→</kbd> go through the history, <kbd>o</kbd> opens Mirador in the browser, and <kbd>q</kbd> closes it.</p>
+
+    <h2>Agents</h2>
+    <p>These are in the palette, without a key; type <code>agents</code> to list them. What each one means is in the <a href="security.html">Security model</a>.</p>
+    <table>
+    <thead><tr><th>In the palette</th><th>What it sets</th></tr></thead>
+    <tbody>
+    <tr><td>Agents: ask before each request</td><td><code>corral config agents ask</code>, the default</td></tr>
+    <tr><td>Agents: run code without asking</td><td><code>corral config agents on</code></td></tr>
+    <tr><td>Agents: can't run code</td><td><code>corral config agents off</code></td></tr>
+    <tr><td>Agents: see full results</td><td><code>corral config agent_output full</code>, the default</td></tr>
+    <tr><td>Agents: you review results before they see them</td><td><code>corral config agent_output review</code></td></tr>
+    <tr><td>Agents: see only the structure of results</td><td><code>corral config agent_output structure</code></td></tr>
+    </tbody>
+    </table>
+
+    <h2>Appearance and language</h2>
+    <table>
+    <thead><tr><th>In the palette</th><th>What it sets</th></tr></thead>
+    <tbody>
+    <tr><td>Theme: Dark 2026 (VS Code's and Positron's)</td><td><code>corral config theme dark-2026</code> (<a href="themes.html">Themes</a>)</td></tr>
+    <tr><td>Theme: back to herdr's</td><td><code>corral config theme herdr</code></td></tr>
+    <tr><td>Language: English, Idioma: español</td><td><code>corral config language en</code> or <code>es</code></td></tr>
+    </tbody>
+    </table>
+
+    <h2>Help</h2>
+    <table>
+    <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+    <tbody>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>space</kbd></td><td>This palette, with every shortcut and action</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>?</kbd></td><td>All of herdr's own shortcuts (panes, tabs, workspaces)</td></tr>
+    </tbody>
+    </table>
 
     <h2>Change a shortcut</h2>
     <pre><code><span class="p">$ </span>corral keys --list
@@ -208,7 +243,7 @@
 <span class="p">$ </span>corral keys --change editor:corral_run_line ctrl+e</code></pre>
     <p><code>corral keys</code> opens the palette. <code>--list</code> prints it, with the ID of each shortcut, and <code>--json</code> gives the same list to agents. <code>--change ID KEY</code> gives an action a new key:</p>
     <ul>
-    <li><code>herdr:</code> IDs are the shortcuts that work in any pane. The key is what comes after <kbd>ctrl+b</kbd> (<code>t</code>, <code>shift+k</code>, <code>space</code>) or the whole shortcut (<code>"ctrl+b t"</code>). herdr takes the change at once.</li>
+    <li><code>herdr:</code> IDs are the shortcuts that start with <kbd>ctrl+b</kbd> and work in any pane. The key is what comes after <kbd>ctrl+b</kbd> (<code>t</code>, <code>shift+k</code>, <code>space</code>) or the whole shortcut (<code>"ctrl+b t"</code>). herdr takes the change at once.</li>
     <li><code>editor:</code> IDs are the editor's. The key is the whole shortcut (<code>ctrl+e</code>, <code>f6</code>, <code>ctrl+shift+enter</code>). Close the editor with <kbd>Ctrl</kbd>+<kbd>Q</kbd> and open it again to use it.</li>
     <li>The keys of the console, the variables pane, the tables and Mirador are part of Corral and can't be changed this way.</li>
     </ul>
