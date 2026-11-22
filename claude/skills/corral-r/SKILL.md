@@ -103,6 +103,7 @@ corral toggle script            # the right column shows: script, consola or amb
 corral switch python            # the console shows: r or python
 corral atajos --json            # every shortcut, with the id used to change it
 corral atajos --cambiar herdr:toggle shift+e
+corral config tema dark-2026    # Corral's own theme (VS Code Dark 2026) for Corral and herdr; `herdr` goes back
 ```
 
 The user opens the same list with `ctrl+b space` (searchable; Enter runs the actions).

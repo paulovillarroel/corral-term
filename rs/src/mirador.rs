@@ -225,7 +225,10 @@ fn palette_file() -> PathBuf {
 fn palette(app: &Shared) -> Value {
     let p = env::read_json(&palette_file());
     let herdr_cfg = std::env::var_os("HERDR_CONFIG_PATH").map(PathBuf::from).unwrap_or_else(|| env::home().join(".config/herdr/config.toml"));
-    if let Some(h) = mtime(&herdr_cfg) {
+    // The palette follows herdr's config and Corral's own theme choice (corral config tema).
+    let corral_cfg = palette_file().with_file_name("config.json");
+    let newest = [mtime(&herdr_cfg), mtime(&corral_cfg)].into_iter().flatten().fold(None, |a: Option<f64>, b| Some(a.map_or(b, |a| a.max(b))));
+    if let Some(h) = newest {
         let mut a = app.lock().unwrap();
         let stale = (h - p.get("source_mtime").num().unwrap_or(0.0)).abs() > 1e-3;
         if stale && a.theme_asked.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {

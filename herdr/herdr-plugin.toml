@@ -74,6 +74,19 @@ title = "Corral: atajos y acciones (paleta)"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../bin/corral-run", "atajos"]
 
+# Corral's own themes (herdr can't install themes); choosing another one in herdr drops it.
+[[actions]]
+id = "tema-dark-2026"
+title = "Corral: tema Dark 2026 (el de VS Code y Positron)"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../bin/corral-run", "config", "tema", "dark-2026"]
+
+[[actions]]
+id = "tema-herdr"
+title = "Corral: volver al tema de herdr"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../bin/corral-run", "config", "tema", "herdr"]
+
 [[actions]]
 id = "open-url"
 title = "Corral: abrir enlace local en el navegador"

@@ -67,6 +67,33 @@ PALETTES: dict[str, dict[str, str]] = {
                       yellow="#f6c177", red="#eb6f92", blue="#31748f", violet="#c4a7e7", orange="#ebbcba",
                       cyan="#9ccfd8"),
 }
+# Corral's own themes, chosen with `corral config tema <name>`: they rule Corral's
+# windows whatever herdr's theme is (herdr follows with matching [theme.custom]).
+# syn_* keys give the editor its syntax colours; without them they come from the
+# named colours above.
+OWN_THEMES: dict[str, dict[str, str]] = {
+    # VS Code "Dark 2026" (theme-defaults/themes/2026-dark.json), as in Positron.
+    "dark-2026": dict(bg="#121314", surface="#191a1b", raised="#242526", selection="#245c73", border="#2a2b2c",
+                      text="#bbbebf", muted="#8c8c8c", dim="#5f6264", accent="#3994bc", green="#7ee787",
+                      yellow="#cd9731", red="#f44747", blue="#79c0ff", violet="#d2a8ff", orange="#ffa657",
+                      cyan="#4ec9b0", line_number="#858889",
+                      syn_keyword="#ff7b72", syn_string="#a5d6ff", syn_comment="#8b949e", syn_function="#d2a8ff",
+                      syn_type="#ffa657", syn_variable="#c9d1d9", syn_variable_builtin="#79c0ff",
+                      syn_constant="#79c0ff", syn_number="#79c0ff", syn_operator="#d4d4d4", syn_property="#79c0ff",
+                      syn_attribute="#79c0ff"),
+}
+# herdr's side of each own theme: [theme.custom] colours that dress herdr to match.
+OWN_HERDR: dict[str, dict[str, str]] = {
+    "dark-2026": {
+        "accent": "#3994bc", "panel_bg": "#121314", "sidebar_bg": "#191a1b", "surface_dim": "#191a1b",
+        "active_row_bg": "#242526", "selection_bg": "#245c73", "surface0": "#202122", "surface1": "#2a2b2c",
+        "overlay0": "#555555", "overlay1": "#858889", "text": "#bbbebf", "subtext0": "#8c8c8c",
+        "mauve": "#d2a8ff", "green": "#7ee787", "yellow": "#cd9731", "red": "#f44747", "blue": "#79c0ff",
+        "teal": "#4ec9b0", "peach": "#ffa657",
+    },
+}
+CORRAL_CONFIG = CONFIG_HOME / "corral" / "config.json"
+
 DEFAULT_THEME = "catppuccin"  # herdr's own default
 
 # herdr [theme.custom] tokens -> palette keys
@@ -87,8 +114,127 @@ def herdr_theme() -> tuple[str, dict]:
     return str(theme.get("name") or DEFAULT_THEME), dict(theme.get("custom") or {})
 
 
+def corral_config() -> dict:
+    try:
+        cfg = json.loads(CORRAL_CONFIG.read_text())
+    except (OSError, ValueError):
+        return {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def own_theme() -> str | None:
+    """The Corral theme chosen with `corral config tema`, while it is still on:
+    choosing another theme in herdr afterwards turns it off (see follow_herdr)."""
+    cfg = corral_config()
+    chosen = cfg.get("tema")
+    if chosen not in OWN_THEMES:
+        return None
+    if cfg.get("tema_herdr") not in (None, herdr_theme()[0]):
+        return None
+    return chosen
+
+
+# --------------------------------------------------------------------------- herdr's [theme.custom]
+
+def _custom_span(lines: list[str]) -> tuple[int, int] | None:
+    """Lines of the [theme.custom] table (with Corral's comment above it, if any)."""
+    start = next((i for i, l in enumerate(lines) if l.strip() == "[theme.custom]"), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+    while start > 0 and lines[start - 1].startswith(("# Corral", '# VS Code "Dark 2026"')):
+        start -= 1
+    return start, end
+
+
+def _write_herdr(lines: list[str]) -> None:
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    tomllib.loads(text)  # never leave herdr with a broken config
+    HERDR_CONFIG.write_text(text)
+    import subprocess
+    try:
+        subprocess.run(["herdr", "server", "reload-config"], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass  # herdr not running: it reads the file when it starts
+
+
+def is_own_custom(custom: dict) -> str | None:
+    """Which own theme these [theme.custom] colours are (Corral wrote them), if any."""
+    norm = {k: str(v).lower() for k, v in custom.items()}
+    return next((t for t, colours in OWN_HERDR.items() if norm == colours), None)
+
+
+def dress_herdr(theme: str) -> bool:
+    """Put the theme's colours in herdr's [theme.custom]. False when the user has
+    colours of their own there (they are left alone)."""
+    _, custom = herdr_theme()
+    if custom and not is_own_custom(custom):
+        return False
+    lines = HERDR_CONFIG.read_text().splitlines() if HERDR_CONFIG.exists() else []
+    span = _custom_span(lines)
+    if span:
+        del lines[span[0]:span[1]]
+    head = next((i for i, l in enumerate(lines) if l.strip() == "[theme]"), None)
+    if head is None:
+        lines += ["", "[theme]"]
+        head = len(lines) - 1
+    end = next((i for i in range(head + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+    while end > head + 1 and not lines[end - 1].strip():
+        end -= 1
+    block = ["", f"# Corral: tema {theme} (se quita solo al elegir otro tema en herdr)", "[theme.custom]"]
+    block += [f'{k} = "{v}"' for k, v in OWN_HERDR[theme].items()] + [""]
+    lines[end:end] = block
+    _write_herdr(lines)
+    return True
+
+
+def undress_herdr() -> None:
+    """Take Corral's colours out of herdr's [theme.custom] (never the user's own)."""
+    _, custom = herdr_theme()
+    if not custom or not is_own_custom(custom):
+        return
+    lines = HERDR_CONFIG.read_text().splitlines()
+    span = _custom_span(lines)
+    if span:
+        del lines[span[0]:span[1]]
+        _write_herdr(lines)
+
+
+def choose(theme: str | None) -> bool:
+    """`corral config tema`: an own theme for Corral and herdr, or None to follow herdr.
+    Returns whether herdr took the colours too."""
+    cfg = corral_config()
+    if theme is None:
+        undress_herdr()
+        cfg.pop("tema", None)
+        cfg.pop("tema_herdr", None)
+        dressed = False
+    else:
+        dressed = dress_herdr(theme)
+        cfg["tema"] = theme
+        cfg["tema_herdr"] = herdr_theme()[0]
+    CORRAL_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CORRAL_CONFIG.write_text(json.dumps(cfg, indent=1, ensure_ascii=False))
+    apply()
+    return dressed
+
+
+def follow_herdr() -> None:
+    """Another theme was chosen in herdr since the own theme went on: drop it."""
+    cfg = corral_config()
+    if cfg.get("tema") in OWN_THEMES and cfg.get("tema_herdr") not in (None, herdr_theme()[0]):
+        undress_herdr()
+        cfg.pop("tema", None)
+        cfg.pop("tema_herdr", None)
+        CORRAL_CONFIG.write_text(json.dumps(cfg, indent=1, ensure_ascii=False))
+
+
 def palette() -> dict:
-    """The palette Corral uses: herdr's theme, its custom colours applied."""
+    """The palette Corral uses: its own theme if one is chosen, else herdr's
+    theme with its custom colours applied."""
+    own = own_theme()
+    if own:
+        return dict(OWN_THEMES[own], name=own, base=own)
     name, custom = herdr_theme()
     base = name
     if base not in PALETTES:
@@ -136,7 +282,11 @@ def fresh_theme(p: dict) -> dict:
     c = {k: rgb(v) for k, v in p.items() if isinstance(v, str) and v.startswith("#")}
     D = "Default"
     vesper_like = p["base"] == "vesper"
-    syntax = {
+    if "syn_keyword" in c:
+        syntax = {k[4:]: c[k] for k in c if k.startswith("syn_")}
+    else:
+        syntax = None
+    syntax = syntax or {
         "keyword": {"color": c["muted"] if vesper_like else c["violet"], "modifier": ["italic"]},
         "string": c["green"],
         "comment": {"color": c["dim"], "modifier": ["italic"]},
@@ -153,7 +303,7 @@ def fresh_theme(p: dict) -> dict:
     rainbow = [c["accent"], c["blue"], c["green"], c["violet"], c["yellow"], c["red"]]
     editor = {
         "bg": D, "fg": c["text"], "cursor": c["accent"], "inactive_cursor": c["dim"],
-        "selection_bg": c["selection"], "current_line_bg": c["raised"], "line_number_fg": c["dim"],
+        "selection_bg": c["selection"], "current_line_bg": c["raised"], "line_number_fg": c.get("line_number", c["dim"]),
         "line_number_bg": D, "current_line_number_fg": c["accent"], "gutter_separator_fg": c["border"],
         "diff_add_bg": c["raised"], "diff_remove_bg": c["raised"], "diff_add_highlight_bg": c["selection"],
         "diff_remove_highlight_bg": c["selection"], "diff_modify_bg": c["raised"],
@@ -212,6 +362,7 @@ def fresh_theme(p: dict) -> dict:
 
 def apply() -> dict:
     """Write the palette and the editor theme; point Fresh at it. Returns the palette."""
+    follow_herdr()
     p = palette()
     p["x256"] = {k: xterm256(v) for k, v in p.items() if isinstance(v, str) and v.startswith("#")}
     p["source_mtime"] = herdr_mtime()
@@ -231,10 +382,14 @@ def apply() -> dict:
 
 
 def herdr_mtime() -> float:
-    try:
-        return HERDR_CONFIG.stat().st_mtime
-    except OSError:
-        return 0.0
+    """When herdr's config (or Corral's theme choice) last changed."""
+    times = []
+    for f in (HERDR_CONFIG, CORRAL_CONFIG):
+        try:
+            times.append(f.stat().st_mtime)
+        except OSError:
+            pass
+    return max(times, default=0.0)
 
 
 def sync() -> bool:

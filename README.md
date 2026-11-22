@@ -360,6 +360,21 @@ herdr manda: Corral lee el tema de `~/.config/herdr/config.toml` (`[theme] name`
 
 Los cambios se siguen en vivo: si cambias el tema de herdr (o sus colores en `config.toml`), en unos segundos el editor, el panel de variables y Mirador se recolorean solos, sin reiniciar nada. VisiData toma los colores nuevos la próxima vez que abres una tabla. `corral theme` fuerza la actualización. herdr no publica los valores de sus colores, así que Corral usa los colores publicados de cada tema (vesper, catppuccin, dracula, tokyo-night, nord, gruvbox, one-dark, solarized, kanagawa, rose-pine) más tus ajustes de `[theme.custom]`.
 
+### Temas propios de Corral
+
+herdr no permite instalar temas, pero Corral trae los suyos, con colores de interfaz y de sintaxis exactos. Por ahora, `dark-2026`: el tema oscuro nuevo de VS Code (Dark 2026), el mismo de Positron.
+
+```bash
+corral config tema dark-2026     # el editor, la consola, las variables y Mirador
+corral config tema herdr         # volver a seguir el tema de herdr
+```
+
+También se elige desde la paleta (`ctrl+b space`): escribe `tema` y elige «Tema Dark 2026» o «Volver al tema de herdr». Un aviso de herdr confirma el cambio.
+
+`corral config tema dark-2026` viste a la vez a Corral y a herdr: agrega en `~/.config/herdr/config.toml` un `[theme.custom]` con los colores del tema, marcado con un comentario de Corral. Es un tema más: si después eliges otro en herdr (`ctrl+b s`), Corral lo nota, quita esos colores de herdr y vuelve a seguir el tema de herdr. Si ya tenías colores propios en `[theme.custom]`, Corral no los toca y el tema se aplica solo a Corral.
+
+El fondo de los paneles lo pone la terminal (Warp): con un fondo `#121314` o `#191a1b` en Warp, todo queda como en Positron.
+
 ## Mirador
 
 El visor de gráficos en el navegador: los gráficos al tamaño de la ventana con historial, ← y →, y descarga en SVG o PNG; además, las tablas con orden, filtro y un resumen por columna. La barra lateral con los objetos de R viene cerrada; se abre con el ícono de la esquina o con la tecla `v`, y Mirador recuerda tu elección. En ventanas angostas siempre se oculta.

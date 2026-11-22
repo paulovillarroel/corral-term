@@ -1112,8 +1112,11 @@ def cmd_theme(args: argparse.Namespace) -> None:
     t = theme_module()
     p = t.apply() if not args.mostrar else t.palette()
     custom = t.herdr_theme()[1]
-    print(f"tema de herdr: {p['name']}" + (f" (base {p['base']})" if p["base"] != p["name"] else "")
-          + (f", con {len(custom)} colores propios" if custom else ""))
+    if t.own_theme():
+        print(f"tema de Corral: {p['name']} (corral config tema herdr vuelve al de herdr)")
+    else:
+        print(f"tema de herdr: {p['name']}" + (f" (base {p['base']})" if p["base"] != p["name"] else "")
+              + (f", con {len(custom)} colores propios" if custom else ""))
     if args.mostrar:
         for k in ("accent", "text", "muted", "dim", "selection", "green", "yellow", "red"):
             print(f"  {k:<10} {p[k]}")
@@ -1243,6 +1246,21 @@ def cmd_config(args: argparse.Namespace) -> None:
         return
     allowed = {"images": {"auto", "kitty", "symbols"}, "mirador_window": {"derecha", "libre"},
                "ark_frontend": {"corral", "jupyter"}, "python_lsp": {"ty", "pylsp"}}
+    if args.key == "tema":
+        # A theme for Corral and herdr together; choosing another theme in herdr drops it.
+        t = theme_module()
+        if args.value not in (*t.OWN_THEMES, "herdr"):
+            raise CorralError(f"tema acepta: {', '.join(sorted((*t.OWN_THEMES, 'herdr')))}")
+        # From the palette (a plugin action) there is no terminal to print to.
+        say = notify if os.environ.get("HERDR_PLUGIN_ID") else lambda title, body: print(f"{title}: {body}")
+        if args.value == "herdr":
+            t.choose(None)
+            say("Tema de herdr", f"Corral sigue {t.herdr_theme()[0]}")
+        elif t.choose(args.value):
+            say(f"Tema {args.value}", "en Corral y en herdr; al elegir otro tema en herdr (ctrl+b s), Corral lo sigue")
+        else:
+            say(f"Tema {args.value}", "en Corral; herdr mantiene tus colores de [theme.custom]")
+        return
     if args.key in allowed and args.value not in allowed[args.key]:
         raise CorralError(f"{args.key} acepta: {', '.join(sorted(allowed[args.key]))}")
     cfg[args.key] = args.value
