@@ -32,7 +32,7 @@ When something doesn't work, `corral doctor` checks the installation and the run
 
 ## Commands
 
-`corral --help` lists every command. `eval`, `vars`, `script`, `view`, `layout`, `send` and `audit` print their usage with `--help`; for the others, and for what each option does, read the Commands page. Commands and options have English names in both languages.
+`corral --help` lists every command, and `corral COMMAND --help` (or `-h`) prints that command's usage without running it, so it is safe to try with any of them; for what each option does, read the Commands page. Commands and options have English names in both languages.
 
 ## Docs
 
