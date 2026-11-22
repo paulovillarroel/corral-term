@@ -102,7 +102,7 @@
     <p><code>corral eval</code> runs code in your console and prints what it printed. R is the default; <code>--lang python</code> runs Python, and starts the Python console if it isn't there yet. You see each command appear in the console after a <code># corral eval</code> line, and the objects, plots and tables stay in your session.</p>
     <p>It works from any terminal or script, too:</p>
     <pre><code><span class="p">$ </span>corral eval 'summary(mtcars)'
-<span class="p">$ </span>corral eval --file analisis.R
+<span class="p">$ </span>corral eval --file analysis.R
 <span class="p">$ </span>corral eval --lang python 'df.describe()'
 <span class="p">$ </span>corral vars --json</code></pre>
     <p>It also reads the code from stdin. If the console isn't there, isn't in view, or was quit, <code>corral eval</code> brings it into view or starts it first.</p>
@@ -174,8 +174,8 @@
 
     <h2>Agents in your draft</h2>
     <pre><code><span class="p">$ </span>corral script --read
-<span class="p">$ </span>echo 'modelo &lt;- lm(mpg ~ wt, data = autos)' | corral script --write
-<span class="p">$ </span>corral script --save analisis/modelo.R</code></pre>
+<span class="p">$ </span>echo 'model &lt;- lm(mpg ~ wt, data = cars_df)' | corral script --write
+<span class="p">$ </span>corral script --save analysis/model.R</code></pre>
     <p>They act on the draft of the console in view: <code>draft.R</code> or <code>draft.py</code> in a session that uses both. <code>--read</code> prints the draft, unsaved edits included. <code>--write</code> adds text at the end, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>; with <code>--replace</code> it replaces everything. <code>--save</code> writes the draft into your project, and refuses to replace a file unless you add <code>--force</code>. <a href="editor.html#agents-in-the-draft">The script editor</a> has the details.</p>
 
     <h2>Without a Corral console</h2>

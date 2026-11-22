@@ -83,7 +83,7 @@
     <ul>
     <li><kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.py</code> file show the Python console in place of the R one. The first time, they start it: IPython with <code>uv run --with ipython</code> in the project folder, so it uses the project's environment (its <code>.venv</code> and its packages) without adding IPython to it. If the folder isn't a uv project, uv uses the <code>.venv</code> it finds, or a Python of its own.</li>
     <li><kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.R</code> file go back to R. <kbd>ctrl+b</kbd> <kbd>y</kbd> switches by hand.</li>
-    <li>The console you don't see keeps running in the "corral (oculto)" tab, with its variables. If you go to that tab, you can use it there as well.</li>
+    <li>The console you don't see keeps running in the "corral (hidden)" tab, with its variables. If you go to that tab, you can use it there as well.</li>
     <li>The variables pane, Mirador and <code>View()</code> follow the console in view. The pane's header says which one, for example "R 4.6.1" or "Python 3.14.3".</li>
     </ul>
     <p>The first start can take a few seconds while uv prepares the environment. Python needs <a href="https://docs.astral.sh/uv/">uv</a>. matplotlib figures go to Mirador (see <a href="plots.html#python-figures">Python figures</a>), and <code>View(df)</code> opens pandas, polars or pyarrow tables.</p>

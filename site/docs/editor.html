@@ -69,19 +69,19 @@
     <h2>Save your work</h2>
     <p>The draft is lost when the layout closes, unless you save it:</p>
     <ul>
-    <li><kbd>Ctrl</kbd>+<kbd>S</kbd> in the draft asks for a name and saves the file in the project (the folder where you opened the layout). You can type <code>analisis/modelo</code> or a full path. Without an extension it adds <code>.R</code>, and if the file exists it asks before replacing it. From then on the editor works on the new file. In any other file, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves as usual.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>S</kbd> in the draft asks for a name and saves the file in the project (the folder where you opened the layout). You can type <code>analysis/model</code> or a full path. Without an extension it adds <code>.R</code>, and if the file exists it asks before replacing it. From then on the editor works on the new file. In any other file, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves as usual.</li>
     <li>"Save as" in the File menu starts in the draft's folder, which can't be changed. If you save there under another name, Corral moves the file into the project with that name. If the project already has a file with that name, Corral leaves yours in the draft's folder and tells you.</li>
     <li>Or ask Claude. It uses <code>corral script --save path.R</code>, which also saves what you haven't saved yet.</li>
     </ul>
     <pre><code><span class="p">$ </span>corral script --read
-<span class="p">$ </span>corral script --save analisis/modelo.R</code></pre>
+<span class="p">$ </span>corral script --save analysis/model.R</code></pre>
     <p><code>--read</code> prints the current draft, unsaved edits included. <code>--save</code> refuses to replace an existing file unless you add <code>--force</code>.</p>
 
     <h2>Completion and diagnostics</h2>
     <p>Completion appears in a menu while you type. You also get help when you hover over a function, its signature when you open the parenthesis, and go to definition. Diagnostics show only real problems: style is never flagged, because the formatter fixes it when you save.</p>
 
     <h3>R with Ark</h3>
-    <p>With Ark as the console (the default), the same R as your console gives the completion, so it knows your session: <code>autos$</code> offers the columns of your <code>autos</code>. The diagnostics are Ark's, mostly syntax errors.</p>
+    <p>With Ark as the console (the default), the same R as your console gives the completion, so it knows your session: <code>cars_df$</code> offers the columns of your <code>cars_df</code>. The diagnostics are Ark's, mostly syntax errors.</p>
 
     <h3>Plain R</h3>
     <p>With plain R as the console, completion comes from the <code>languageserver</code> package, which only sees the text of your files. The diagnostics are lintr's <em>correctness</em> rules (an object that doesn't exist, <code>x == NA</code>, a repeated argument), or the project's <code>.lintr</code> if it has one.</p>
@@ -108,7 +108,7 @@
 
     <h2>Agents in the draft</h2>
     <p>Claude can read your draft and put code into it. The text goes at the end, on a new line, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>, and your unsaved work stays:</p>
-    <pre><code><span class="p">$ </span>echo 'resumen &lt;- summary(autos)' | corral script --write</code></pre>
+    <pre><code><span class="p">$ </span>echo 'overview &lt;- summary(cars_df)' | corral script --write</code></pre>
     <p><code>--write</code> reads the text from stdin, or from a file you name. With <code>--replace</code>, it replaces the whole draft. The editor doesn't let other programs change a buffer you haven't saved, so Corral leaves the request next to the draft and its editor plugin applies it.</p>
     <p>Corral's skill tells Claude to replace the draft only when you ask, and never to save it on its own: the draft is temporary on purpose. See <a href="agents.html">Working with agents</a>.</p>
 
