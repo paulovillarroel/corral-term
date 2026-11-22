@@ -1,6 +1,6 @@
 ---
 name: corral-r
-description: Runs R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at; also arranges the Corral panes (script, console, variables) and reads or changes Corral's keyboard shortcuts. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example "corre esto en R", "hazlo en Python", "analiza estos datos", "haz un gráfico", "¿qué tiene ventas?", "ajusta un modelo", and when the user asks to show only the script or the console, switch to Python, or see or change a shortcut ("¿cuál es el atajo para…?", "cambia el atajo de…"). Prefer it over Rscript or a separate python for anything that touches the user's data or session.
+description: Runs R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at; also arranges the Corral panes (script, console, variables), reads or changes Corral's keyboard shortcuts, and answers questions about Corral from its settings and docs. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example "corre esto en R", "hazlo en Python", "analiza estos datos", "haz un gráfico", "¿qué tiene ventas?", "ajusta un modelo", and when the user asks to show only the script or the console, switch to Python, or see or change a shortcut ("¿cuál es el atajo para…?", "cambia el atajo de…"), or asks how Corral works ("¿cómo cambio el idioma?"). Prefer it over Rscript or a separate python for anything that touches the user's data or session.
 ---
 
 # Corral: the user's live R and Python sessions
@@ -96,9 +96,9 @@ corral script --save analisis/modelo.R
 
 Don't save the scratch file on your own initiative; it is temporary on purpose.
 
-## Panes and shortcuts
+## Panes, shortcuts, settings and docs
 
-When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. The essentials:
+When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. For a setting, a command's options or any question about how Corral works, read [reference/settings-and-docs.md](reference/settings-and-docs.md): it lists the settings, which ones you must never change (`agents`, `agent_output`), and where Corral's docs are. The essentials:
 
 ```bash
 corral toggle script            # the right column shows: script (agent, if focused on code), console or both
@@ -106,6 +106,8 @@ corral switch python            # the console shows: r or python
 corral keys --json            # every shortcut, with the id used to change it
 corral keys --change herdr:toggle shift+e
 corral config theme dark-2026    # Corral's own theme (VS Code Dark 2026) for Corral and herdr; `herdr` goes back
+corral config                    # the settings the user has set, as JSON
+corral --help                    # every command
 ```
 
 The user opens the same list with `ctrl+b space` (searchable; Enter runs the actions).
