@@ -5,7 +5,6 @@
 mod i18n;
 mod approve;
 mod ark;
-mod atajos;
 mod audit;
 mod console;
 mod editor;
@@ -21,6 +20,7 @@ mod plots;
 mod send;
 mod setup;
 mod sha256;
+mod shortcuts;
 mod table;
 mod term;
 mod theme;
@@ -104,8 +104,8 @@ fn main() {
         Some("audit") => audit::run(rest),
         Some("_console") => console::run(rest),
         Some("_editor") => editor::run(rest),
-        Some("keys") => atajos::run(rest, false),
-        Some("_keys") => atajos::run(rest, true),
+        Some("keys") => shortcuts::run(rest, false),
+        Some("_keys") => shortcuts::run(rest, true),
         Some("toggle") => layout::toggle(rest),
         Some("switch") => layout::switch(rest),
         Some("_lsp") => lsp::run(rest),

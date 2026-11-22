@@ -44,13 +44,13 @@ pub fn discard(file: &Path) {
         return;
     }
     let Some(dir) = file.parent() else { return };
-    let in_scratch = dir.parent().is_some_and(|p| p.file_name().is_some_and(|n| n == ".corral") || p.ends_with("corral/borradores"));
+    let in_scratch = dir.parent().is_some_and(|p| p.file_name().is_some_and(|n| n == ".corral") || p.ends_with("corral/drafts"));
     if !in_scratch {
         return;
     }
     let stem = if name.starts_with("borrador") { "borrador" } else { "draft" };
-    for name in [format!("{stem}.R"), format!("{stem}.py"), ".actual.R".into(), ".actual.py".into(),
-                 ".pedido.json".into(), ".pedido.tmp".into(), ".respuesta.json".into()] {
+    for name in [format!("{stem}.R"), format!("{stem}.py"), ".live.R".into(), ".live.py".into(),
+                 ".request.json".into(), ".request.tmp".into(), ".reply.json".into()] {
         let _ = std::fs::remove_file(dir.join(name));
     }
     let _ = std::fs::remove_dir(dir); // fails, as it should, if something else is there

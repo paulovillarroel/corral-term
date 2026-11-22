@@ -76,11 +76,48 @@ fn dest() -> PathBuf {
 }
 
 fn tools() -> PathBuf {
-    data().join("corral/herramientas")
+    data().join("corral/tools")
 }
 
 fn manifest() -> PathBuf {
-    state().join("corral/instalacion.json")
+    state().join("corral/install.json")
+}
+
+/// The install record's keys as Corral 0.1.7 and earlier named them, and their names now.
+const OLD_KEYS: [(&str, &str); 10] = [
+    ("carpeta", "folder"), ("en_el_lugar", "in_place"), ("fecha", "date"), ("respaldos", "backups"),
+    ("herramientas", "tools"), ("herdr_creado", "herdr_created"), ("rprofile_creado", "rprofile_created"),
+    ("fresh_creado", "fresh_created"), ("fresh_atajos_tuyos", "fresh_keys_user"), ("fresh_atajos_corral", "fresh_keys_corral"),
+];
+
+/// An install by Corral 0.1.7 or earlier: move its record (instalacion.json) and
+/// its downloads (corral/herramientas) to their English names, and point the
+/// links in ~/.local/bin at the new folder, so install and uninstall find them.
+fn migrate_old_install() {
+    let old = state().join("corral/instalacion.json");
+    if old.exists() && !manifest().exists() {
+        let mut done = Value::obj();
+        if let Value::Obj(fields) = env::read_json(&old) {
+            for (k, v) in fields {
+                done.set(OLD_KEYS.iter().find(|(o, _)| *o == k).map_or(k.as_str(), |(_, n)| n), v);
+            }
+        }
+        env::write_json(&manifest(), &done);
+        if manifest().exists() {
+            let _ = std::fs::remove_file(&old);
+        }
+    }
+    let old = data().join("corral/herramientas");
+    if !old.is_dir() || tools().exists() || std::fs::rename(&old, tools()).is_err() {
+        return;
+    }
+    for (name, ..) in DOWNLOADS {
+        let at = bin().join(name);
+        let Ok(target) = std::fs::read_link(&at) else { continue };
+        if let Ok(rest) = target.strip_prefix(&old) {
+            let _ = link(&tools().join(rest), &at);
+        }
+    }
 }
 
 fn rprofile() -> PathBuf {
@@ -482,9 +519,9 @@ fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, sha: &str
     if let Err(e) = link(&exe, &bin().join(name)) {
         return step(&e, State::Warn);
     }
-    let mut list = done.get("herramientas").arr().to_vec();
+    let mut list = done.get("tools").arr().to_vec();
     list.push(name.into());
-    done.set("herramientas", Value::Arr(list));
+    done.set("tools", Value::Arr(list));
     step(&trf!("{shown} {v} in {}, SHA-256 checked", "{shown} {v} en {}, SHA-256 comprobado", short(&bin().join(name))), State::Ok);
 }
 
@@ -584,7 +621,7 @@ fn herdr_keys(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
         return step(tr("herdr shortcuts, already there", "atajos de herdr, ya estaban"), State::Ok);
     }
     if !path.exists() {
-        done.set("herdr_creado", true.into());
+        done.set("herdr_created", true.into());
     }
     backup(&path, saved);
     if let Some(d) = path.parent() {
@@ -625,7 +662,7 @@ fn rprofile_step(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
     }
     let old: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("source(") && l.contains("/r/corral.R")).map(|(i, _)| i).collect();
     if !path.exists() {
-        done.set("rprofile_creado", true.into());
+        done.set("rprofile_created", true.into());
     }
     backup(&path, saved);
     if let Some(&first) = old.first() {
@@ -693,9 +730,9 @@ fn fresh(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
                 let taken: Vec<_> = ours.get("keybindings").arr().iter().map(combo).collect();
                 let theirs: Vec<Value> = user.get("keybindings").arr().iter()
                     .filter(|b| taken.contains(&combo(b)) && !ours.get("keybindings").arr().contains(b)).cloned().collect();
-                add_unique(done, "fresh_atajos_tuyos", theirs);
+                add_unique(done, "fresh_keys_user", theirs);
                 let added: Vec<Value> = ours.get("keybindings").arr().iter().filter(|b| !user.get("keybindings").arr().contains(b)).cloned().collect();
-                add_unique(done, "fresh_atajos_corral", added);
+                add_unique(done, "fresh_keys_corral", added);
                 let merged = merge(&user, &ours);
                 if merged != user {
                     backup(&cfg, saved);
@@ -709,8 +746,8 @@ fn fresh(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
     } else {
         let _ = std::fs::create_dir_all(fresh_dir());
         let _ = std::fs::write(&cfg, ours.to_json_pretty(2));
-        add_unique(done, "fresh_atajos_corral", ours.get("keybindings").arr().to_vec());
-        done.set("fresh_creado", true.into());
+        add_unique(done, "fresh_keys_corral", ours.get("keybindings").arr().to_vec());
+        done.set("fresh_created", true.into());
         step(tr("editor configuration (Fresh)", "configuración del editor (Fresh)"), State::Ok);
     }
     let _ = link(&dest.join("fresh/plugins/corral.ts"), &fresh_dir().join("plugins/corral.ts"));
@@ -739,25 +776,26 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         std::process::exit(1);
     }
     println!("\n{}{}{}", s.bold, tr("Installing", "Instalando"), s.off);
+    migrate_old_install();
     let before = env::read_json(&manifest());
     let mut done = Value::obj();
     done.set("version", VERSION.into());
     let (y, mo, d, h, mi, _) = env::local_now();
-    done.set("fecha", format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}").into());
-    done.set("en_el_lugar", in_place.into());
-    for key in ["fresh_atajos_tuyos", "fresh_atajos_corral"] {
+    done.set("date", format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}").into());
+    done.set("in_place", in_place.into());
+    for key in ["fresh_keys_user", "fresh_keys_corral"] {
         done.set(key, Value::Arr(before.get(key).arr().to_vec()));
     }
-    for key in ["fresh_creado", "rprofile_creado", "herdr_creado"] {
+    for key in ["fresh_created", "rprofile_created", "herdr_created"] {
         if before.get(key) == &Value::Bool(true) {
             done.set(key, true.into());
         }
     }
-    let mut saved: Vec<String> = before.get("respaldos").arr().iter().filter_map(|v| v.str().map(String::from)).collect();
+    let mut saved: Vec<String> = before.get("backups").arr().iter().filter_map(|v| v.str().map(String::from)).collect();
     let earlier = saved.len();
 
     let dest = if in_place { src.to_path_buf() } else { place(src)? };
-    done.set("carpeta", dest.to_string_lossy().to_string().into());
+    done.set("folder", dest.to_string_lossy().to_string().into());
     let exe = dest.join("rs/target/release/corral");
     if !exe.is_file() {
         return Err(trf!("{} is missing: build it with cargo build --release in {}", "falta {}: compílalo con cargo build --release en {}",
@@ -778,7 +816,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     skill(&dest);
     theme::apply();
     step(tr("herdr's theme colors in the editor, the console and Mirador", "colores del tema de herdr en el editor, la consola y Mirador"), State::Ok);
-    done.set("respaldos", Value::Arr(saved.iter().map(|b| Value::from(b.as_str())).collect()));
+    done.set("backups", Value::Arr(saved.iter().map(|b| Value::from(b.as_str())).collect()));
     env::write_json(&manifest(), &done);
 
     let (bold, off) = (s.bold, s.off);
@@ -877,9 +915,10 @@ pub fn cmd_install(args: &[String]) -> Result<(), String> {
 /// `corral uninstall`: take out what the installer added (and the user's own Corral lines it recognizes).
 pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
     let s = style();
+    migrate_old_install();
     let done = env::read_json(&manifest());
-    let dest = done.get("carpeta").str().map(PathBuf::from).unwrap_or_else(env::repo);
-    let in_place = done.get("en_el_lugar") != &Value::Bool(false);
+    let dest = done.get("folder").str().map(PathBuf::from).unwrap_or_else(env::repo);
+    let in_place = done.get("in_place") != &Value::Bool(false);
     let created = |k: &str| done.get(k) == &Value::Bool(true);
     let mut saved: Vec<String> = Vec::new();
     let mut fresh_note = false;
@@ -892,7 +931,7 @@ pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
         if let Ok(text) = std::fs::read_to_string(&path) {
             let cut = without_keys_block(&text);
             if cut != text {
-                if created("herdr_creado") && cut.trim().is_empty() {
+                if created("herdr_created") && cut.trim().is_empty() {
                     let _ = std::fs::remove_file(&path); // only Corral's lines were there
                 } else {
                     backup(&path, &mut saved);
@@ -911,7 +950,7 @@ pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
         let lines: Vec<&str> = text.lines().collect();
         let kept: Vec<&str> = lines.iter().copied().filter(|l| !(l.contains("source(") && l.contains("/r/corral.R"))).collect();
         if kept.len() != lines.len() {
-            if !kept.is_empty() || !created("rprofile_creado") {
+            if !kept.is_empty() || !created("rprofile_created") {
                 backup(&rp, &mut saved);
                 let _ = std::fs::write(&rp, if kept.is_empty() { String::new() } else { kept.join("\n") + "\n" });
             } else {
@@ -922,7 +961,7 @@ pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
     }
     let cfg = fresh_dir().join("config.json");
     let mut user = std::fs::read_to_string(&cfg).ok().and_then(|t| json::parse(&t).ok()).filter(|v| matches!(v, Value::Obj(_)));
-    if user.is_some() && created("fresh_creado") {
+    if user.is_some() && created("fresh_created") {
         backup(&cfg, &mut saved);
         let _ = std::fs::remove_file(&cfg);
         step(&trf!("{}, which Corral had created", "{}, que había creado Corral", short(&cfg)), State::Ok);
@@ -931,10 +970,10 @@ pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
     if let Some(user) = user {
         let mut clean = user.clone();
         if let Value::Arr(list) = user.get("keybindings") {
-            let ours = done.get("fresh_atajos_corral").arr();
+            let ours = done.get("fresh_keys_corral").arr();
             let mut kept: Vec<Value> = list.iter()
                 .filter(|b| !b.get("action").str().unwrap_or("").starts_with("corral_") && !ours.contains(b)).cloned().collect();
-            for b in done.get("fresh_atajos_tuyos").arr() {
+            for b in done.get("fresh_keys_user").arr() {
                 if !kept.contains(b) {
                     kept.push(b.clone());
                 }

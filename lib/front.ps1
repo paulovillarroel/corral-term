@@ -81,8 +81,8 @@ do {
 } while ((Get-Date) -lt $deadline)
 
 if ($DryRun) {
-    $title = if ($h -ne [IntPtr]::Zero) { [CorralWin]::LastTitle } else { "(no encontrada)" }
-    Write-Output ("ventana: " + $title + " | right: " + [CorralWin]::Right($h, $Width, $Height, $true))
+    $title = if ($h -ne [IntPtr]::Zero) { [CorralWin]::LastTitle } else { "(not found)" }
+    Write-Output ("window: " + $title + " | right: " + [CorralWin]::Right($h, $Width, $Height, $true))
     exit 0
 }
 if ($h -eq [IntPtr]::Zero) { Write-Output "not-found"; exit 1 }

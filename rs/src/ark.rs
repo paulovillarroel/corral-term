@@ -939,7 +939,7 @@ impl Console {
             return;
         }
         let line: String = self.ed.buf[start_of_line..self.ed.line_end(cur)].iter().collect();
-        let file = env::state_dir().join("ark").join(format!("completar-{}.txt", std::process::id()));
+        let file = env::state_dir().join("ark").join(format!("completions-{}.txt", std::process::id()));
         let _ = std::fs::remove_file(&file);
         let lit = |s: &str| Value::from(s).to_json(); // a JSON string is also an R string
         let code = format!(
@@ -1166,7 +1166,7 @@ pub fn run() -> Result<(), String> {
         keys: VecDeque::new(),
         dec: Decoder::default(),
         ed: Editor::new(Prompt::In(1)),
-        hist: History::load(env::state_dir().join("historial-r.jsonl")),
+        hist: History::load(env::state_file("history-r.jsonl", "historial-r.jsonl")),
         mode: Mode::Edit,
         count: 1,
         at_line_start: true,

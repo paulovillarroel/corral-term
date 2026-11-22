@@ -183,12 +183,12 @@ pub fn start_lang() -> &'static str {
 // ----------------------------------------------------------------------- drafts
 
 fn scratch_index() -> PathBuf {
-    env::state_dir().join("borradores.json")
+    env::state_file("drafts.json", "borradores.json")
 }
 
 fn temp_scratch_root() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty()).map(PathBuf::from)
-        .unwrap_or_else(|| env::home().join(".cache")).join("corral/borradores")
+        .unwrap_or_else(|| env::home().join(".cache")).join("corral/drafts")
 }
 
 /// Where drafts go: <project>/.corral/ (so Air, lintr and the language server see
@@ -286,16 +286,19 @@ pub fn editor_command(editor: &str, target: &Path, scratch: bool) -> String {
     }
 }
 
-/// The editor plugin's live copy of a draft: .actual.R or .actual.py, next to it.
+/// The editor plugin's live copy of a draft: .live.R or .live.py, next to it.
 pub fn live_copy(scratch: &Path) -> PathBuf {
     let ext = scratch.extension().and_then(|e| e.to_str()).unwrap_or("R");
-    scratch.with_file_name(format!(".actual.{ext}"))
+    scratch.with_file_name(format!(".live.{ext}"))
 }
 
 /// Latest text of a draft: the editor plugin's live copy if newer, else the file.
+/// An editor started by Corral 0.1.7 or earlier writes its copy as .actual.R.
 fn scratch_text(scratch: &Path) -> String {
     let live = live_copy(scratch);
-    let newest = [live, scratch.to_path_buf()].into_iter()
+    let ext = scratch.extension().and_then(|e| e.to_str()).unwrap_or("R");
+    let older = scratch.with_file_name(format!(".actual.{ext}"));
+    let newest = [live, older, scratch.to_path_buf()].into_iter()
         .filter_map(|p| std::fs::metadata(&p).and_then(|m| m.modified()).ok().map(|t| (t, p)))
         .max_by_key(|(t, _)| *t);
     newest.and_then(|(_, p)| std::fs::read_to_string(p).ok()).unwrap_or_default()
@@ -305,17 +308,17 @@ fn scratch_text(scratch: &Path) -> String {
 /// editor doesn't let other programs change an unsaved buffer, so this leaves a
 /// request next to the draft; Corral's editor plugin applies it, as one edit the
 /// user can undo with Ctrl+Z, and answers.
-/// Ask the editor plugin to do something with a draft (`modo`: agregar, reemplazar
-/// or abrir), and wait up to `wait` for its answer; None if it didn't answer.
+/// Ask the editor plugin to do something with a draft (`mode`: append, replace
+/// or open), and wait up to `wait` for its answer; None if it didn't answer.
 fn scratch_request(scratch: &Path, mode: &str, text: &str, wait: Duration) -> Result<Option<Value>, String> {
     let folder = scratch.parent().ok_or(tr("the draft has no folder", "borrador sin carpeta"))?;
     let name = scratch.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let rid = env::random_hex(4);
-    let answer = folder.join(".respuesta.json");
-    let tmp = folder.join(".pedido.tmp");
-    let request = obj(vec![("id", rid.as_str().into()), ("modo", mode.into()), ("archivo", name.into()), ("texto", text.into())]);
+    let answer = folder.join(".reply.json");
+    let tmp = folder.join(".request.tmp");
+    let request = obj(vec![("id", rid.as_str().into()), ("mode", mode.into()), ("file", name.into()), ("text", text.into())]);
     std::fs::write(&tmp, request.to_json()).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, folder.join(".pedido.json")).map_err(|e| e.to_string())?; // in one step
+    std::fs::rename(&tmp, folder.join(".request.json")).map_err(|e| e.to_string())?; // in one step
     let end = Instant::now() + wait;
     let mut reply = None;
     while Instant::now() < end {
@@ -326,7 +329,7 @@ fn scratch_request(scratch: &Path, mode: &str, text: &str, wait: Duration) -> Re
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    let _ = std::fs::remove_file(folder.join(".pedido.json"));
+    let _ = std::fs::remove_file(folder.join(".request.json"));
     Ok(reply)
 }
 
@@ -358,8 +361,8 @@ pub fn draft_follows(lang: &str) {
     if !target.exists() && std::fs::write(&target, "").is_err() {
         return;
     }
-    // An editor started before this version doesn't know "abrir": then nothing opens.
-    if let Ok(Some(reply)) = scratch_request(&target, "abrir", "", Duration::from_secs(2)) {
+    // An editor started before this version doesn't know "open": then nothing opens.
+    if let Ok(Some(reply)) = scratch_request(&target, "open", "", Duration::from_secs(2)) {
         if reply.get("ok") == &Value::Bool(true) {
             index.set(&key, target.to_string_lossy().to_string().into());
             env::write_json(&scratch_index(), &index);
@@ -368,7 +371,7 @@ pub fn draft_follows(lang: &str) {
 }
 
 fn scratch_write(scratch: &Path, text: &str, replace: bool) -> Result<(), String> {
-    let reply = scratch_request(scratch, if replace { "reemplazar" } else { "agregar" }, text, Duration::from_secs(5))?
+    let reply = scratch_request(scratch, if replace { "replace" } else { "append" }, text, Duration::from_secs(5))?
         .unwrap_or(Value::Null);
     if reply.is_null() {
         return Err(tr("the editor did not answer: is the draft open? An editor opened before Corral was updated \
@@ -594,8 +597,8 @@ mod tests {
 
     #[test]
     fn each_draft_has_its_own_live_copy() {
-        assert_eq!(live_copy(Path::new("/d/draft.R")), PathBuf::from("/d/.actual.R"));
-        assert_eq!(live_copy(Path::new("/d/draft.py")), PathBuf::from("/d/.actual.py"));
+        assert_eq!(live_copy(Path::new("/d/draft.R")), PathBuf::from("/d/.live.R"));
+        assert_eq!(live_copy(Path::new("/d/draft.py")), PathBuf::from("/d/.live.py"));
     }
 
     #[test]
