@@ -18,6 +18,11 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const VERSION: &str = "0.1.0";
 const ACTIVE_WINDOW_S: f64 = 6.0;
 const MAX_PAGE: i64 = 500;
+/// How long a page's /api/state?wait= request may wait for a change.
+const WAIT_MAX: Duration = Duration::from_secs(25);
+/// SVGs larger than this (a scatter of many thousand points) go out as PNG:
+/// the browser would have to build every point as an element.
+const HEAVY_SVG: usize = 2 * 1024 * 1024;
 
 struct App {
     token: String,
@@ -27,6 +32,8 @@ struct App {
     schema: HashMap<String, Value>,
     show_plot: Value,
     theme_asked: Option<Instant>,
+    /// Plots (session:id) whose SVG was too heavy: shown as PNG from then on.
+    heavy: std::collections::HashSet<String>,
 }
 
 type Shared = Arc<Mutex<App>>;
@@ -290,6 +297,35 @@ fn sessions() -> Vec<Value> {
     out
 }
 
+/// A cheap summary of everything the page shows: it changes when a session
+/// starts or ends, its variables or plots change (R and Python touch
+/// `plots-rev` after a command that drew), a table opens, a plot is asked
+/// for, or the palette changes. Only file dates, no question to httpgd.
+fn fingerprint(app: &Shared) -> String {
+    let mut out = String::new();
+    if let Ok(entries) = std::fs::read_dir(sessions_dir()) {
+        let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        dirs.sort();
+        for d in dirs {
+            out.push_str(&d.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+            for f in ["meta.json", "vars.json", "plots-rev", "plots-url"] {
+                out.push_str(&format!(":{}", mtime(&d.join(f)).unwrap_or(0.0)));
+            }
+            out.push('|');
+        }
+    }
+    let a = app.lock().unwrap();
+    for t in &a.tables {
+        out.push_str(t.get("id").str().unwrap_or(""));
+    }
+    out.push_str(&format!("|{}|{}", a.show_plot.to_json(), mtime(&palette_file()).unwrap_or(0.0)));
+    format!("{:016x}", fnv(out.as_bytes()))
+}
+
+fn fnv(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf29ce484222325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
+}
+
 fn state(app: &Shared) -> Value {
     let (tables, show_plot) = {
         let mut a = app.lock().unwrap();
@@ -453,7 +489,20 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
         }
         "/api/state" => {
             app.lock().unwrap().last_client = now();
-            json_reply(200, &state(app))
+            // With ?wait=<rev>, answer when something changed (or after a while),
+            // instead of the page asking again and again.
+            if let Some(seen) = q.get("wait") {
+                let end = Instant::now() + WAIT_MAX;
+                while fingerprint(app) == *seen && Instant::now() < end {
+                    std::thread::sleep(Duration::from_millis(100));
+                    app.lock().unwrap().last_client = now(); // the page is still open
+                }
+            }
+            // The revision first: a change right after it only makes the next wait return at once.
+            let rev = fingerprint(app);
+            let mut st = state(app);
+            st.set("rev", rev.into());
+            json_reply(200, &st)
         }
         "/api/vars" => {
             let v = env::read_json(&session_dir(&arg("session", ""))?.join("vars.json"));
@@ -466,23 +515,46 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
             json_reply(200, &p)
         }
         "/api/plot" => {
-            let renderer = arg("renderer", "svg");
-            let mut params = vec![("width", arg("width", "720")), ("height", arg("height", "576")),
-                                  ("renderer", renderer.clone()), ("zoom", arg("zoom", "1"))];
-            if q.get("id").map(|s| !s.is_empty()).unwrap_or(false) {
-                params.push(("id", arg("id", "")));
-            } else {
-                params.push(("index", arg("index", "-1")));
-            }
-            let Some((mut body, ctype)) = plots_raw(&arg("session", ""), "plot", &params) else {
+            // renderer=auto (what the page shows): SVG, or PNG for a plot whose SVG is too heavy.
+            let asked = arg("renderer", "svg");
+            let key = q.get("id").filter(|s| !s.is_empty()).map(|id| format!("{}:{id}", arg("session", "")));
+            let known_heavy = key.as_ref().is_some_and(|k| app.lock().unwrap().heavy.contains(k));
+            let renderer = if asked == "auto" { if known_heavy { "png" } else { "svg" }.to_string() } else { asked.clone() };
+            let fetch = |renderer: &str| {
+                // A PNG for the screen is drawn at the screen's pixel density.
+                let zoom = if asked == "auto" && renderer == "png" { arg("dpr", "1") } else { arg("zoom", "1") };
+                let z = zoom.parse::<f64>().unwrap_or(1.0).clamp(1.0, 2.0);
+                let size = |k: &str, d: &str| -> String {
+                    let v: f64 = arg(k, d).parse().unwrap_or(0.0);
+                    if asked == "auto" && renderer == "png" { format!("{}", (v * z).round()) } else { arg(k, d) }
+                };
+                let mut params = vec![("width", size("width", "720")), ("height", size("height", "576")),
+                                      ("renderer", renderer.to_string()), ("zoom", format!("{z}"))];
+                if q.get("id").map(|s| !s.is_empty()).unwrap_or(false) {
+                    params.push(("id", arg("id", "")));
+                } else {
+                    params.push(("index", arg("index", "-1")));
+                }
+                plots_raw(&arg("session", ""), "plot", &params)
+            };
+            let Some((mut body, mut ctype)) = fetch(&renderer) else {
                 return Ok(error(404, "gráfico no disponible"));
             };
+            if asked == "auto" && renderer == "svg" && body.len() > HEAVY_SVG {
+                if let Some(k) = &key {
+                    app.lock().unwrap().heavy.insert(k.clone());
+                }
+                if let Some((png, png_type)) = fetch("png") {
+                    body = png;
+                    ctype = png_type;
+                }
+            }
             if ctype.contains("svg") {
                 body = fix_svg_fonts(&body);
             }
             let mut extra = Vec::new();
             if q.get("download").map(|s| !s.is_empty()).unwrap_or(false) {
-                let ext = if renderer == "png" { "png" } else { "svg" };
+                let ext = if ctype.contains("png") { "png" } else { "svg" };
                 extra.push(("Content-Disposition".into(), format!("attachment; filename=\"grafico.{ext}\"")));
             }
             Reply { code: 200, ctype, body, extra }
@@ -576,6 +648,12 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
                 let index = match body.get("index") { Value::Num(n) => format!("{}", *n as i64), _ => "-1".into() };
                 plots_raw(&sid, "remove", &[("index", index)]).is_some()
             };
+            if ok {
+                // R isn't running a command, so mark the change here: open pages update at once.
+                if let Ok(dir) = session_dir(&sid) {
+                    let _ = std::fs::write(dir.join("plots-rev"), format!("quitado {}", now()));
+                }
+            }
             json_reply(200, &obj(vec![("ok", ok.into())]))
         }
         _ => error(404, "no encontrado"),
@@ -594,7 +672,7 @@ pub fn serve() -> Result<(), String> {
     let tables: Vec<Value> = env::read_json(&tables_file()).arr().iter()
         .filter(|t| Path::new(t.get("path").str().unwrap_or("")).is_file()).cloned().collect();
     let app: Shared = Arc::new(Mutex::new(App {
-        token: token.clone(), port, last_client: 0.0, tables, schema: HashMap::new(), show_plot: Value::Null, theme_asked: None,
+        token: token.clone(), port, last_client: 0.0, tables, schema: HashMap::new(), show_plot: Value::Null, theme_asked: None, heavy: Default::default(),
     }));
 
     let url = format!("http://127.0.0.1:{port}/?token={token}");

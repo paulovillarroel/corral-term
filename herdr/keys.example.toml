@@ -3,6 +3,12 @@
 # Después de pegarlos: herdr server reload-config
 
 [[keys.command]]
+key = "prefix+space"
+type = "plugin_action"
+command = "corral.atajos"
+description = "Corral: atajos y acciones (paleta)"
+
+[[keys.command]]
 key = "prefix+enter"
 type = "plugin_action"
 command = "corral.send"

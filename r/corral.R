@@ -214,23 +214,32 @@ local({
 
   # The httpgd device (it shows up as "unigd" in dev.list() since httpgd 2).
   # NA when there is none (not NULL: `is.na(NULL) || …` would go on and load unigd).
+  # The number keeps its name (`d[1]`, not `d[[1]]`): unigd only takes a named one.
   plot_device <- function() {
     d <- grDevices::dev.list()
     d <- d[names(d) %in% c("unigd", "httpgd")]
-    if (length(d)) d[[1]] else NA_integer_
+    if (length(d)) d[1] else NA_integer_
   }
 
   # A plot object printed by hand (typing its name, Ctrl+R in the script):
   # remember which drawing it made, so opening it from the variables pane
   # shows that drawing instead of drawing it a second time.
   plot_pages <- 0L
+  plot_rev <- ""
   remember_plot <- function(value, ok) {
     dev <- plot_device()
     if (is.na(dev) || !requireNamespace("unigd", quietly = TRUE)) {
       plot_pages <<- 0L
       return(invisible())
     }
-    pages <- unigd::ugd_state(dev)$hsize
+    st <- unigd::ugd_state(dev)
+    # Mirador waits for this file to change instead of asking every second and a half.
+    rev <- paste(st$upid, st$hsize)
+    if (!identical(rev, plot_rev)) {
+      plot_rev <<- rev
+      writeLines(rev, file.path(session_dir, "plots-rev"))
+    }
+    pages <- st$hsize
     grew <- pages > plot_pages
     plot_pages <<- pages
     if (!isTRUE(ok) || !grew || !inherits(value, plot_classes) ||

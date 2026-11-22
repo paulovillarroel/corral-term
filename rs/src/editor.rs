@@ -42,7 +42,7 @@ pub fn discard(file: &Path) {
     if !in_scratch {
         return;
     }
-    for name in ["borrador.R", ".actual.R"] {
+    for name in ["borrador.R", ".actual.R", ".pedido.json", ".pedido.tmp", ".respuesta.json"] {
         let _ = std::fs::remove_file(dir.join(name));
     }
     let _ = std::fs::remove_dir(dir); // fails, as it should, if something else is there

@@ -133,8 +133,11 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 
 ### Atajos de herdr
 
+`ctrl+b space` abre la paleta de Corral: todos sus atajos en una lista con búsqueda (los de herdr, el editor, la consola, el panel de variables, las tablas y Mirador). Escribe parte de lo que buscas (`grafico`, `python`, `copiar`); Enter ejecuta las acciones, y Esc cierra. La lista sale de tu configuración, así que muestra tus atajos aunque los hayas cambiado. También está en el editor (`Ctrl+P`, "Corral: atajos de teclado") y en Mirador (`?`).
+
 | Atajo | Acción |
 |---|---|
+| `ctrl+b space` | Paleta de atajos y acciones de Corral |
 | `ctrl+b a` | Abrir el espacio de trabajo de Corral |
 | `ctrl+b shift+c` | Cerrar Corral: cierra script, consola y variables, y deja a Claude como panel normal |
 | `ctrl+b t` | Expandir el script o la consola (el panel donde estás); otra vez, ambos |
@@ -151,7 +154,8 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 |---|---|
 | `corral layout` | Abre el espacio de trabajo (`--shell` agrega una shell, `--editor ''` sin script, `--agent ''` sin Claude). |
 | `corral close` | Cierra los paneles de Corral de la pestaña (script, consola, variables) y deja el resto, Claude incluido. La sesión de R se cierra con su panel. |
-| `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. `--leer` muestra el borrador actual; `--guardar ruta.R` lo guarda (con `--forzar` reemplaza). |
+| `corral script [archivo]` | Agrega el editor sobre la consola en un layout existente. `--leer` muestra el borrador actual, con lo que no has guardado; `--guardar ruta.R` lo guarda (con `--forzar` reemplaza); `--escribir` agrega al final el texto que recibe por stdin (con `--reemplazar`, reemplaza todo), como una sola edición que `Ctrl+Z` deshace. |
+| `corral atajos` | La paleta de atajos (`ctrl+b space`). `--lista` la imprime y `--json` la entrega para agentes; `--cambiar ID TECLA` cambia un atajo de herdr (`corral atajos --cambiar herdr:toggle shift+e`) o del editor (`editor:corral_run_line ctrl+e`), y rechaza teclas que ya están en uso salvo con `--forzar`. Claude puede leerlos y cambiarlos si se lo pides. |
 | `corral toggle [script\|consola\|ambos]` | Expande el script o la consola, o vuelve a mostrar ambos; sin argumento, expande el panel donde estás o vuelve a ambos. |
 | `corral switch [r\|python]` | La consola del layout pasa a R o a Python; sin argumento, alterna. La otra sigue corriendo en la pestaña "corral (oculto)". |
 | `corral console` | Marca el panel actual como consola de R o de Python (según lo que corre en él) y activa Corral si hay un R o un IPython abierto. |
@@ -255,6 +259,8 @@ También bajó lo que se repite después de cada comando y lo que queda corriend
 | Fresh en reposo, con los plugins que no usa desactivados | 60 MB, 0,57 % de CPU | 48 MB, 0,20 % |
 | Cargar Corral en R (`corral.R`) | 85 ms, 23 MB | 27 ms, 17 MB |
 | Servidores de lenguaje de Python | 340 MB (pylsp y Ruff) | 159 MB (ty y Ruff) |
+| Mirador muestra un gráfico nuevo | 0 a 1,5 s (preguntaba cada 1,5 s) | unos 80 ms |
+| Gráfico de 100 mil puntos en Mirador | SVG de 7,1 MB | PNG de 0,7 MB |
 
 Durante el uso, cada comando en la consola de R tarda unos 2,5 ms de Enter al siguiente prompt (1,5 ms sin Corral), también con una tabla de 2 millones de celdas en memoria; en Python, unos 6 ms con o sin Corral.
 
@@ -357,6 +363,10 @@ Los cambios se siguen en vivo: si cambias el tema de herdr (o sus colores en `co
 ## Mirador
 
 El visor de gráficos en el navegador: los gráficos al tamaño de la ventana con historial, ← y →, y descarga en SVG o PNG; además, las tablas con orden, filtro y un resumen por columna. La barra lateral con los objetos de R viene cerrada; se abre con el ícono de la esquina o con la tecla `v`, y Mirador recuerda tu elección. En ventanas angostas siempre se oculta.
+
+**Copiar** (o la tecla `c`) pone el gráfico en el portapapeles como imagen PNG, al doble del tamaño en pantalla para que se vea nítido, listo para pegarlo en un correo o un documento sin guardarlo. Con `?` (o el botón del mismo signo) ves los atajos de Mirador.
+
+Un gráfico nuevo aparece unos 80 ms después de que termina el comando que lo dibujó: R y Python marcan el cambio en un archivo al terminar el comando, y la página espera esa marca en vez de preguntar cada cierto tiempo. Los gráficos se muestran como SVG, salvo los que pasarían de 2 MB (un gráfico de dispersión con decenas de miles de puntos), que se muestran como PNG: el navegador no tiene que construir cada punto. Las descargas en SVG siguen siendo SVG.
 
 Corral abre cada ventana nueva de Mirador sin maximizar, a la derecha de la pantalla, y la trae al frente. Para cambiarlo:
 

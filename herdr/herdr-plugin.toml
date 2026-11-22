@@ -16,13 +16,13 @@ command = ["../bin/corral-run", "layout"]
 
 [[actions]]
 id = "send"
-title = "Corral: enviar selección a la consola de R"
+title = "Corral: enviar la selección a la consola (R o Python)"
 contexts = ["selection", "pane"]
 command = ["../bin/corral-run", "send"]
 
 [[actions]]
 id = "console"
-title = "Corral: usar este panel como consola de R"
+title = "Corral: usar este panel como consola"
 contexts = ["pane"]
 command = ["../bin/corral-run", "console"]
 
@@ -52,21 +52,27 @@ command = ["../bin/corral-run", "script"]
 
 [[actions]]
 id = "plots"
-title = "Corral: ver gráficos de la sesión de R"
+title = "Corral: ver los gráficos"
 contexts = ["global", "workspace"]
 command = ["../bin/corral-run", "plots"]
 
 [[actions]]
 id = "vars"
-title = "Corral: ver variables de la sesión de R"
+title = "Corral: ver las variables"
 contexts = ["global", "workspace"]
 command = ["../bin/corral-run", "vars"]
 
 [[actions]]
 id = "mirador"
-title = "Corral: abrir Mirador (agentes, variables, gráficos y tablas)"
+title = "Corral: abrir Mirador (gráficos y tablas en el navegador)"
 contexts = ["global"]
 command = ["../bin/corral-run", "mirador", "--open"]
+
+[[actions]]
+id = "atajos"
+title = "Corral: atajos y acciones (paleta)"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../bin/corral-run", "atajos"]
 
 [[actions]]
 id = "open-url"
@@ -90,6 +96,15 @@ placement = "popup"
 width = "72%"
 height = "80%"
 command = ["../bin/corral-run", "_vars"]
+
+# ctrl+b space: every Corral shortcut, searchable; Enter runs the actions.
+[[panes]]
+id = "atajos"
+title = "Corral: atajos"
+placement = "popup"
+width = "70%"
+height = "80%"
+command = ["../bin/corral-run", "_atajos"]
 
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]

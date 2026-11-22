@@ -289,7 +289,7 @@ def discard_scratch(file: Path) -> None:
     """Remove a draft and Corral's live copy of it, then its folder if nothing else is there."""
     if file.name != "borrador.R" or not (file.parent.parent.name == ".corral" or file.parent.parent == SCRATCH_ROOT):
         return
-    for name in ("borrador.R", ".actual.R"):
+    for name in ("borrador.R", ".actual.R", ".pedido.json", ".pedido.tmp", ".respuesta.json"):
         (file.parent / name).unlink(missing_ok=True)
     try:
         file.parent.rmdir()  # only if empty: a file saved there by hand stays
@@ -714,12 +714,50 @@ def cmd_toggle(args: argparse.Namespace) -> None:
     notify("Corral", TOGGLE_NAMES[mode] + (" (ctrl+b t para volver)" if mode != "ambos" else ""))
 
 
+def scratch_write(scratch: Path, text: str, replace: bool) -> None:
+    """Put text into the open draft (at the end, or instead of everything).
+
+    The editor doesn't let other programs change an unsaved buffer, so this
+    leaves a request next to the draft and Corral's editor plugin applies it,
+    as one edit the user can undo with Ctrl+Z, and answers.
+    """
+    folder = scratch.parent
+    rid = secrets.token_hex(4)
+    answer = folder / ".respuesta.json"
+    tmp = folder / ".pedido.tmp"
+    tmp.write_text(json.dumps({"id": rid, "modo": "reemplazar" if replace else "agregar", "texto": text}), encoding="utf-8")
+    tmp.rename(folder / ".pedido.json")  # in one step: the plugin never reads half a request
+    reply: dict = {}
+    end = time.time() + 5
+    while time.time() < end:
+        try:
+            reply = json.loads(answer.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            reply = {}
+        if reply.get("id") == rid:
+            break
+        time.sleep(0.05)
+    (folder / ".pedido.json").unlink(missing_ok=True)
+    if reply.get("id") != rid:
+        raise CorralError("el editor no respondió: ¿está abierto el borrador? Un editor abierto antes de "
+                          "actualizar Corral necesita cerrarse (Ctrl+Q) y abrirse otra vez")
+    if not reply.get("ok"):
+        raise CorralError(reply.get("msg") or "el editor no aplicó el cambio")
+    lines = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
+    what = "reemplazó el borrador con" if replace else "agregó al final del borrador"
+    print(f"se {what} {lines} línea{'' if lines == 1 else 's'}; el usuario lo deshace con Ctrl+Z")
+
+
 def cmd_script(args: argparse.Namespace) -> None:
     """Add the script editor above the console, or save/read the scratch script."""
-    if args.guardar or args.leer:
+    if args.guardar or args.leer or args.escribir:
         scratch = read_json_file(SCRATCH_INDEX).get(current_workspace() or "default")
         if not scratch:
             raise CorralError("este workspace no tiene un borrador de Corral")
+        if args.escribir:
+            text = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
+            scratch_write(Path(scratch), text, replace=args.reemplazar)
+            return
         text = scratch_text(scratch)
         if args.leer:
             print(text, end="" if text.endswith("\n") else "\n")
@@ -1920,6 +1958,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--split", action="store_true", help="(por defecto) abrir el panel sobre la consola")
     p.add_argument("--guardar", metavar="RUTA", help="guardar el borrador (con lo no guardado) en RUTA")
     p.add_argument("--leer", action="store_true", help="imprimir el contenido actual del borrador")
+    p.add_argument("--escribir", action="store_true",
+                   help="escribir en el borrador abierto el texto de stdin (o de ARCHIVO), al final")
+    p.add_argument("--reemplazar", action="store_true", help="con --escribir: reemplazar todo el borrador")
     p.add_argument("--forzar", action="store_true", help="con --guardar, reemplazar si RUTA existe")
     p.add_argument("--editor", default=os.environ.get("CORRAL_EDITOR", "fresh"))
     p.set_defaults(func=cmd_script)

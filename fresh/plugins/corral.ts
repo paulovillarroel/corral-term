@@ -484,10 +484,14 @@ editor.on("after_file_open", "corral_show_explorer");
 editor.on("ready", "corral_show_explorer");
 editor.setTimeout(800, "corral_show_explorer");  // the file Fresh opened at start
 
-// A scratch buffer that shows up gets its copy right away.
+// A scratch buffer that shows up gets its copy right away, and its folder is
+// watched for text sent from the terminal (`corral script --escribir`).
 registerHandler("corral_scratch_shown", async function (args?: { buffer_id: number }) {
   try {
-    await mirror(args && typeof args.buffer_id === "number" ? args.buffer_id : editor.getActiveBufferId());
+    const id = args && typeof args.buffer_id === "number" ? args.buffer_id : editor.getActiveBufferId();
+    await mirror(id);
+    const paths = scratchCopy(id);
+    if (paths) await watchScratch(paths[0]);
   } catch (e) {
     // Retried on the next edit.
   }
@@ -495,6 +499,66 @@ registerHandler("corral_scratch_shown", async function (args?: { buffer_id: numb
 editor.on("buffer_activated", "corral_scratch_shown");
 editor.on("after_file_open", "corral_scratch_shown");
 editor.setTimeout(800, "corral_scratch_shown");
+
+// Text sent to the draft from the terminal: Fresh doesn't let other programs
+// change an unsaved buffer, so `corral script --escribir` leaves a request in
+// the draft's folder (.pedido.json) and this applies it to the buffer as one
+// edit (Ctrl+Z undoes it), then answers in .respuesta.json.
+const scratchWatches: Record<number, string> = {}; // watch handle -> draft folder
+const watchedFolders: Record<string, boolean> = {};
+let lastRequest = "";
+
+async function watchScratch(path: string): Promise<void> {
+  const folder = path.slice(0, path.lastIndexOf("/"));
+  if (watchedFolders[folder]) return;
+  watchedFolders[folder] = true;
+  try {
+    scratchWatches[await editor.watchPath(folder)] = folder;
+  } catch (e) {
+    delete watchedFolders[folder];
+  }
+}
+
+registerHandler("corral_scratch_request", async function (args: { handle: number; path: string }) {
+  const folder = scratchWatches[args.handle];
+  if (!folder || !args.path.endsWith("/.pedido.json")) return;
+  let req: { id?: string; modo?: string; texto?: string };
+  try {
+    req = JSON.parse(editor.readFile(folder + "/.pedido.json") || "");
+  } catch (e) {
+    return; // not there anymore, or still being written
+  }
+  if (!req.id || req.id === lastRequest) return;
+  lastRequest = req.id;
+  let ok = false;
+  let msg = "";
+  try {
+    const id = editor.findBufferByPath(folder + "/borrador.R");
+    if (!id) {
+      msg = "el borrador no está abierto en el editor (si lo guardaste en el proyecto, edita ese archivo)";
+    } else {
+      const len = editor.getBufferLength(id);
+      let text = String(req.texto || "");
+      if (req.modo === "reemplazar") {
+        ok = await editor.replaceRange(id, 0, len, text);
+      } else {
+        // At the end, on a line of its own.
+        const last = len > 0 ? await editor.getBufferText(id, len - 1, len) : "\n";
+        if (!text.endsWith("\n")) text += "\n";
+        ok = await editor.replaceRange(id, len, len, (last === "\n" ? "" : "\n") + text);
+      }
+      if (ok) {
+        await mirror(id); // the plugin's own edits fire no buffer_modified
+        editor.setStatus("Corral: se escribió en el borrador desde la terminal (Ctrl+Z lo deshace)");
+      }
+      else msg = "el editor no aceptó el cambio";
+    }
+  } catch (e) {
+    msg = String(e);
+  }
+  editor.replaceFile(folder + "/.respuesta.json", JSON.stringify({ id: req.id, ok, msg }));
+});
+editor.on("path_changed", "corral_scratch_request");
 
 // Fresh's own "Save as" (File menu) starts in the scratch folder. A file saved
 // there under another name would stay hidden, git-ignored and be deleted in two
@@ -524,6 +588,16 @@ registerHandler("corral_after_save", async function (args: { path: string; buffe
 });
 editor.on("after_file_save", "corral_after_save");
 
+// The shortcut palette (also ctrl+b space in herdr): every Corral key, searchable.
+registerHandler("corral_shortcuts", async function () {
+  try {
+    await editor.spawnProcess("corral", ["atajos"]);
+  } catch (e) {
+    editor.setStatus("Corral: " + String(e));
+  }
+});
+
+editor.registerCommand("Corral: atajos de teclado", "Todos los atajos de Corral, con búsqueda (ctrl+b space)", "corral_shortcuts", null);
 editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola (R o Python, según el archivo)", "corral_run_line", null);
 editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola (R o Python, según el archivo)", "corral_run_file", null);
 editor.registerCommand("Corral: guardar", "Guarda; en un borrador temporal, pregunta dónde", "corral_save", null);

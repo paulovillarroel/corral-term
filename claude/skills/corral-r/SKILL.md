@@ -1,6 +1,6 @@
 ---
 name: corral-r
-description: Run R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example "corre esto en R", "hazlo en Python", "analiza estos datos", "haz un gráfico", "¿qué tiene ventas?", "ajusta un modelo". Prefer it over Rscript or a separate python for anything that touches the user's data or session.
+description: Runs R or Python code in the user's live console (the herdr panes labeled corral:r and corral:python) with `corral eval`, so objects, plots and tables land in the session the user is looking at; also arranges the Corral panes (script, console, variables) and reads or changes Corral's keyboard shortcuts. Use whenever you need to run or inspect R or Python code, explore or analyze data, fit models or make plots while working inside herdr (HERDR_ENV=1) and a Corral layout exists, for example "corre esto en R", "hazlo en Python", "analiza estos datos", "haz un gráfico", "¿qué tiene ventas?", "ajusta un modelo", and when the user asks to show only the script or the console, switch to Python, or see or change a shortcut ("¿cuál es el atajo para…?", "cambia el atajo de…"). Prefer it over Rscript or a separate python for anything that touches the user's data or session.
 ---
 
 # Corral: the user's live R and Python sessions
@@ -70,11 +70,21 @@ Don't use it when the user asked for a new or different plot, or wants to compar
 
 ## The user's script
 
-The Script pane above the console holds a temporary scratch file that is thrown away when the layout closes, unless saved. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't edit, cite or clean them up. Its current text, unsaved edits included:
+The Script pane above the console holds a temporary scratch file that is thrown away when the editor, its pane or the layout closes, unless saved. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't touch them directly (use the commands below), cite or clean them up. Its current text, unsaved edits included:
 
 ```bash
 corral script --leer
 ```
+
+To put code into it, pass the text on stdin. It goes at the end, on a new line, as one edit the user can undo with Ctrl+Z; their unsaved work stays:
+
+```bash
+corral script --escribir <<'EOF'
+resumen <- ventas |> summarise(total = sum(monto))
+EOF
+```
+
+Add `--reemplazar` to replace the whole draft, only when the user asks for it (read it first: it may hold unsaved work). The draft stays temporary and is deleted when the editor closes, so code the user wants to keep belongs in a project file.
 
 When the user asks you to save it, write it into their project (it refuses to overwrite unless you add `--forzar`, so ask first if the file exists):
 
@@ -83,6 +93,19 @@ corral script --guardar analisis/modelo.R
 ```
 
 Don't save the scratch file on your own initiative; it is temporary on purpose.
+
+## Panes and shortcuts
+
+When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. The essentials:
+
+```bash
+corral toggle script            # the right column shows: script, consola or ambos
+corral switch python            # the console shows: r or python
+corral atajos --json            # every shortcut, with the id used to change it
+corral atajos --cambiar herdr:toggle shift+e
+```
+
+The user opens the same list with `ctrl+b space` (searchable; Enter runs the actions).
 
 ## Working in someone else's session
 

@@ -77,6 +77,43 @@ impl Value {
         write_value(self, &mut out);
         out
     }
+
+    /// Indented, like Python's `json.dumps(indent=...)`, for files people read.
+    pub fn to_json_pretty(&self, indent: usize) -> String {
+        let mut out = String::new();
+        write_pretty(self, &mut out, indent, 0);
+        out.push('\n');
+        out
+    }
+}
+
+fn write_pretty(v: &Value, out: &mut String, indent: usize, level: usize) {
+    let pad = |n: usize| " ".repeat(indent * n);
+    match v {
+        Value::Arr(items) if !items.is_empty() => {
+            out.push_str("[\n");
+            for (i, item) in items.iter().enumerate() {
+                out.push_str(&pad(level + 1));
+                write_pretty(item, out, indent, level + 1);
+                out.push_str(if i + 1 < items.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&pad(level));
+            out.push(']');
+        }
+        Value::Obj(items) if !items.is_empty() => {
+            out.push_str("{\n");
+            for (i, (k, item)) in items.iter().enumerate() {
+                out.push_str(&pad(level + 1));
+                write_str(k, out);
+                out.push_str(": ");
+                write_pretty(item, out, indent, level + 1);
+                out.push_str(if i + 1 < items.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&pad(level));
+            out.push('}');
+        }
+        other => write_value(other, out),
+    }
 }
 
 impl From<&str> for Value {

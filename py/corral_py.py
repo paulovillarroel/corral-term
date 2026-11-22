@@ -359,6 +359,7 @@ class Session:
         self.pages_before = 0
         self.described: dict[str, tuple] = {}  # name -> (object, state_of, description)
         self.vars_written = False
+        self.plots_rev = None
         self.plots = PlotServer(self)
         self.write_meta()
         atexit.register(self.close)
@@ -421,6 +422,11 @@ class Session:
     def after_cell(self, result=None) -> None:
         try:
             self.flush_figures()
+            # Mirador waits for this file to change instead of asking every second and a half.
+            rev = (self.plots.upid, len(self.plots.pages))
+            if rev != self.plots_rev:
+                self.plots_rev = rev
+                (self.dir / "plots-rev").write_text(f"{rev[0]} {rev[1]}")
             # Variables holding a figure that has a page: Enter on them shows that drawing.
             drawn = {}
             for name, value in list(self.shell.user_ns.items()):

@@ -312,7 +312,7 @@ impl Viewer {
         } else if !self.status.is_empty() {
             self.status.clone()
         } else {
-            format!("←/→ pestañas · ↑↓ mover · {action} · / buscar{}", if self.keep_open { "" } else { " · q salir" })
+            format!("←/→ pestañas · ↑↓ mover · {action} · / buscar{} · ctrl+b space atajos", if self.keep_open { "" } else { " · q salir" })
         };
         f += &format!("\x1b[{rows};1H\x1b[2K {}{}{RESET}", c.dim, clip(&hint, cols.saturating_sub(2)));
         out(&f);

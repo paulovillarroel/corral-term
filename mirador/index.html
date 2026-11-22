@@ -191,6 +191,13 @@
   .status .sp { flex: 1; }
   .status .ok { color: var(--green); }
 
+  .keys { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .keys.hidden { display: none; }
+  .keys-box { background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 18px 22px; min-width: 320px; max-width: 92vw; color: var(--text); font-size: 13px; }
+  .keys-box h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+  .keys-box td { padding: 5px 14px 5px 0; vertical-align: top; border: 0; }
+  .keys-box kbd { font: 12px var(--mono); padding: 1px 7px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--side-2); color: var(--text); white-space: nowrap; }
+  .keys-box p { color: var(--muted); margin: 14px 0 0; font-size: 12px; line-height: 1.5; }
   .toast { position: fixed; right: 16px; bottom: 40px; background: var(--side-2); border: 1px solid var(--line-2); color: var(--text); padding: 8px 12px; border-radius: 9px; font-size: 12.5px; opacity: 0; transform: translateY(6px); transition: .18s ease; pointer-events: none; max-width: 420px; }
   .toast.show { opacity: 1; transform: none; }
   .toast code { font: 12px var(--mono); color: var(--accent); }
@@ -238,8 +245,10 @@
         <span class="label" id="plotlabel"></span>
         <span class="sp"></span>
         <a class="btn" id="dlsvg" download>SVG</a>
+        <button class="btn" id="copyplot" title="Copiar como imagen PNG, para pegarla en un correo o un documento (c)">Copiar</button>
         <a class="btn" id="dlpng" download>PNG</a>
         <button class="btn" id="delplot" title="Borrar este gráfico">Borrar</button>
+        <button class="btn" id="showkeys" title="Atajos de teclado (?)">?</button>
       </div>
       <div class="stage" id="stage"></div>
       <div class="strip hidden" id="strip"></div>
@@ -266,6 +275,19 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
+<div class="keys hidden" id="keys" role="dialog" aria-modal="true" aria-label="Atajos de Mirador">
+  <div class="keys-box">
+    <h2>Atajos de Mirador</h2>
+    <table>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Gráfico anterior o siguiente</td></tr>
+      <tr><td><kbd>c</kbd></td><td>Copiar el gráfico como imagen PNG</td></tr>
+      <tr><td><kbd>v</kbd></td><td>Mostrar u ocultar la barra lateral</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Buscar en la barra lateral</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Mostrar u ocultar estos atajos</td></tr>
+    </table>
+    <p>En la terminal, <kbd>ctrl+b space</kbd> muestra todos los atajos de Corral.<br>Esc cierra.</p>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -334,16 +356,23 @@ const currentSession = () => (S.data?.sessions || []).find((s) => s.id === S.ses
 
 // ------------------------------------------------------------------ polling
 async function poll() {
+  let next = 30;
   try {
-    const d = await api("/api/state");
+    // The server answers when something changed (or after 25 s), so a new plot
+    // shows up at once; a server without ?wait= answers right away: ask less often.
+    const d = await api("/api/state" + (S.rev ? `?wait=${enc(S.rev)}` : ""));
+    if (!d.rev) next = 1500;
+    S.rev = d.rev || "";
     S.data = d;
     $("#conn").className = "conn on";
     await onState(d);
   } catch (e) {
     $("#conn").className = "conn off";
     $("#status").innerHTML = `<span style="color:var(--red)">Sin conexión con Mirador</span><span class="sp"></span><span>corral mirador</span>`;
+    S.rev = "";
+    next = 1500;
   } finally {
-    setTimeout(poll, 1500);
+    setTimeout(poll, next);
   }
 }
 
@@ -588,12 +617,17 @@ function plotUrl(id, w, h, extra = "") {
 }
 
 let stageSize = [0, 0];
+// Screen pixels per CSS pixel: a plot sent as PNG (too heavy as SVG) is drawn at that density.
+const DPR = Math.min(2, Math.max(1, Math.round((window.devicePixelRatio || 1) * 4) / 4));
+// SVG, or PNG when it would be too heavy; a server from before ?wait= (no rev) only knows SVG.
+const onScreen = () => (S.rev ? `&renderer=auto&dpr=${DPR}` : "&renderer=svg");
 function renderPlot() {
   const { ids, current } = S.plots;
   const i = ids.indexOf(current);
   $("#prev").disabled = i <= 0;
   $("#next").disabled = i < 0 || i >= ids.length - 1;
   $("#delplot").disabled = i < 0;
+  $("#copyplot").disabled = i < 0;
   $("#plotlabel").textContent = ids.length ? `${i + 1} / ${ids.length}` : "";
   const stage = $("#stage");
   if (i < 0) {
@@ -606,9 +640,15 @@ function renderPlot() {
   const w = Math.max(240, Math.floor(stage.clientWidth - 32));
   const h = Math.max(180, Math.floor(stage.clientHeight - 32));
   stageSize = [w, h];
-  const src = plotUrl(current, w, h, "&renderer=svg");
+  const src = plotUrl(current, w, h, onScreen());
   let img = stage.querySelector("img");
-  if (!img) { stage.innerHTML = ""; img = document.createElement("img"); img.alt = "Gráfico"; stage.appendChild(img); }
+  if (!img) {
+    stage.innerHTML = "";
+    img = document.createElement("img");
+    img.alt = "Gráfico";
+    img.onerror = () => { if (img.src.includes("renderer=auto")) img.src = img.src.replace(/renderer=auto&dpr=[^&]*/, "renderer=svg"); };
+    stage.appendChild(img);
+  }
   if (img.getAttribute("src") !== src) img.src = src;
   $("#dlsvg").href = plotUrl(current, w, h, "&renderer=svg&download=1");
   $("#dlpng").href = plotUrl(current, w * 2, h * 2, "&renderer=png&zoom=2&download=1");
@@ -622,7 +662,7 @@ function renderThumbs() {
   const key = ids.join(",") + "|" + upid;
   if (key !== S.plots.thumbsKey) {
     S.plots.thumbsKey = key;
-    strip.innerHTML = ids.slice(-40).map((id) => `<button class="thumb" data-id="${esc(id)}" title="Gráfico ${ids.indexOf(id) + 1}"><img loading="lazy" alt="" src="${plotUrl(id, 324, 216, "&renderer=svg")}"></button>`).join("");
+    strip.innerHTML = ids.slice(-40).map((id) => `<button class="thumb" data-id="${esc(id)}" title="Gráfico ${ids.indexOf(id) + 1}"><img loading="lazy" alt="" src="${plotUrl(id, 324, 216, onScreen())}"></button>`).join("");
   }
   for (const b of strip.querySelectorAll(".thumb")) b.classList.toggle("on", b.dataset.id === current);
   strip.querySelector(".thumb.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -645,6 +685,31 @@ $("#strip").addEventListener("click", (e) => {
   S.plots.follow = b.dataset.id === S.plots.ids[S.plots.ids.length - 1];
   renderPlot();
 });
+// Copy the plot as a PNG at twice the size on screen, sharp in an email.
+async function copyPlot() {
+  const i = S.plots.ids.indexOf(S.plots.current);
+  if (i < 0) return;
+  const [w, h] = stageSize;
+  const url = plotUrl(S.plots.current, w * 2, h * 2, "&renderer=png&zoom=2");
+  const png = fetch(url).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.blob(); })
+    .then((b) => (b.type === "image/png" ? b : new Blob([b], { type: "image/png" })));
+  try {
+    // The item gets the image as a promise, so the click still counts while it downloads.
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    toast("Gráfico copiado como imagen PNG");
+  } catch (e) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": await png })]);
+      toast("Gráfico copiado como imagen PNG");
+    } catch (e2) {
+      toast(`No pude copiar: ${esc(e2.message || String(e2))}. Usa el botón PNG para guardarlo.`);
+    }
+  }
+}
+$("#copyplot").addEventListener("click", copyPlot);
+const showKeys = (on) => $("#keys").classList.toggle("hidden", !on);
+$("#showkeys").addEventListener("click", () => showKeys(true));
+$("#keys").addEventListener("click", (e) => { if (e.target.id === "keys") showKeys(false); });
 $("#delplot").addEventListener("click", async () => {
   const i = S.plots.ids.indexOf(S.plots.current);
   if (i < 0) return;
@@ -805,12 +870,17 @@ $("#sidetoggle").addEventListener("click", () => setSidebar($(".app").classList.
 
 document.addEventListener("keydown", (e) => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "");
+  const keysOpen = !$("#keys").classList.contains("hidden");
+  if (keysOpen && (e.key === "Escape" || e.key === "?")) { showKeys(false); return; }
+  if (e.key === "?" && !typing) { showKeys(true); return; }
+  if (keysOpen) return;
   if (e.key === "/" && !typing) { e.preventDefault(); setSidebar(true); $("#q").focus(); return; }
   if (e.key === "v" && !typing) { setSidebar($(".app").classList.contains("collapsed")); return; }
   if (e.key === "Escape" && typing) { document.activeElement.blur(); return; }
   if (typing || S.tab !== "plots") return;
   if (e.key === "ArrowLeft") stepPlot(-1);
   if (e.key === "ArrowRight") stepPlot(1);
+  if (e.key === "c" && !e.ctrlKey && !e.metaKey && !e.altKey) copyPlot();
 });
 $("#q").addEventListener("input", (e) => {
   S.q = e.target.value.trim().toLowerCase();

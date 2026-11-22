@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 736" width="760" height="736" role="img" font-family='system-ui, -apple-system, "Segoe UI", sans-serif'>
-<title>Antes y ahora</title><desc>El editor sigue un cambio de tema: hasta 2000 → 400; Arranque de la consola de Ark: 470 → 330; corral eval: 210 → 20–40; Cargar Corral en R: 85 → 27; Variables de R por comando: 79 → 3; toggle y switch (ctrl+b t, ctrl+b y): 50–60 → 10–30; corral send (Ctrl+R): 50 → menos de 10; Variables de Python por comando: 2,4 → 0,5; Visor de tablas (2 millones de filas): 740 → 4; Ark con el servidor de lenguaje: 641 → 112; Servidores de lenguaje de Python: 340 → 159; Fresh en reposo: 60 → 48; Consola de Ark: 55 → 3; Puente del servidor de lenguaje: 45 → 3; Panel de variables: 26 → 3; Servidor de Mirador: 26 → 3; corral send: 26 → 2,5</desc>
-<rect width="760" height="736" rx="8" fill="#fcfcfb"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 764" width="760" height="764" role="img" font-family='system-ui, -apple-system, "Segoe UI", sans-serif'>
+<title>Antes y ahora</title><desc>El editor sigue un cambio de tema: hasta 2000 → 400; Mirador muestra un gráfico nuevo: 0–1500 → 80; Arranque de la consola de Ark: 470 → 330; corral eval: 210 → 20–40; Cargar Corral en R: 85 → 27; Variables de R por comando: 79 → 3; toggle y switch (ctrl+b t, ctrl+b y): 50–60 → 10–30; corral send (Ctrl+R): 50 → menos de 10; Variables de Python por comando: 2,4 → 0,5; Visor de tablas (2 millones de filas): 740 → 4; Ark con el servidor de lenguaje: 641 → 112; Servidores de lenguaje de Python: 340 → 159; Fresh en reposo: 60 → 48; Consola de Ark: 55 → 3; Puente del servidor de lenguaje: 45 → 3; Panel de variables: 26 → 3; Servidor de Mirador: 26 → 3; corral send: 26 → 2,5</desc>
+<rect width="760" height="764" rx="8" fill="#fcfcfb"/>
 <text x="24.0" y="36.0" font-size="18" font-weight="600" fill="#0b0b0b" text-anchor="start">Antes y ahora</text>
 <text x="24.0" y="58.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Cada fila es una pieza de Corral. Escala logarítmica: cada línea vertical vale 10 veces la anterior.</text>
 <circle cx="29" cy="81.5" r="5" fill="#86b6ef"/>
@@ -9,108 +9,113 @@
 <text x="124.0" y="86.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Ahora</text>
 <text x="24.0" y="124.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">Tiempo</text>
 <text x="736.0" y="124.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="end">antes → ahora, en milisegundos</text>
-<line x1="349.5" y1="136" x2="349.5" y2="360" stroke="#e1e0d9" stroke-width="1"/>
-<text x="349.5" y="376.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1</text>
-<line x1="413.5" y1="136" x2="413.5" y2="360" stroke="#e1e0d9" stroke-width="1"/>
-<text x="413.5" y="376.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">10</text>
-<line x1="477.5" y1="136" x2="477.5" y2="360" stroke="#e1e0d9" stroke-width="1"/>
-<text x="477.5" y="376.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">100</text>
-<line x1="541.5" y1="136" x2="541.5" y2="360" stroke="#e1e0d9" stroke-width="1"/>
-<text x="541.5" y="376.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1000</text>
+<line x1="349.5" y1="136" x2="349.5" y2="388" stroke="#e1e0d9" stroke-width="1"/>
+<text x="349.5" y="404.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1</text>
+<line x1="413.5" y1="136" x2="413.5" y2="388" stroke="#e1e0d9" stroke-width="1"/>
+<text x="413.5" y="404.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">10</text>
+<line x1="477.5" y1="136" x2="477.5" y2="388" stroke="#e1e0d9" stroke-width="1"/>
+<text x="477.5" y="404.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">100</text>
+<line x1="541.5" y1="136" x2="541.5" y2="388" stroke="#e1e0d9" stroke-width="1"/>
+<text x="541.5" y="404.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1000</text>
 <text x="24.0" y="154.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">El editor sigue un cambio de tema</text>
 <line x1="516.0" y1="150" x2="560.7" y2="150" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
 <circle cx="560.7" cy="150" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="516.0" cy="150" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <text x="736.0" y="154.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">hasta 2000 → 400</text>
-<text x="24.0" y="182.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Arranque de la consola de Ark</text>
-<line x1="510.6" y1="178" x2="520.5" y2="178" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="520.5" cy="178" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="510.6" cy="178" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="182.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">470 → 330</text>
-<text x="24.0" y="210.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral eval</text>
-<line x1="444.0" y1="206" x2="498.1" y2="206" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="498.1" cy="206" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="444.0" cy="206" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="210.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">210 → 20–40</text>
-<text x="24.0" y="238.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Cargar Corral en R</text>
-<line x1="441.1" y1="234" x2="472.9" y2="234" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="472.9" cy="234" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="441.1" cy="234" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="238.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">85 → 27</text>
-<text x="24.0" y="266.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Variables de R por comando</text>
-<line x1="380.0" y1="262" x2="470.9" y2="262" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="470.9" cy="262" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="380.0" cy="262" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="266.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">79 → 3</text>
-<text x="24.0" y="294.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">toggle y switch (ctrl+b t, ctrl+b y)</text>
-<line x1="432.7" y1="290" x2="460.8" y2="290" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="460.8" cy="290" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="432.7" cy="290" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="294.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">50–60 → 10–30</text>
-<text x="24.0" y="322.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral send (Ctrl+R)</text>
-<line x1="413.5" y1="318" x2="458.2" y2="318" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="458.2" cy="318" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="413.5" cy="318" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="322.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">50 → menos de 10</text>
-<text x="24.0" y="350.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Variables de Python por comando</text>
-<line x1="330.2" y1="346" x2="373.8" y2="346" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="373.8" cy="346" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="330.2" cy="346" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="350.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">2,4 → 0,5</text>
-<text x="24.0" y="416.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">Memoria</text>
-<text x="736.0" y="416.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="end">antes → ahora, en MB</text>
-<line x1="349.5" y1="428" x2="349.5" y2="680" stroke="#e1e0d9" stroke-width="1"/>
-<text x="349.5" y="696.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1</text>
-<line x1="413.5" y1="428" x2="413.5" y2="680" stroke="#e1e0d9" stroke-width="1"/>
-<text x="413.5" y="696.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">10</text>
-<line x1="477.5" y1="428" x2="477.5" y2="680" stroke="#e1e0d9" stroke-width="1"/>
-<text x="477.5" y="696.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">100</text>
-<line x1="541.5" y1="428" x2="541.5" y2="680" stroke="#e1e0d9" stroke-width="1"/>
-<text x="541.5" y="696.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1000</text>
-<text x="24.0" y="446.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Visor de tablas (2 millones de filas)</text>
-<line x1="388.0" y1="442" x2="533.1" y2="442" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="533.1" cy="442" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="388.0" cy="442" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="446.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">740 → 4</text>
-<text x="24.0" y="474.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Ark con el servidor de lenguaje</text>
-<line x1="480.6" y1="470" x2="529.1" y2="470" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="529.1" cy="470" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="480.6" cy="470" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="474.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">641 → 112</text>
-<text x="24.0" y="502.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Servidores de lenguaje de Python</text>
-<line x1="490.4" y1="498" x2="511.5" y2="498" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="511.5" cy="498" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="490.4" cy="498" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="502.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">340 → 159</text>
-<text x="24.0" y="530.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Fresh en reposo</text>
-<line x1="457.1" y1="526" x2="463.3" y2="526" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="463.3" cy="526" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="457.1" cy="526" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="530.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">60 → 48</text>
-<text x="24.0" y="558.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Consola de Ark</text>
-<line x1="380.0" y1="554" x2="460.8" y2="554" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="460.8" cy="554" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="380.0" cy="554" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="558.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">55 → 3</text>
-<text x="24.0" y="586.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Puente del servidor de lenguaje</text>
-<line x1="380.0" y1="582" x2="455.3" y2="582" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="455.3" cy="582" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<text x="24.0" y="182.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Mirador muestra un gráfico nuevo</text>
+<line x1="471.3" y1="178" x2="533.5" y2="178" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="533.5" cy="178" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="471.3" cy="178" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="182.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">0–1500 → 80</text>
+<text x="24.0" y="210.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Arranque de la consola de Ark</text>
+<line x1="510.6" y1="206" x2="520.5" y2="206" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="520.5" cy="206" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="510.6" cy="206" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="210.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">470 → 330</text>
+<text x="24.0" y="238.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral eval</text>
+<line x1="444.0" y1="234" x2="498.1" y2="234" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="498.1" cy="234" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="444.0" cy="234" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="238.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">210 → 20–40</text>
+<text x="24.0" y="266.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Cargar Corral en R</text>
+<line x1="441.1" y1="262" x2="472.9" y2="262" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="472.9" cy="262" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="441.1" cy="262" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="266.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">85 → 27</text>
+<text x="24.0" y="294.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Variables de R por comando</text>
+<line x1="380.0" y1="290" x2="470.9" y2="290" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="470.9" cy="290" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="380.0" cy="290" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="294.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">79 → 3</text>
+<text x="24.0" y="322.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">toggle y switch (ctrl+b t, ctrl+b y)</text>
+<line x1="432.7" y1="318" x2="460.8" y2="318" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="460.8" cy="318" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="432.7" cy="318" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="322.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">50–60 → 10–30</text>
+<text x="24.0" y="350.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral send (Ctrl+R)</text>
+<line x1="413.5" y1="346" x2="458.2" y2="346" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="458.2" cy="346" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="413.5" cy="346" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="350.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">50 → menos de 10</text>
+<text x="24.0" y="378.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Variables de Python por comando</text>
+<line x1="330.2" y1="374" x2="373.8" y2="374" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="373.8" cy="374" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="330.2" cy="374" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="378.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">2,4 → 0,5</text>
+<text x="24.0" y="444.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">Memoria</text>
+<text x="736.0" y="444.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="end">antes → ahora, en MB</text>
+<line x1="349.5" y1="456" x2="349.5" y2="708" stroke="#e1e0d9" stroke-width="1"/>
+<text x="349.5" y="724.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1</text>
+<line x1="413.5" y1="456" x2="413.5" y2="708" stroke="#e1e0d9" stroke-width="1"/>
+<text x="413.5" y="724.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">10</text>
+<line x1="477.5" y1="456" x2="477.5" y2="708" stroke="#e1e0d9" stroke-width="1"/>
+<text x="477.5" y="724.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">100</text>
+<line x1="541.5" y1="456" x2="541.5" y2="708" stroke="#e1e0d9" stroke-width="1"/>
+<text x="541.5" y="724.0" font-size="11.5" font-weight="400" fill="#898781" text-anchor="middle" style="font-variant-numeric: tabular-nums">1000</text>
+<text x="24.0" y="474.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Visor de tablas (2 millones de filas)</text>
+<line x1="388.0" y1="470" x2="533.1" y2="470" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="533.1" cy="470" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="388.0" cy="470" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="474.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">740 → 4</text>
+<text x="24.0" y="502.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Ark con el servidor de lenguaje</text>
+<line x1="480.6" y1="498" x2="529.1" y2="498" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="529.1" cy="498" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="480.6" cy="498" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="502.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">641 → 112</text>
+<text x="24.0" y="530.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Servidores de lenguaje de Python</text>
+<line x1="490.4" y1="526" x2="511.5" y2="526" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="511.5" cy="526" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="490.4" cy="526" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="530.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">340 → 159</text>
+<text x="24.0" y="558.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Fresh en reposo</text>
+<line x1="457.1" y1="554" x2="463.3" y2="554" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="463.3" cy="554" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="457.1" cy="554" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="558.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">60 → 48</text>
+<text x="24.0" y="586.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Consola de Ark</text>
+<line x1="380.0" y1="582" x2="460.8" y2="582" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="460.8" cy="582" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="380.0" cy="582" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="586.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">45 → 3</text>
-<text x="24.0" y="614.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Panel de variables</text>
-<line x1="380.0" y1="610" x2="440.0" y2="610" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
-<circle cx="440.0" cy="610" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="586.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">55 → 3</text>
+<text x="24.0" y="614.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Puente del servidor de lenguaje</text>
+<line x1="380.0" y1="610" x2="455.3" y2="610" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="455.3" cy="610" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="380.0" cy="610" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="614.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">26 → 3</text>
-<text x="24.0" y="642.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Servidor de Mirador</text>
+<text x="736.0" y="614.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">45 → 3</text>
+<text x="24.0" y="642.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Panel de variables</text>
 <line x1="380.0" y1="638" x2="440.0" y2="638" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
 <circle cx="440.0" cy="638" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="380.0" cy="638" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <text x="736.0" y="642.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">26 → 3</text>
-<text x="24.0" y="670.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral send</text>
-<line x1="374.9" y1="666" x2="440.0" y2="666" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<text x="24.0" y="670.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Servidor de Mirador</text>
+<line x1="380.0" y1="666" x2="440.0" y2="666" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
 <circle cx="440.0" cy="666" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="374.9" cy="666" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="736.0" y="670.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">26 → 2,5</text>
-<text x="24.0" y="718.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Medido en WSL (Ubuntu 24.04). Antes, el visor de tablas era VisiData y la consola de Ark, jupyter-console.</text>
+<circle cx="380.0" cy="666" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="670.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">26 → 3</text>
+<text x="24.0" y="698.5" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">corral send</text>
+<line x1="374.9" y1="694" x2="440.0" y2="694" stroke="#c3c2b7" stroke-width="2" stroke-linecap="round"/>
+<circle cx="440.0" cy="694" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="374.9" cy="694" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="736.0" y="698.5" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end" style="font-variant-numeric: tabular-nums">26 → 2,5</text>
+<text x="24.0" y="746.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Medido en WSL (Ubuntu 24.04). Antes, el visor de tablas era VisiData y la consola de Ark, jupyter-console.</text>
 </svg>

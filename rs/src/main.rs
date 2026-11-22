@@ -4,6 +4,7 @@
 //! console, reading the clipboard), goes to the Python version in bin/corral.
 
 mod ark;
+mod atajos;
 mod console;
 mod editor;
 mod env;
@@ -28,6 +29,8 @@ fn main() {
         Some("eval") => eval::run(rest, &args),
         Some("_console") => console::run(rest, &args),
         Some("_editor") => editor::run(rest),
+        Some("atajos") => atajos::run(rest, false),
+        Some("_atajos") => atajos::run(rest, true),
         Some("toggle") => layout::toggle(rest, &args),
         Some("switch") => layout::switch(rest, &args),
         Some("_lsp") => lsp::run(rest, &args),
