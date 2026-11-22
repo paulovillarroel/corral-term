@@ -35,16 +35,22 @@ const RENAMED_ACTIONS: [(&str, &str); 4] = [
 ];
 
 /// A single-file program the installer downloads when it is missing:
-/// name, shown name, version, what for (English, Spanish), URL.
-type Download = (&'static str, &'static str, &'static str, (&'static str, &'static str), &'static str);
+/// name, shown name, version, what for (English, Spanish), URL, and the SHA-256 of
+/// that version's package. The hashes live here, in Corral's own code (which the
+/// installer checks), so each download is checked whether or not its project
+/// publishes a checksum; a new version needs its new hash.
+type Download = (&'static str, &'static str, &'static str, (&'static str, &'static str), &'static str, &'static str);
 
 const DOWNLOADS: [Download; 3] = [
     ("fresh", "Fresh", "0.5.9", ("script editor", "editor de scripts"),
-     "https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-x86_64-unknown-linux-musl.tar.gz"),
+     "https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-x86_64-unknown-linux-musl.tar.gz",
+     "97717593ded1f66946d9c598bbf9f2cdf9c53ed2b5d528c92d4e51b8137b3203"),
     ("duckdb", "DuckDB", "1.4.4", ("View() tables", "tablas de View()"),
-     "https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-linux-amd64.gz"),
+     "https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-linux-amd64.gz",
+     "58882f65fcde335484857d595a6e7c1836eb2b125f78652fcfc813ad74ee348d"),
     ("air", "Air", "0.13.0", ("R code formatting", "formato del código de R"),
-     "https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-unknown-linux-gnu.tar.gz"),
+     "https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-unknown-linux-gnu.tar.gz",
+     "3909b12870df0b6a44e3f40376cd59aca373791c0abedd02dcbda7b136e4573c"),
 ];
 
 // ----------------------------------------------------------------------- places
@@ -283,7 +289,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
 
     // What the installer brings -------------------------------------------------
     out.push(check("installer", State::Ok, "corral", trf!("{VERSION}, built", "{VERSION}, compilado"), &[]));
-    for (name, shown, v, what, _) in DOWNLOADS {
+    for (name, shown, v, what, ..) in DOWNLOADS {
         match which(name) {
             Some(have) => {
                 let found = version_of(&have, "--version");
@@ -444,11 +450,7 @@ fn place(src: &Path) -> Result<PathBuf, String> {
     Ok(d)
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, done: &mut Value) {
+fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, sha: &str, done: &mut Value) {
     let url = url_t.replace("{v}", v);
     println!("  {}", trf!("… downloading {shown} {v} ({what})", "… descargando {shown} {v} ({what})"));
     let data = match setup::download(&url) {
@@ -456,18 +458,9 @@ fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, done: &mu
         Err(e) => return step(&trf!("couldn't download {shown}: {e}. Install it later and Corral will use it.",
                                     "no pude descargar {shown}: {e}. Instálalo después y Corral lo usará."), State::Warn),
     };
-    // The published checksum, when there is one.
-    let verified = match setup::download(&format!("{url}.sha256")) {
-        Ok(sum) => {
-            let expected = String::from_utf8_lossy(&sum).split_whitespace().next().unwrap_or("").to_lowercase();
-            if expected != hex(&crate::sha256::sha256(&data)) {
-                return step(&trf!("{shown}: the checksum doesn't match; not installing it",
-                                  "{shown}: la suma de verificación no coincide; no lo instalo"), State::Warn);
-            }
-            true
-        }
-        Err(_) => false,
-    };
+    if let Err(e) = setup::checked(&format!("{shown} {v}"), &data, sha) {
+        return step(&e, State::Warn);
+    }
     let program = if url.ends_with(".tar.gz") {
         zip::gunzip(&data).ok().and_then(|tar| zip::tar_member(&tar, name))
     } else {
@@ -490,8 +483,7 @@ fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, done: &mu
     let mut list = done.get("herramientas").arr().to_vec();
     list.push(name.into());
     done.set("herramientas", Value::Arr(list));
-    let checked = if verified { tr(" (checksum verified)", " (suma de verificación correcta)") } else { "" };
-    step(&trf!("{shown} {v} in {}{checked}", "{shown} {v} en {}{checked}", short(&bin().join(name))), State::Ok);
+    step(&trf!("{shown} {v} in {}, SHA-256 checked", "{shown} {v} en {}, SHA-256 comprobado", short(&bin().join(name))), State::Ok);
 }
 
 fn ark() {
@@ -500,9 +492,9 @@ fn ark() {
     }
     println!("  {}", trf!("… downloading Ark {ARK_VERSION} (the R console)", "… descargando Ark {ARK_VERSION} (la consola de R)"));
     match setup::install_ark(ARK_VERSION) {
-        Ok(_) => step(&format!("Ark {ARK_VERSION}"), State::Ok),
-        Err(_) => step(tr("couldn't download Ark; the R console will be plain R (corral ark --install tries again)",
-                          "no pude descargar Ark; la consola de R será R normal (corral ark --install lo reintenta)"), State::Warn),
+        Ok(_) => step(&trf!("Ark {ARK_VERSION}, SHA-256 checked", "Ark {ARK_VERSION}, SHA-256 comprobado"), State::Ok),
+        Err(e) => step(&trf!("{e}. The R console will be plain R; corral ark --install tries again.",
+                             "{e}. La consola de R será R normal; corral ark --install lo reintenta."), State::Warn),
     }
 }
 
@@ -771,9 +763,9 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     }
     link(&exe, &bin().join("corral"))?;
     step(&trf!("corral command in {}", "comando corral en {}", short(&bin().join("corral"))), State::Ok);
-    for (name, shown, v, what, url) in DOWNLOADS {
+    for (name, shown, v, what, url, sha) in DOWNLOADS {
         if which(name).is_none() {
-            download(name, shown, v, tr(what.0, what.1), url, &mut done);
+            download(name, shown, v, tr(what.0, what.1), url, sha, &mut done);
         }
     }
     ark();
@@ -1023,6 +1015,14 @@ mod tests {
         let both = format!("{}{}", block(KEYS_BEGIN_OLD), block(KEYS_BEGIN));
         assert!(!without_keys_block(&both).contains("prefix+t"));
         assert_eq!(without_keys_block("a = 1\n"), "a = 1\n");
+    }
+
+    #[test]
+    fn every_download_has_a_sha256() {
+        let hex = |h: &str| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
+        for (name, _, _, _, _, sha) in DOWNLOADS {
+            assert!(hex(sha), "{name}");
+        }
     }
 
     #[test]

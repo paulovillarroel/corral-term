@@ -9,8 +9,27 @@ use crate::theme;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The Ark version Corral was tested with.
+/// The Ark version Corral was tested with, and the SHA-256 of its Linux package.
 pub const ARK_VERSION: &str = "0.1.252";
+const ARK_SHA256: &str = "7dda5d05b6c4d67e7ae74e70b6bec5fd3bc526b19e222fa78306e14972cf4495";
+
+/// Check a download against the SHA-256 it should have, before anything uses it.
+pub fn checked(what: &str, data: &[u8], expected: &str) -> Result<(), String> {
+    let actual = crate::sha256::sha256_hex(data);
+    if actual == expected.to_ascii_lowercase() {
+        return Ok(());
+    }
+    Err(trf!("{what} doesn't match its SHA-256, so I didn't install it (expected {expected}, got {actual})",
+             "{what} no coincide con su SHA-256, así que no lo instalé (esperado {expected}, obtenido {actual})"))
+}
+
+/// The SHA-256 GitHub reports for a file of a release (its `digest`), when it has one.
+fn github_digest(repo: &str, tag: &str, file: &str) -> Option<String> {
+    let body = download(&format!("https://api.github.com/repos/{repo}/releases/tags/{tag}")).ok()?;
+    let release = crate::json::parse(&String::from_utf8_lossy(&body)).ok()?;
+    let asset = release.get("assets").arr().iter().find(|a| a.get("name").str() == Some(file))?;
+    asset.get("digest").str()?.strip_prefix("sha256:").map(String::from)
+}
 
 /// Download `url` (with curl, which the install line needs anyway).
 pub fn download(url: &str) -> Result<Vec<u8>, String> {
@@ -24,12 +43,23 @@ pub fn download(url: &str) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
-/// Install Ark `version` under ~/.local/share/corral/ark/<version>.
+/// Install Ark `version` under ~/.local/share/corral/ark/<version>. The version Corral
+/// was tested with is checked against the SHA-256 written above, in Corral's own code;
+/// another one, against the SHA-256 GitHub reports for it, and refused if there is none.
 pub fn install_ark(version: &str) -> Result<PathBuf, String> {
-    let url = format!("https://github.com/posit-dev/ark/releases/download/{version}/ark-{version}-linux-x64.zip");
+    let file = format!("ark-{version}-linux-x64.zip");
+    let url = format!("https://github.com/posit-dev/ark/releases/download/{version}/{file}");
+    let expected = if version == ARK_VERSION {
+        ARK_SHA256.to_string()
+    } else {
+        github_digest("posit-dev/ark", version, &file).ok_or_else(|| trf!(
+            "GitHub has no SHA-256 for Ark {version}, so I won't install it; Ark {ARK_VERSION} is the one Corral was tested with",
+            "GitHub no tiene un SHA-256 para Ark {version}, así que no lo instalo; Ark {ARK_VERSION} es la que Corral probó"))?
+    };
+    let zip = download(&url)?;
+    checked(&format!("Ark {version}"), &zip, &expected)?;
     let target = env::data_dir().join("ark").join(version);
     std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
-    let zip = download(&url)?;
     crate::zip::extract(&zip, &target)?;
     let ark = target.join("ark");
     use std::os::unix::fs::PermissionsExt;
@@ -169,4 +199,19 @@ pub fn cmd_doctor(_args: &[String]) -> Result<(), String> {
         println!("{} {name}{}  {detail}", if ok { "✓" } else { "✗" }, " ".repeat(pad));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checked_compares_the_sha256() {
+        let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert!(checked("x", b"abc", abc).is_ok());
+        assert!(checked("x", b"abc", &abc.to_uppercase()).is_ok());
+        assert!(checked("x", b"abd", abc).is_err());
+        assert!(checked("x", b"abc", "").is_err());
+        assert!(ARK_SHA256.len() == 64 && ARK_SHA256.bytes().all(|b| b.is_ascii_hexdigit()));
+    }
 }
