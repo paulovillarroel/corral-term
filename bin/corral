@@ -849,14 +849,10 @@ def jupyter_prompt(pane: str) -> bool:
 
 
 def paste_python(pane: str, code: str) -> None:
-    """Paste code into IPython or Ark's console as one block (bracketed paste), then run it."""
-    herdr_socket("pane.send_text", {"pane_id": pane, "text": "\x1b[200~" + code + "\x1b[201~"})
-    time.sleep(0.05)
-    keys = ["enter"]
+    """Paste code into IPython or Ark's console as one block (bracketed paste) and run it, in one write."""
     last = code.rstrip("\n").splitlines()[-1] if code.strip() else ""
-    if last[:1] in (" ", "\t"):
-        keys.append("enter")  # the code ends inside a block: an empty line closes it
-    herdr_socket("pane.send_keys", {"pane_id": pane, "keys": keys})
+    enter = "\r\r" if last[:1] in (" ", "\t") else "\r"  # inside a block, an empty line closes it
+    herdr_socket("pane.send_text", {"pane_id": pane, "text": "\x1b[200~" + code + "\x1b[201~" + enter})
 
 
 def cmd_view(args: argparse.Namespace) -> None:

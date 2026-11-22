@@ -12,67 +12,67 @@ platforms = ["linux"]
 id = "layout"
 title = "Corral: abrir espacio de trabajo"
 contexts = ["global", "workspace"]
-command = ["python3", "../bin/corral", "layout"]
+command = ["../bin/corral-run", "layout"]
 
 [[actions]]
 id = "send"
 title = "Corral: enviar selección a la consola de R"
 contexts = ["selection", "pane"]
-command = ["python3", "../bin/corral", "send"]
+command = ["../bin/corral-run", "send"]
 
 [[actions]]
 id = "console"
 title = "Corral: usar este panel como consola de R"
 contexts = ["pane"]
-command = ["python3", "../bin/corral", "console"]
+command = ["../bin/corral-run", "console"]
 
 [[actions]]
 id = "close"
 title = "Corral: cerrar (deja a Claude y el resto de la pestaña)"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["python3", "../bin/corral", "close"]
+command = ["../bin/corral-run", "close"]
 
 [[actions]]
 id = "toggle"
 title = "Corral: expandir script o consola"
 contexts = ["global", "workspace", "pane"]
-command = ["python3", "../bin/corral", "toggle"]
+command = ["../bin/corral-run", "toggle"]
 
 [[actions]]
 id = "switch"
 title = "Corral: consola de R o de Python"
 contexts = ["global", "workspace", "pane"]
-command = ["python3", "../bin/corral", "switch"]
+command = ["../bin/corral-run", "switch"]
 
 [[actions]]
 id = "script"
 title = "Corral: agregar el editor de scripts sobre la consola"
 contexts = ["global", "workspace"]
-command = ["python3", "../bin/corral", "script"]
+command = ["../bin/corral-run", "script"]
 
 [[actions]]
 id = "plots"
 title = "Corral: ver gráficos de la sesión de R"
 contexts = ["global", "workspace"]
-command = ["python3", "../bin/corral", "plots"]
+command = ["../bin/corral-run", "plots"]
 
 [[actions]]
 id = "vars"
 title = "Corral: ver variables de la sesión de R"
 contexts = ["global", "workspace"]
-command = ["python3", "../bin/corral", "vars"]
+command = ["../bin/corral-run", "vars"]
 
 [[actions]]
 id = "mirador"
 title = "Corral: abrir Mirador (agentes, variables, gráficos y tablas)"
 contexts = ["global"]
-command = ["python3", "../bin/corral", "mirador", "--open"]
+command = ["../bin/corral-run", "mirador", "--open"]
 
 [[actions]]
 id = "open-url"
 title = "Corral: abrir enlace local en el navegador"
 contexts = ["global"]
-command = ["python3", "../bin/corral", "plots"]
+command = ["../bin/corral-run", "plots"]
 
 # Viewers open on demand over the terminal and close with q or Esc.
 [[panes]]
@@ -81,7 +81,7 @@ title = "Corral: gráficos"
 placement = "popup"
 width = "96%"
 height = "94%"
-command = ["python3", "../bin/corral", "_plots"]
+command = ["../bin/corral-run", "_plots"]
 
 [[panes]]
 id = "vars"
@@ -89,7 +89,7 @@ title = "Corral: variables"
 placement = "popup"
 width = "72%"
 height = "80%"
-command = ["python3", "../bin/corral", "_vars"]
+command = ["../bin/corral-run", "_vars"]
 
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]
@@ -98,7 +98,7 @@ title = "Corral: tabla"
 placement = "popup"
 width = "95%"
 height = "90%"
-command = ["python3", "../bin/corral", "_table"]
+command = ["../bin/corral-run", "_table"]
 
 # Ctrl+click on local URLs (`quarto preview`, httpgd, Shiny) opens them in the browser.
 [[link_handlers]]

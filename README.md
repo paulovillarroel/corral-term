@@ -11,6 +11,8 @@ Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es [Ark](
 | Carpeta | Qué es |
 |---|---|
 | `bin/corral` | El comando, con la lógica. Python 3 sin dependencias. |
+| `rs/` | `corral` en Rust, sin dependencias: hace lo que se ejecuta a cada rato (Ctrl+R, F5, `ctrl+b t`, `ctrl+b y`, abrir una consola) y le pasa el resto a `bin/corral`. |
+| `bin/corral-run` | Lo que ejecutan los atajos de herdr: el `corral` de Rust si está compilado, si no el de Python. |
 | `lib/corral_tui.py` | Los visores de gráficos y variables que corren dentro de herdr. |
 | `lib/corral_theme.py` | Toma el tema de herdr y lo aplica al editor, los visores, VisiData y Mirador. |
 | `herdr/` | Plugin de herdr: atajos, layout y popups. Solo llama a `bin/corral`. |
@@ -24,11 +26,14 @@ Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, 
 
 ## Instalación
 
-1. Pon `corral` en el PATH:
+1. Compila el `corral` de Rust (necesita `cargo`; no descarga bibliotecas) y ponlo en el PATH:
 
    ```bash
-   ln -s ~/workspace/personal/corral-term/bin/corral ~/.local/bin/corral
+   cd ~/workspace/personal/corral-term/rs && cargo build --release
+   ln -sfn ~/workspace/personal/corral-term/rs/target/release/corral ~/.local/bin/corral
    ```
+
+   Sin Rust, enlaza la versión Python, que hace lo mismo un poco más lento: `ln -sfn ~/workspace/personal/corral-term/bin/corral ~/.local/bin/corral`.
 
 2. Enlaza el plugin en herdr (queda donde está, no se copia). Si cambia `herdr-plugin.toml`, repite con `herdr plugin unlink corral` antes:
 
@@ -199,6 +204,17 @@ El borrador es un archivo real, y no un "sin nombre", porque el autocompletado s
 Fresh mantiene un servicio de fondo con la configuración y los plugins cargados. Si cambias `config.json` o el plugin, cierra el editor y reinícialo con `fresh --cmd daemon kill orchestrator` antes de volver a abrirlo.
 
 La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin en [`fresh/plugins/corral.ts`](fresh/plugins/corral.ts). Fresh viene con las búsquedas de actualizaciones y la telemetría desactivadas (`check_for_updates: false`).
+
+### Rendimiento: corral en Rust
+
+Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. Lo propio de Corral es sobre todo Python, salvo lo que corre a cada tecla: `corral send` (Ctrl+R, F5, `ctrl+b enter`), `toggle` (`ctrl+b t`), `switch` (`ctrl+b y`) y el arranque de las consolas. Eso está en `rs/`, un binario de Rust de unos 450 KB sin dependencias que habla con herdr por su socket. Cuando le toca algo poco frecuente (abrir la consola de Python por primera vez, leer el portapapeles) o cualquier otro comando, se lo pasa a `bin/corral`.
+
+| `corral send` | Rust | Python |
+|---|---|---|
+| Tiempo | menos de 10 ms | unos 50 ms |
+| Memoria | 2,5 MB | 26 MB |
+
+`toggle` y `switch` bajan de 50–60 ms a 10–30 ms. Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
 
 ### La consola de R: Ark
 

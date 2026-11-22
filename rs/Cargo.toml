@@ -1,0 +1,17 @@
+[package]
+name = "corral"
+version = "0.1.0"
+edition = "2021"
+description = "Corral's fast path: the commands that run on every keystroke, without Python's startup"
+license = "MIT"
+publish = false
+
+# No dependencies on purpose: a small binary that starts in a couple of milliseconds.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

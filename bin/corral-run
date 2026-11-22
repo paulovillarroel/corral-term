@@ -1,0 +1,8 @@
+#!/bin/sh
+# What herdr's plugin actions run: the Rust corral when it is built (fast
+# path, falls back to Python by itself), else the Python version.
+here=$(dirname "$0")
+if [ -x "$here/../rs/target/release/corral" ]; then
+    exec "$here/../rs/target/release/corral" "$@"
+fi
+exec python3 "$here/corral" "$@"
