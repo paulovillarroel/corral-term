@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Agents know Corral's settings and docs: the skill lists every `corral config` key, points to the docs that come with Corral and to `corral --help`, and tells agents never to change `agents` or `agent_output` themselves.
+
+### Fixes
+
+- The skill told agents to pass `agente`, `consola` or `ambos` to `corral toggle`, which refuses them; it now says `agent`, `console` and `both`.
+
 ## 0.1.8
 
 Corral's files move to English names, and nothing is lost on upgrade.
