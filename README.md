@@ -103,7 +103,7 @@ Agents run code in your real session, so the user stays in control, and Corral e
 
 ## Telemetry
 
-For transparency: the installer sends one anonymous ping when an installation finishes, only to measure how many times Corral is installed and from which countries. It carries the version, the system (Linux or WSL), whether it is a new install or an update, and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Nothing is sent while you use Corral, and your data and code never leave your machine through it. `CORRAL_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) turns it off; the code that receives it is [`api/installed.js`](api/installed.js).
+For transparency: the installer sends one anonymous ping when an installation finishes, only to measure how many times Corral is installed and from which countries. It carries the version, the system (Linux or WSL), whether it is a new install or an update, and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Corral itself sends nothing else, ever. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `CORRAL_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) turns it off; the code that receives it is [`api/installed.js`](api/installed.js).
 
 ---
 
