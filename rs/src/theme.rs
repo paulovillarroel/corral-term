@@ -228,7 +228,7 @@ fn dress_herdr(theme: &Own) -> Result<bool, String> {
     while end > head + 1 && lines[end - 1].trim().is_empty() {
         end -= 1;
     }
-    let mut block = vec![String::new(), format!("# Corral: tema {} (se quita solo al elegir otro tema en herdr)", theme.name),
+    let mut block = vec![String::new(), format!("# Corral: theme {} (removed when you pick another theme in herdr)", theme.name),
                          "[theme.custom]".to_string()];
     block.extend(theme.herdr.iter().map(|(k, v)| format!("{k} = \"{v}\"")));
     block.push(String::new());
