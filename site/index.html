@@ -203,9 +203,9 @@
   <article class="feature">
     <div class="n">03</div>
     <div><h3><a href="docs/data.html">Big tables, instantly. DuckDB under the hood.</a></h3>
-      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. Ten million rows show up in about 34 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
+      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. With ten million rows, saving the table takes about a second with nanoparquet; from then on each screen takes about 30 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
     <div class="card">
-      <div class="row"><span>10,000,000 rows</span><span>first screen in 34 ms</span></div>
+      <div class="row"><span>10,000,000 rows</span><span>on screen in ~1.1 s</span></div>
       <div class="row"><span>memory</span><span>~3 MB</span></div>
       <div class="row"><span>f</span><span>mpg &gt; 20 &amp; cyl == 6, or SQL</span></div>
       <div class="row"><span>i</span><span>SUMMARIZE every column</span></div>
@@ -249,13 +249,14 @@
   <section class="showcase split" id="tables">
     <div class="show-text">
       <div class="section-label"><span>Table viewer</span><span>View(df)</span></div>
-      <h2>Ten million rows, on screen in 34 ms.</h2>
+      <h2>Ten million rows, on screen in under two seconds.</h2>
       <p><code>View(df)</code> opens the table in a pane right next to your console. Corral never loads it whole: DuckDB reads the Parquet file and returns only the rows you're looking at, so scrolling, sorting, searching and filtering stay instant at any size.</p>
       <p>Want more room? Press <kbd>m</kbd> and the same table opens in Mirador, in your browser. Only when you ask: the terminal stays the default.</p>
       <div class="card">
-        <div class="row"><span>10,000,000 rows</span><span>first screen in 34 ms</span></div>
-        <div class="row"><span>a page from the middle</span><span>30 ms</span></div>
-        <div class="row"><span>sort every row by a column</span><span>60 ms</span></div>
+        <div class="row"><span>10,000,000 rows, saved as Parquet</span><span>1.1 s</span></div>
+        <div class="row"><span>then the first screen</span><span>30 ms</span></div>
+        <div class="row"><span>a page from the middle</span><span>16 ms</span></div>
+        <div class="row"><span>sort every row by a column</span><span>35 ms</span></div>
         <div class="row"><span>the viewer itself</span><span>~3 MB of memory</span></div>
       </div>
     </div>
@@ -398,7 +399,7 @@
     </details>
     <details>
       <summary>How big can my data be?</summary>
-      <p>Looking at it scales: <code>View()</code> hands the table to DuckDB, which reads only what's on screen, so ten million rows show up in about 34 ms. Computing is up to your code, as in any IDE: data frames live in memory, while arrow, duckdb, polars or data.table let you go further.</p>
+      <p>Looking at it scales: <code>View()</code> saves the table as Parquet and DuckDB reads only what's on screen, so ten million rows take about a second to open with nanoparquet, and then about 30 ms a screen. Computing is up to your code, as in any IDE: data frames live in memory, while arrow, duckdb, polars or data.table let you go further.</p>
     </details>
     <details>
       <summary>Does it run on macOS or Windows?</summary>
