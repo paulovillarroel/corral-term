@@ -9,7 +9,7 @@
 //! `--change ID KEY` rebinds a herdr or editor shortcut.
 
 use crate::env;
-use crate::i18n::{es, tr};
+use crate::i18n::tr;
 use crate::json::{obj, Value};
 use crate::term::{clip, out, width, Screen};
 use crate::vars::Colors;
@@ -23,28 +23,34 @@ extern "C" {
 
 const RESET: &str = "\x1b[0m";
 
-/// The palette's groups, in display order.
-#[derive(Clone, Copy, PartialEq)]
+/// The palette's groups, in display order: the parts of the IDE, from the layout
+/// to the plots, then what you set (agents, appearance) and help. Each entry
+/// starts with a category ("Agents: …", "Editor: …"), so typing it filters.
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 enum Group {
     Layout,
-    Herdr,
     Editor,
     Console,
     Vars,
     Table,
-    Mirador,
+    Plots,
+    Agents,
+    Settings,
+    Help,
 }
 
 impl Group {
     fn name(self) -> &'static str {
         match self {
-            Group::Layout => "Layouts",
-            Group::Herdr => tr("In any pane (herdr)", "En cualquier panel (herdr)"),
+            Group::Layout => tr("Layouts and panes", "Layouts y paneles"),
             Group::Editor => tr("Script editor", "Editor de scripts"),
-            Group::Console => tr("R console", "Consola de R"),
+            Group::Console => tr("Console (R and Python)", "Consola (R y Python)"),
             Group::Vars => tr("Variables pane", "Panel de variables"),
             Group::Table => tr("Tables (View)", "Tablas (View)"),
-            Group::Mirador => tr("Mirador (browser)", "Mirador (navegador)"),
+            Group::Plots => tr("Plots and Mirador", "Gráficos y Mirador"),
+            Group::Agents => tr("Agents", "Agentes"),
+            Group::Settings => tr("Appearance and language", "Apariencia e idioma"),
+            Group::Help => tr("Help", "Ayuda"),
         }
     }
 }
@@ -166,41 +172,43 @@ fn plugin_actions() -> Vec<(String, String, Vec<String>)> {
     out
 }
 
-/// The Spanish titles of Corral's plugin actions; the manifest has the English ones.
-/// The language actions are missing on purpose: each is titled in the language it switches to.
-fn title_es(id: &str) -> Option<&'static str> {
-    Some(match id {
-        "layout" => "Corral: layout con foco en el agente",
-        "layout-code" => "Corral: layout con foco en el código",
-        "send" => "Corral: enviar la selección a la consola (R o Python)",
-        "console" => "Corral: usar este panel como consola",
-        "close" => "Corral: cerrar (deja a Claude y el resto de la pestaña)",
-        "toggle" => "Corral: expandir script (o agente) o consola",
-        "switch" => "Corral: consola de R o de Python",
-        "script" => "Corral: agregar el editor de scripts sobre la consola",
-        "plots" => "Corral: ver los gráficos",
-        "vars" => "Corral: ver las variables",
-        "mirador" => "Corral: abrir Mirador (gráficos y tablas en el navegador)",
-        "keys" => "Corral: atajos y acciones (paleta)",
-        "theme-dark-2026" => "Corral: tema Dark 2026 (el de VS Code y Positron)",
-        "theme-herdr" => "Corral: volver al tema de herdr",
-        "start-r" => "Corral: partir con R",
-        "start-python" => "Corral: partir con Python",
-        "agents-on" => "Corral: los agentes ejecutan código sin preguntar",
-        "agents-ask" => "Corral: los agentes preguntan antes de cada petición",
-        "agents-off" => "Corral: los agentes no pueden ejecutar código",
-        "output-full" => "Corral: los agentes ven los resultados completos",
-        "output-review" => "Corral: revisar los resultados antes de que los vean los agentes",
-        "output-structure" => "Corral: los agentes ven solo la estructura de los resultados",
-        _ => return None,
-    })
-}
+/// Where each of Corral's plugin actions goes in the palette, and its text there,
+/// with its category first (English, Spanish), in display order. The manifest's own
+/// titles ("Corral: …") are what herdr's palette shows. The language actions read
+/// in the language they switch to.
+const ACTIONS: &[(&str, Group, &str, &str)] = &[
+    ("layout", Group::Layout, "Layout: agent first", "Layout: foco en el agente"),
+    ("layout-code", Group::Layout, "Layout: code first", "Layout: foco en el código"),
+    ("start-r", Group::Layout, "Layout: start with R", "Layout: partir con R"),
+    ("start-python", Group::Layout, "Layout: start with Python", "Layout: partir con Python"),
+    ("toggle", Group::Layout, "Layout: expand the script (or agent) or the console", "Layout: expandir el script (o el agente) o la consola"),
+    ("script", Group::Layout, "Layout: add the script editor above the console", "Layout: agregar el editor de scripts sobre la consola"),
+    ("close", Group::Layout, "Layout: close (keeps the agent and the rest of the tab)", "Layout: cerrar (deja al agente y el resto de la pestaña)"),
+    ("switch", Group::Console, "Console: R or Python", "Consola: R o Python"),
+    ("send", Group::Console, "Console: send the selection (R or Python)", "Consola: enviar la selección (R o Python)"),
+    ("console", Group::Console, "Console: use this pane as the console", "Consola: usar este panel como consola"),
+    ("vars", Group::Vars, "Variables: open them over the terminal", "Variables: abrirlas sobre la terminal"),
+    ("plots", Group::Plots, "Plots: show them", "Gráficos: verlos"),
+    ("mirador", Group::Plots, "Mirador: open it in the browser (plots and tables)", "Mirador: abrirlo en el navegador (gráficos y tablas)"),
+    ("agents-ask", Group::Agents, "Agents: ask before each request", "Agentes: preguntan antes de cada petición"),
+    ("agents-on", Group::Agents, "Agents: run code without asking", "Agentes: ejecutan código sin preguntar"),
+    ("agents-off", Group::Agents, "Agents: can't run code", "Agentes: no pueden ejecutar código"),
+    ("output-full", Group::Agents, "Agents: see full results", "Agentes: ven los resultados completos"),
+    ("output-review", Group::Agents, "Agents: you review results before they see them", "Agentes: revisas los resultados antes de que los vean"),
+    ("output-structure", Group::Agents, "Agents: see only the structure of results", "Agentes: ven solo la estructura de los resultados"),
+    ("theme-dark-2026", Group::Settings, "Theme: Dark 2026 (VS Code's and Positron's)", "Tema: Dark 2026 (el de VS Code y Positron)"),
+    ("theme-herdr", Group::Settings, "Theme: back to herdr's", "Tema: volver al de herdr"),
+    ("language-en", Group::Settings, "Language: English", "Language: English"),
+    ("language-es", Group::Settings, "Idioma: español", "Idioma: español"),
+    ("keys", Group::Help, "Help: shortcuts and actions (this palette)", "Ayuda: atajos y acciones (esta paleta)"),
+];
 
-/// A plugin action's title in the user's language.
-fn action_title<'a>(id: &str, title: &'a str) -> &'a str {
-    match title_es(id) {
-        Some(t) if es() => t,
-        _ => title,
+/// A plugin action's place and text in the palette, in the user's language; an
+/// action this list doesn't know yet goes under Layouts with its own title.
+fn action_label(id: &str, title: &str) -> (Group, String, usize) {
+    match ACTIONS.iter().position(|a| a.0 == id) {
+        Some(i) => (ACTIONS[i].1, tr(ACTIONS[i].2, ACTIONS[i].3).to_string(), i),
+        None => (Group::Layout, tidy(title), ACTIONS.len()),
     }
 }
 
@@ -245,12 +253,19 @@ fn editor_desc(action: &str) -> String {
     .to_string()
 }
 
-/// Keys that come from the code: (English, Spanish, keys).
-fn fixed(group: Group, prefix: &str, items: &[(&str, &str, &[&str])]) -> Vec<Entry> {
+/// "Run the line" under the category "Editor": "Editor: run the line".
+fn categorized(category: &str, desc: &str) -> String {
+    let mut c = desc.chars();
+    let first = c.next().map(|f| f.to_lowercase().collect::<String>()).unwrap_or_default();
+    format!("{category}: {first}{}", c.as_str())
+}
+
+/// Keys that come from the code: (English, Spanish, keys), under a category (English, Spanish).
+fn fixed(group: Group, prefix: &str, category: (&str, &str), items: &[(&str, &str, &[&str])]) -> Vec<Entry> {
     items.iter().enumerate().map(|(i, (en, es_text, keys))| Entry {
         group,
         keys: keys.iter().map(|k| k.to_string()).collect(),
-        desc: tr(en, es_text).to_string(),
+        desc: categorized(tr(category.0, category.1), tr(en, es_text)),
         id: format!("{prefix}:{}", i + 1),
         run: None,
     }).collect()
@@ -261,58 +276,58 @@ pub fn entries() -> Vec<Entry> {
     let (prefix, binds) = herdr_bindings(&std::fs::read_to_string(herdr_config_path()).unwrap_or_default());
     let mut list = Vec::new();
 
-    let mut herdr: Vec<Entry> = plugin_actions().into_iter().map(|(id, title, args)| {
+    let mut actions: Vec<(usize, Entry)> = plugin_actions().into_iter().map(|(id, title, args)| {
         let command = format!("corral.{id}");
         let keys = binds.iter().filter(|b| b.kind == "plugin_action" && b.command == command)
             .map(|b| herdr_key(&prefix, &b.key)).collect();
-        // The workspace layouts (layout, layout-code, …) get a group of their own, first.
-        let group = if id == "layout" || id.starts_with("layout-") { Group::Layout } else { Group::Herdr };
-        Entry { group, keys, desc: tidy(action_title(&id, &title)), id: format!("herdr:{id}"), run: Some((id, args)) }
+        let (group, desc, order) = action_label(&id, &title);
+        (order, Entry { group, keys, desc, id: format!("herdr:{id}"), run: Some((id, args)) })
     }).collect();
-    herdr.sort_by_key(|e| (e.group != Group::Layout, e.keys.is_empty())); // layouts, then the ones with a key
-    list.extend(herdr);
-    list.push(Entry { group: Group::Herdr, keys: vec![format!("{prefix} ?")],
-                      desc: tr("All of herdr's shortcuts (panes, tabs, workspaces)", "Todos los atajos de herdr (paneles, pestañas, espacios)").into(),
+    actions.sort_by_key(|(order, _)| *order);
+    list.extend(actions.into_iter().map(|(_, e)| e));
+    list.push(Entry { group: Group::Help, keys: vec![format!("{prefix} ?")],
+                      desc: tr("Help: all of herdr's shortcuts (panes, tabs, workspaces)", "Ayuda: todos los atajos de herdr (paneles, pestañas, espacios)").into(),
                       id: "herdr:help".into(), run: None });
 
     let fresh = env::read_json(&fresh_config_path());
-    let mut actions: Vec<(String, Vec<String>)> = Vec::new();
+    let mut editor_actions: Vec<(String, Vec<String>)> = Vec::new();
     for kb in fresh.get("keybindings").arr() {
         let Some(action) = kb.get("action").str() else { continue };
-        match actions.iter_mut().find(|(a, _)| a == action) {
+        match editor_actions.iter_mut().find(|(a, _)| a == action) {
             Some((_, keys)) => keys.push(fresh_key(kb)),
-            None => actions.push((action.to_string(), vec![fresh_key(kb)])),
+            None => editor_actions.push((action.to_string(), vec![fresh_key(kb)])),
         }
     }
-    for (action, keys) in actions {
-        list.push(Entry { group: Group::Editor, keys, desc: editor_desc(&action), id: format!("editor:{action}"), run: None });
+    for (action, keys) in editor_actions {
+        list.push(Entry { group: Group::Editor, keys, desc: categorized("Editor", &editor_desc(&action)), id: format!("editor:{action}"), run: None });
     }
-    list.extend(fixed(Group::Editor, "editor-fixed", &[
-        ("Editor's command palette (all its actions)", "Paleta de comandos del editor (todas sus acciones)", &["ctrl+p"]),
+    list.extend(fixed(Group::Editor, "editor-fixed", ("Editor", "Editor"), &[
+        ("Command palette (all its actions)", "Paleta de comandos (todas sus acciones)", &["ctrl+p"]),
         ("Find in the file", "Buscar en el archivo", &["ctrl+f"]),
         ("Undo", "Deshacer", &["ctrl+z"]),
-        ("Close the editor (a draft is discarded)", "Cerrar el editor (el borrador se descarta)", &["ctrl+q"]),
+        ("Close (the drafts are discarded)", "Cerrar (los borradores se descartan)", &["ctrl+q"]),
     ]));
-    list.extend(fixed(Group::Console, "console", &[
+    // The line editor of Corral's R console (Ark); IPython has its own.
+    list.extend(fixed(Group::Console, "console", ("R console", "Consola de R"), &[
         ("Run, if the expression is complete", "Ejecutar, si la expresión está completa", &["enter"]),
         ("Run even if something is left open", "Ejecutar aunque falte cerrar algo", &["alt+enter"]),
         ("History (with something typed, only what starts the same)", "Historial (con algo escrito, solo lo que empieza igual)", &["↑", "↓"]),
         ("Complete names, arguments and columns", "Completar nombres, argumentos y columnas", &["tab"]),
         ("Interrupt what is running, or clear what you typed", "Interrumpir lo que corre, o borrar lo escrito", &["ctrl+c"]),
-        ("Close the console (on an empty line)", "Cerrar la consola (en una línea vacía)", &["ctrl+d"]),
+        ("Close (on an empty line)", "Cerrar (en una línea vacía)", &["ctrl+d"]),
         ("Clear the screen", "Limpiar la pantalla", &["ctrl+l"]),
         ("Go to the start or the end of the line", "Ir al inicio o al final de la línea", &["ctrl+a", "ctrl+e"]),
         ("Delete to the end, to the start or the previous word", "Borrar hasta el final, hasta el inicio o la palabra anterior", &["ctrl+k", "ctrl+u", "ctrl+w"]),
     ]));
-    list.extend(fixed(Group::Vars, "vars", &[
+    list.extend(fixed(Group::Vars, "vars", ("Variables", "Variables"), &[
         ("Switch tabs (data, plots, values, functions, other)", "Cambiar de pestaña (datos, gráficos, valores, funciones, otros)", &["←", "→", "1–5"]),
         ("Move", "Moverse", &["↑", "↓", "pgup", "pgdn"]),
-        ("Open: a table in the viewer, a plot in Mirador, a value with str()", "Abrir: una tabla en el visor, un gráfico en Mirador, un valor con str()", &["enter"]),
+        ("Open the selected one (a table in the viewer, a plot in Mirador, a value with str())", "Abrir el seleccionado (una tabla en el visor, un gráfico en Mirador, un valor con str())", &["enter"]),
         ("Open the table in Mirador, in the browser", "Abrir la tabla en Mirador, en el navegador", &["m"]),
         ("Search (the arrows pick among the results)", "Buscar (las flechas eligen entre los resultados)", &["/"]),
         ("Close the window", "Cerrar la ventana", &["q"]),
     ]));
-    list.extend(fixed(Group::Table, "table", &[
+    list.extend(fixed(Group::Table, "table", ("Table", "Tabla"), &[
         ("Move through the rows", "Moverse por las filas", &["↑", "↓", "pgup", "pgdn", "g", "G"]),
         ("Move through the columns (also the sideways wheel)", "Moverse por las columnas (también la rueda lateral)", &["←", "→", "0", "$"]),
         ("Sort by the column", "Ordenar por la columna", &["s"]),
@@ -322,24 +337,28 @@ pub fn entries() -> Vec<Entry> {
         ("Clear the filters and the search", "Quitar los filtros y la búsqueda", &["x"]),
         ("Show the whole row", "Ver la fila completa", &["enter"]),
         ("Summary of each column", "Resumen de cada columna", &["i"]),
-        ("Open the table in Mirador, in the browser", "Abrir la tabla en Mirador, en el navegador", &["m"]),
+        ("Open it in Mirador, in the browser", "Abrirla en Mirador, en el navegador", &["m"]),
         ("Close", "Cerrar", &["q"]),
     ]));
-    list.extend(fixed(Group::Mirador, "mirador", &[
+    list.extend(fixed(Group::Plots, "mirador", ("Mirador", "Mirador"), &[
         ("Previous or next plot", "Gráfico anterior o siguiente", &["←", "→"]),
         ("Copy the plot as a PNG image", "Copiar el gráfico como imagen PNG", &["c"]),
-        // A table tab has the table viewer's keys.
-        ("In a table: move through the rows", "En una tabla: moverse por las filas", &["↑", "↓", "pgup", "pgdn", "g", "G"]),
-        ("In a table: move through the columns", "En una tabla: moverse por las columnas", &["←", "→", "0", "$"]),
-        ("In a table: sort by the column", "En una tabla: ordenar por la columna", &["s"]),
-        ("In a table: search for a text in every column", "En una tabla: buscar un texto en todas las columnas", &["/"]),
-        ("In a table: filter with a condition, in R or in SQL", "En una tabla: filtrar con una condición, en R o en SQL", &["f"]),
-        ("In a table: keep only the rows with the cell's value", "En una tabla: dejar solo las filas con el valor de la celda", &["="]),
-        ("In a table: clear the filters and the search", "En una tabla: quitar los filtros y la búsqueda", &["x"]),
-        ("In a table: show the whole row", "En una tabla: ver la fila completa", &["enter"]),
-        ("In a table: summary of each column", "En una tabla: resumen de cada columna", &["i"]),
         ("Show these shortcuts", "Ver estos atajos", &["?"]),
     ]));
+    // A table tab in Mirador has the table viewer's keys.
+    list.extend(fixed(Group::Plots, "mirador-table", ("Mirador table", "Tabla en Mirador"), &[
+        ("Move through the rows", "Moverse por las filas", &["↑", "↓", "pgup", "pgdn", "g", "G"]),
+        ("Move through the columns", "Moverse por las columnas", &["←", "→", "0", "$"]),
+        ("Sort by the column", "Ordenar por la columna", &["s"]),
+        ("Search for a text in every column", "Buscar un texto en todas las columnas", &["/"]),
+        ("Filter with a condition, in R or in SQL", "Filtrar con una condición, en R o en SQL", &["f"]),
+        ("Keep only the rows with the cell's value", "Dejar solo las filas con el valor de la celda", &["="]),
+        ("Clear the filters and the search", "Quitar los filtros y la búsqueda", &["x"]),
+        ("Show the whole row", "Ver la fila completa", &["enter"]),
+        ("Summary of each column", "Resumen de cada columna", &["i"]),
+    ]));
+    // In display order: by group, and within one as listed here.
+    list.sort_by(|a, b| a.group.partial_cmp(&b.group).unwrap_or(std::cmp::Ordering::Equal));
     list
 }
 
@@ -605,7 +624,7 @@ fn change_herdr(action: &str, key: &str, force: bool) -> Result<String, String> 
     }
     std::fs::write(&path, lines.join("\n") + "\n").map_err(|e| format!("{}: {e}", path.display()))?;
     let reloaded = Command::new("herdr").args(["server", "reload-config"]).output().map(|o| o.status.success()).unwrap_or(false);
-    Ok(format!("{} → {}{}", herdr_key(&prefix, &spec), tidy(action_title(action, title)),
+    Ok(format!("{} → {}{}", herdr_key(&prefix, &spec), action_label(action, title).1,
                if reloaded { tr(" (herdr already picked it up)", " (herdr ya lo tomó)") }
                else { tr(" (in herdr: ctrl+b shift+r to reload)", " (en herdr: ctrl+b shift+r para recargar)") }))
 }
