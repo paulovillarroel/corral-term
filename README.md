@@ -224,7 +224,7 @@ Queda en Python el cliente de la consola de Ark (`jupyter-console`, unos 55 MB).
 | Tecla | Acción |
 |---|---|
 | `↑` `↓`, `PgUp` `PgDn`, `g` `G` | Moverse por las filas (rueda del mouse también) |
-| `←` `→`, `0` `$` | Moverse por las columnas |
+| `←` `→`, `0` `$` | Moverse por las columnas; con el mouse, la rueda horizontal, deslizar de lado en el trackpad o Shift + rueda |
 | `s` (o clic en el encabezado) | Ordenar por la columna: ascendente, descendente, sin orden |
 | `/` | Buscar un texto en todas las columnas; `/` y Enter vacío quita la búsqueda |
 | `f` | Filtrar con una condición; parte con el nombre de la columna actual. Acepta R (`mpg > 20 & cyl == 6`, `region %in% c("a", "b")`, `!is.na(x)`) o SQL de DuckDB (`region LIKE 'nor%'`) |

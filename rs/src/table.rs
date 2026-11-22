@@ -212,7 +212,7 @@ impl Viewer {
             self.status.clone()
         } else {
             match self.mode {
-                Mode::Data => "/ buscar · f filtrar · = igual a la celda · x quitar filtros · s ordenar · Enter fila · i resumen · q cerrar".into(),
+                Mode::Data => "/ buscar · f filtrar · = igual a la celda · x quitar filtros · s ordenar · Enter fila · i resumen · Shift+rueda columnas · q cerrar".into(),
                 _ => "↑↓ mover · Esc volver · q cerrar".into(),
             }
         };
@@ -538,9 +538,13 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
         if let Some(rest) = key.strip_prefix("mouse:") {
             let nums: Vec<usize> = rest.split(':').filter_map(|x| x.parse().ok()).collect();
             if let [button, mx, my] = nums[..] {
+                let last_col = v.cols.len().saturating_sub(1);
                 match button {
                     64 => v.row = v.row.saturating_sub(3),
                     65 => v.row = (v.row + 3).min(last),
+                    // Sideways: the horizontal wheel or a trackpad swipe (66, 67), or Shift + wheel (68, 69).
+                    66 | 68 => v.col = v.col.saturating_sub(1),
+                    67 | 69 => v.col = (v.col + 1).min(last_col),
                     0 if my == 3 => {
                         if let Some(&(_, _, i)) = v.header_spans.iter().find(|(a, b, _)| *a <= mx && mx < *b) {
                             v.col = i;
