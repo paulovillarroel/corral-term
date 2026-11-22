@@ -2,14 +2,15 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.7
+
+Agents ask first, and R and Python share one session.
 
 - Agents ask by default: each `corral eval` waits in a popup until you approve it. A missing or mistyped `agents` setting also asks; only `corral config agents on` lets agents run without asking. If you had set `on`, nothing changes for you.
 - Start with R or with Python: "Layout: start with R" and "Layout: start with Python" in the palette (`corral config start r|python`), or `corral layout --lang python` for one layout. A Python layout opens the Python console and a `draft.py`, so Ctrl+R sends to Python; `corral script` follows the console in view.
 - One draft per language in a session that goes back and forth: switching the console (ctrl+b y) opens the other language's draft in another tab, and switching back shows the first again. Both are temporary and are deleted together when the editor closes; `corral script --read/--write/--save` act on the one for the console in view.
-- Docs: Why Corral, a new page with the idea behind Corral, where the name comes from and where it fits in a data scientist's work; the panes of a layout, with a diagram; and the draft is deleted when you close Corral unless you save it.
-
 - The palette (ctrl+b space) is grouped by part of the IDE and by what it does: layouts and panes, the script editor, the console, the variables, tables, plots and Mirador, then agents, appearance and language, and help. Each entry starts with its category (`Layout:`, `Editor:`, `Console:`, `Agents:`, `Theme:`…), so typing one lists just those.
+- Docs: Why Corral, a new page with the idea behind Corral, where the name comes from and where it fits in a data scientist's work; the panes of a layout, with a diagram; and the draft is deleted when you close Corral unless you save it.
 
 ### Fixes
 
