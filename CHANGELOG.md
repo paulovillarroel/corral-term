@@ -2,6 +2,20 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## 0.1.5
+
+Big tables open faster.
+
+- `View()` in R writes the table with nanoparquet first, and with arrow when nanoparquet isn't installed or can't write a column (such as `POSIXlt`). Ten million rows now open in about 1.1 s instead of 1.9 s.
+- In a long session, R's memory stays steady: 20 `View()` of ten million rows left R at 1.6 GB with nanoparquet, against 6.4 GB with arrow. `corral doctor` and the installer suggest nanoparquet even when arrow is installed.
+- A `difftime` column shows in the table viewer as a number in its own units: 1.5 hours shows 1.5.
+- `bench/view.R` measures how long `View()` takes with a big table, `bench/writers.R` compares nanoparquet with arrow, and `bench/repeat.R` follows R's memory over 20 `View()` in one session.
+
+### Fixes
+
+- Site and docs: the time to open ten million rows counts writing the Parquet file. The 34 ms quoted before was only the first screen, after the file was written.
+- Docs: the configuration page no longer says `agent_output structure` never shows values; it says to keep `agents ask` with it.
+
 ## 0.1.4
 
 Every download checked.

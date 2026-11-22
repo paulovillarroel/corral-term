@@ -111,4 +111,4 @@ For transparency: the installer sends one anonymous ping when an installation fi
 
 ---
 
-Version 0.1.4 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
+Version 0.1.5 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
