@@ -2,6 +2,10 @@
 # downloads: the repository plus the Rust corral already compiled, so whoever
 # installs it doesn't need Rust. The binary is static (musl) and runs on any
 # x86_64 Linux, WSL included.
+#
+# Next to the package: its SHA-256 (install.sh checks it before opening the
+# package) and a build provenance attestation, so anyone can check the package
+# came from this workflow: gh attestation verify FILE --repo paulovillarroel/corral-term
 name: Versión
 
 on:
@@ -10,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   paquete:
@@ -29,8 +35,15 @@ jobs:
           mkdir -p "$RUNNER_TEMP/corral-term/rs/target/release"
           cp rs/target/x86_64-unknown-linux-musl/release/corral "$RUNNER_TEMP/corral-term/rs/target/release/corral"
           tar -czf corral-term-x86_64-linux.tar.gz -C "$RUNNER_TEMP" corral-term
+          sha256sum corral-term-x86_64-linux.tar.gz > corral-term-x86_64-linux.tar.gz.sha256
+          cat corral-term-x86_64-linux.tar.gz.sha256
+
+      - name: Atestar el origen del paquete
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: corral-term-x86_64-linux.tar.gz
 
       - name: Publicar la versión
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz install.sh --title "Corral $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 install.sh --title "Corral $GITHUB_REF_NAME" --generate-notes
