@@ -514,7 +514,7 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
         current = vs[sel] if 0 <= sel < len(vs) else None
         kind = current.get("kind") if current else None
         action = {"data": "Enter tabla", "plot": "Enter ver", "plotobj": "Enter dibujar"}.get(kind, "Enter str()")
-        hint = (f"/{query}▏  Enter o Esc para terminar" if typing
+        hint = (f"/{query}▏  ↑↓ elegir · Enter abrir · Esc terminar" if typing
                 else status or f"←/→ pestañas · ↑↓ mover · {action} · / buscar" + ("" if keep_open else " · q salir"))
         out(f"\x1b[{rows};1H\x1b[2K {DIM}{clip(hint, cols - 2)}{RESET}")
 
@@ -570,14 +570,40 @@ def vars_viewer(session_dir: Path | None, run_in_console: Callable[[str, str], b
                         pass
                 continue
             status = ""
-            if typing:
-                if key in ("enter", "esc"):
+            if typing and not key.startswith("mouse:"):
+                # Searching: the list filters as you type; arrows pick among the matches,
+                # Enter opens the one selected, Esc ends the search (the filter stays).
+                changed = False
+                if key == "esc":
                     typing = False
+                elif key == "enter":
+                    typing = False
+                    if 0 <= sel < len(vs):
+                        status = "…"
+                        render(scr)
+                        status = act(vs[sel])
+                        if not keep_open:
+                            return 0
                 elif key == "backspace":
-                    query = query[:-1]
+                    query, changed = query[:-1], True
+                elif key == "down":
+                    sel = min(sel + 1, len(vs) - 1)
+                elif key == "up":
+                    sel = max(sel - 1, 0)
+                elif key == "pgdn":
+                    sel = min(sel + 10, len(vs) - 1)
+                elif key == "pgup":
+                    sel = max(sel - 10, 0)
+                elif key in ("right", "\t"):
+                    tab, sel, top, tab_chosen = (tab + 1) % len(TABS), 0, 0, True
+                elif key in ("left", "backtab"):
+                    tab, sel, top, tab_chosen = (tab - 1) % len(TABS), 0, 0, True
                 elif len(key) == 1 and key.isprintable():
-                    query += key
-                sel = 0
+                    query, changed = query + key, True
+                if changed:
+                    sel, top = 0, 0
+                    if not visible():  # nothing here matches, but another tab has matches: go there
+                        tab = next((i for i in range(len(TABS)) if in_tab(i)), tab)
                 render(scr)
                 continue
             if key.startswith("mouse:"):

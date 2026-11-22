@@ -32,6 +32,14 @@ CONFIG_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 KITTY_TERMINALS = ("wezterm", "kitty", "ghostty")
 MIRADOR_INFO = STATE_DIR / "mirador.json"
 MIRADOR_SERVER = REPO / "mirador" / "server.py"
+RUST_CORRAL = REPO / "rs" / "target" / "release" / "corral"
+
+
+def mirador_command() -> list[str]:
+    """Mirador's server: the Rust one when built (a few MB), else the Python one."""
+    if RUST_CORRAL.is_file() and os.access(RUST_CORRAL, os.X_OK):
+        return [str(RUST_CORRAL), "_mirador"]
+    return [sys.executable, str(MIRADOR_SERVER)]
 
 # Windows browsers reachable from WSL, in default order. Firefox has no app mode,
 # so it gets a new window; Edge and Chrome open one without tabs or address bar.
@@ -438,10 +446,17 @@ def ark_kernelspec() -> Path:
     return JUPYTER_DIR
 
 
+def corral_command() -> str:
+    """How to call corral from a pane: `corral` on the PATH (the Rust one when built), else this script."""
+    found = shutil.which("corral")
+    if found and Path(found).resolve() in (SCRIPT, (REPO / "rs" / "target" / "release" / "corral").resolve()):
+        return "corral"
+    return shlex.quote(str(SCRIPT))
+
+
 def console_command(lang: str) -> str:
     """What corral types in a console pane: a short command that clears the screen and starts it."""
-    corral = "corral" if shutil.which("corral") and Path(shutil.which("corral")).resolve() == SCRIPT else shlex.quote(str(SCRIPT))
-    return f"{corral} _console {lang}"
+    return f"{corral_command()} _console {lang}"
 
 
 def cmd_console_run(args: argparse.Namespace) -> None:
@@ -883,15 +898,18 @@ def cmd_view(args: argparse.Namespace) -> None:
         split_args = ["pane", "split"] + ([target] if target else ["--current"])
         new = herdr(*split_args, "--direction", "right", "--ratio", "0.4", "--focus")["pane"]["pane_id"]
         herdr("pane", "rename", new, f"tabla: {title}")
-        viewer = f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT))} _table {shlex.quote(str(path))}; exit"
+        viewer = f"CORRAL_TITLE={shlex.quote(title)} {corral_command()} _table {shlex.quote(str(path))}; exit"
         herdr("pane", "run", new, viewer)
         return
 
+    if RUST_CORRAL.is_file() and not os.environ.get("CORRAL_TABLE_VIEWER"):
+        os.environ["CORRAL_TITLE"] = title
+        os.execv(str(RUST_CORRAL), [str(RUST_CORRAL), "_table", str(path)])  # the DuckDB viewer
     run_table_viewer(path)
 
 
 def run_table_viewer(path: Path) -> None:
-    """Replace this process with the best table viewer available."""
+    """Replace this process with the best table viewer available (without the Rust one)."""
     custom = os.environ.get("CORRAL_TABLE_VIEWER")
     if custom:
         argv = [a.replace("{file}", str(path)) for a in shlex.split(custom)]
@@ -1304,7 +1322,7 @@ def split_vars_pane(console: str | None = None, ratio: float = 0.62) -> str:
             return pane["pane_id"]
     new = herdr("pane", "split", console, "--direction", "down", "--ratio", str(ratio), "--no-focus")["pane"]["pane_id"]
     herdr("pane", "rename", new, "corral:vars")
-    herdr("pane", "run", new, f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT))} vars --pane")
+    herdr("pane", "run", new, f"{corral_command()} vars --pane")
     return new
 
 
@@ -1644,7 +1662,7 @@ def ensure_mirador() -> dict:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     log = open(STATE_DIR / "mirador.log", "ab")
     subprocess.Popen(
-        [sys.executable, str(MIRADOR_SERVER)], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        mirador_command(), stdin=subprocess.DEVNULL, stdout=log, stderr=log,
         start_new_session=True, cwd=str(REPO),
     )
     old_pid = info.get("pid")
@@ -1677,7 +1695,8 @@ def cmd_mirador(args: argparse.Namespace) -> None:
             print("Mirador no estaba corriendo")
         return
     if args.foreground:
-        os.execv(sys.executable, [sys.executable, str(MIRADOR_SERVER)])
+        command = mirador_command()
+        os.execv(command[0], command)
     info = ensure_mirador()
     if args.url:
         print(info["url"])
@@ -1909,6 +1928,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--instalar", nargs="?", const=ARK_VERSION, metavar="VERSION",
                    help=f"descargar e instalar Ark (por defecto {ARK_VERSION}, la versión probada)")
     p.set_defaults(func=cmd_ark)
+
+    p = sub.add_parser("_show-object", help=argparse.SUPPRESS)
+    p.add_argument("session_dir")
+    p.add_argument("name")
+    p.set_defaults(func=lambda a: print(show_plot_object(Path(a.session_dir), a.name)))
 
     p = sub.add_parser("_console", help=argparse.SUPPRESS)
     p.add_argument("lang", choices=list(LANG_NAMES))

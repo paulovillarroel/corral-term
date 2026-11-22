@@ -11,7 +11,7 @@ Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es [Ark](
 | Carpeta | Qué es |
 |---|---|
 | `bin/corral` | El comando, con la lógica. Python 3 sin dependencias. |
-| `rs/` | `corral` en Rust, sin dependencias: hace lo que se ejecuta a cada rato (Ctrl+R, F5, `ctrl+b t`, `ctrl+b y`, abrir una consola) y le pasa el resto a `bin/corral`. |
+| `rs/` | `corral` en Rust, sin dependencias: lo que se ejecuta a cada rato (Ctrl+R, F5, `ctrl+b t`, `ctrl+b y`, abrir una consola), el panel de variables, el puente al servidor de lenguaje de Ark y el servidor de Mirador. El resto pasa a `bin/corral`. |
 | `bin/corral-run` | Lo que ejecutan los atajos de herdr: el `corral` de Rust si está compilado, si no el de Python. |
 | `lib/corral_tui.py` | Los visores de gráficos y variables que corren dentro de herdr. |
 | `lib/corral_theme.py` | Toma el tema de herdr y lo aplica al editor, los visores, VisiData y Mirador. |
@@ -69,11 +69,7 @@ Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, 
    ln -s ~/workspace/personal/corral-term/fresh/plugins/corral.ts ~/.config/fresh/plugins/corral.ts
    ```
 
-7. VisiData, para explorar tablas con orden, filtros y resúmenes:
-
-   ```bash
-   uv tool install visidata --with pyarrow
-   ```
+7. [DuckDB](https://duckdb.org) (el binario `duckdb` en el PATH), que consulta las tablas de `View()` en la terminal y en Mirador. VisiData es opcional, si prefieres su visor: `uv tool install visidata --with pyarrow` y `corral config table_viewer visidata`.
 
 8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto y el autocompletado con `uv run --with python-lsp-server`; la primera vez uv descarga IPython y python-lsp-server a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff, con `uvx ruff`.
 
@@ -129,7 +125,7 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | Ver los gráficos | El primer gráfico de cada sesión abre Mirador solo, como ventana normal a la derecha de la pantalla y al frente. Después se actualiza sin robarte el foco. `ctrl+b f` lo trae al frente en el último gráfico. En una terminal que dibuje imágenes (ver abajo), `ctrl+b f` muestra el gráfico dentro de herdr. |
 | Ver las variables en grande | `ctrl+b d` las abre encima de la terminal. |
 | Moverte en el panel de variables | Pestañas Datos, Gráficos, Valores, Funciones y Otros: ←/→, `Tab` o las teclas 1 a 5, o un clic. `/` busca. Un objeto gráfico que ya está dibujado se abre sin volver a dibujarlo. |
-| Ver una tabla | `View(df)` en R. Se abre encima de la terminal en VisiData; `q` la cierra. |
+| Ver una tabla | `View(df)` en R o en Python. Se abre encima de la terminal en el visor de Corral, que consulta DuckDB; `q` la cierra. |
 | Usar otra consola de R | En ese panel, `ctrl+b m`: la marca como consola y, si hay un R abierto, activa Corral en él. |
 | Abrir Mirador | `ctrl+b shift+m`, o `corral mirador`. |
 | Abrir `quarto preview` | `ctrl+click` sobre la URL `http://localhost:...` en herdr. |
@@ -162,7 +158,7 @@ Los atajos empiezan con `ctrl+b`: apriétalo, suéltalo y después la otra tecla
 | `corral eval 'código'` | Ejecuta en la consola y devuelve la salida (pensado para agentes); R por defecto, `--lang python` para Python. `--file`, `--timeout`, `--check`; `--reemplazar` hace que sus gráficos reemplacen a los de la petición anterior. |
 | `corral vars` | Variables de la consola que se ve, encima de la terminal; `--split` abre el panel fijo, `--json` las imprime (`--lang` elige R o Python). |
 | `corral plots` | Último gráfico (en Mirador en Windows). |
-| `corral view archivo` | Abre una tabla (parquet, csv, json) en VisiData. |
+| `corral view archivo` | Abre una tabla (parquet, csv, json) en el visor de tablas. |
 | `corral mirador` | Abre Mirador; `--stop` lo detiene, `--url` muestra la dirección. |
 | `corral open [url]` | Abre una URL local en el navegador. |
 | `corral theme` | Aplica el tema de herdr al editor, los visores, VisiData y Mirador (`--mostrar` solo enseña la paleta). |
@@ -207,14 +203,38 @@ La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin 
 
 ### Rendimiento: corral en Rust
 
-Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. Lo propio de Corral es sobre todo Python, salvo lo que corre a cada tecla: `corral send` (Ctrl+R, F5, `ctrl+b enter`), `toggle` (`ctrl+b t`), `switch` (`ctrl+b y`) y el arranque de las consolas. Eso está en `rs/`, un binario de Rust de unos 450 KB sin dependencias que habla con herdr por su socket. Cuando le toca algo poco frecuente (abrir la consola de Python por primera vez, leer el portapapeles) o cualquier otro comando, se lo pasa a `bin/corral`.
+Los motores ya están en Rust: herdr, Fresh, Ark, Air, Ruff y uv. De Corral están en Rust lo que corre a cada tecla y los procesos que quedan abiertos, en un solo binario de `rs/` (unos 760 KB, sin dependencias):
 
-| `corral send` | Rust | Python |
+| Pieza | Rust | Python |
 |---|---|---|
-| Tiempo | menos de 10 ms | unos 50 ms |
-| Memoria | 2,5 MB | 26 MB |
+| `corral send` (Ctrl+R, F5, `ctrl+b enter`) | menos de 10 ms, 2,5 MB | unos 50 ms, 26 MB |
+| `toggle` y `switch` (`ctrl+b t`, `ctrl+b y`) | 10–30 ms | 50–60 ms |
+| Panel de variables (`corral vars --pane`) | 3 MB, 0,1 % de CPU | 26 MB |
+| Puente del servidor de lenguaje de Ark (`corral _lsp r`) | 3 MB | 45 MB |
+| Servidor de Mirador (`corral _mirador`) | 3 MB | 26 MB |
 
-`toggle` y `switch` bajan de 50–60 ms a 10–30 ms. Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
+El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo poco frecuente (abrir la consola de Python por primera vez, el portapapeles, dibujar un objeto gráfico) y los demás comandos (`eval`, `layout`, `close`, `doctor`…) pasan a `bin/corral`. Sin el binario, `bin/corral` y `mirador/server.py` hacen todo igual, con Python.
+
+Queda en Python el cliente de la consola de Ark (`jupyter-console`, unos 55 MB). Si cambias algo en `rs/`, vuelve a compilar con `cargo build --release`; `corral --version` dice si estás usando el binario de Rust.
+
+### Tablas
+
+`View(df)` (en R o en Python), Enter sobre un data frame en el panel de variables, o `corral view archivo` abren la tabla encima de la terminal, en un visor que consulta el archivo con DuckDB. La sesión guarda la tabla como parquet y el visor le pide a DuckDB solo lo que está en pantalla: una página de filas, el conteo, el orden o la búsqueda son consultas de unos milisegundos. Con una tabla de 2 millones de filas abre al instante y usa unos 4 MB; VisiData tardaba 20 segundos y 740 MB en abrirla.
+
+| Tecla | Acción |
+|---|---|
+| `↑` `↓`, `PgUp` `PgDn`, `g` `G` | Moverse por las filas (rueda del mouse también) |
+| `←` `→`, `0` `$` | Moverse por las columnas |
+| `s` (o clic en el encabezado) | Ordenar por la columna: ascendente, descendente, sin orden |
+| `/` | Buscar un texto en todas las columnas; `/` y Enter vacío quita la búsqueda |
+| `f` | Filtrar con una condición; parte con el nombre de la columna actual. Acepta R (`mpg > 20 & cyl == 6`, `region %in% c("a", "b")`, `!is.na(x)`) o SQL de DuckDB (`region LIKE 'nor%'`) |
+| `=` | Dejar solo las filas con el valor de la celda seleccionada |
+| `x` | Quitar todos los filtros y la búsqueda |
+| Enter | Ver la fila completa |
+| `i` | Resumen de cada columna (`SUMMARIZE` de DuckDB) |
+| `q` | Cerrar |
+
+Los filtros se suman entre sí y con la búsqueda, y la línea de arriba dice cuáles están activos y cuántas filas quedan. Si un filtro tiene un error, no se aplica y DuckDB explica por qué. Mirador muestra las mismas tablas en el navegador, con la misma consulta a DuckDB. Si prefieres VisiData: `corral config table_viewer visidata`.
 
 ### La consola de R: Ark
 
@@ -240,7 +260,7 @@ R es la consola por defecto. En un proyecto con R y Python no hay que elegir al 
 
 En Python, Ctrl+R envía la instrucción completa bajo el cursor: una función con todo su cuerpo (aunque tenga líneas en blanco), un `if` con su `else`, una llamada repartida en varias líneas o una función con decoradores. El código llega a IPython como un bloque pegado, igual que en Positron, y se ve en `In [n]:`. Una selección se envía sin su sangría común. F5 ejecuta el archivo con `%run -i`, que deja las variables en la sesión. Ctrl+L y Ctrl+U (`<-`, `|>`) no hacen nada en un `.py`.
 
-Las figuras de matplotlib (y de seaborn o plotnine, que dibujan con matplotlib) van a Mirador al terminar cada ejecución, como en Jupyter; `plt.show()` las envía en ese momento. Una figura guardada en una variable aparece en la pestaña Gráficos del panel de variables, y Enter la muestra. Enter sobre un DataFrame de pandas o polars lo abre en VisiData, y `View(df)` en la consola hace lo mismo.
+Las figuras de matplotlib (y de seaborn o plotnine, que dibujan con matplotlib) van a Mirador al terminar cada ejecución, como en Jupyter; `plt.show()` las envía en ese momento. Una figura guardada en una variable aparece en la pestaña Gráficos del panel de variables, y Enter la muestra. Enter sobre un DataFrame de pandas o polars lo abre en el visor de tablas, y `View(df)` en la consola hace lo mismo.
 
 En el editor, el autocompletado y la ayuda vienen de python-lsp-server, que corre en el entorno del proyecto y por eso conoce tus paquetes. Los diagnósticos son de Ruff con sus reglas por defecto (errores reales: nombres sin definir, imports sin usar, errores de sintaxis), y Ruff formatea al guardar, igual que Air en R. Si el proyecto tiene configuración de Ruff en `pyproject.toml` o `ruff.toml`, se usa esa.
 
@@ -304,7 +324,7 @@ Mirador escucha solo en `127.0.0.1` y pide un token en cada solicitud. El token 
 | `CORRAL_VIEW` | Dónde abre `View()`: `auto` (popup dentro de herdr, Mirador fuera), `mirador` o `popup` | `auto` |
 | `CORRAL_BROWSER` | Navegador para Mirador: `firefox`, `edge`, `chrome`, `print` (solo muestra la URL) o un comando con `{url}` | Firefox; si no está, Edge o Chrome |
 | `CORRAL_MIRADOR_PORT` | Puerto de Mirador | `7317` |
-| `CORRAL_TABLE_VIEWER` | Visor de tablas; `{file}` se reemplaza por la ruta | `vd`, si no DuckDB + `less` |
+| `CORRAL_TABLE_VIEWER` | Otro visor de tablas; `{file}` se reemplaza por la ruta | el de Corral, con DuckDB |
 | `CORRAL_MAX_ROWS` | Filas que muestra el visor de DuckDB | `1000` |
 | `CORRAL_CLIPBOARD` | Comando para leer el portapapeles | `wl-paste`, `xclip` o PowerShell |
 
@@ -334,7 +354,7 @@ Opciones de R:
 
 - En Windows los gráficos no se ven nítidos dentro de herdr; van a Mirador (ver arriba).
 - Desde Warp, `Ctrl+Enter`, `Ctrl+Shift+…` y `Alt+…` no llegan al editor; por eso los atajos principales son `Ctrl+R`, `F5`, `Ctrl+L` y `Ctrl+U`.
-- Sin VisiData, las tablas se muestran con DuckDB y `less`: hasta 1000 filas, sin orden ni filtro interactivos.
+- Sin el binario de Rust, las tablas se abren con VisiData o, sin ella, con DuckDB y `less` (hasta 1000 filas, sin orden ni filtro).
 - Las tablas de `View()` se guardan en el directorio temporal de R (o de Python) y desaparecen al cerrar la consola.
 - La consola de Python necesita IPython; `ctrl+b m` sobre un `python` sin IPython marca el panel, pero no activa Corral.
 - Las figuras de Python se guardan al dibujarse (PNG y SVG) y Mirador las escala; no se vuelven a dibujar al cambiar el tamaño de la ventana, como sí hace httpgd en R.

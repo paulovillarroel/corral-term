@@ -8,7 +8,14 @@ mod env;
 mod herdr;
 mod json;
 mod layout;
+mod lsp;
+mod mirador;
 mod send;
+mod sha256;
+mod table;
+mod term;
+mod vars;
+mod zmtp;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -18,6 +25,11 @@ fn main() {
         Some("_console") => console::run(rest, &args),
         Some("toggle") => layout::toggle(rest, &args),
         Some("switch") => layout::switch(rest, &args),
+        Some("_lsp") => lsp::run(rest, &args),
+        Some("vars") => vars::run(rest, &args, false),
+        Some("_vars") => vars::run(rest, &args, true),
+        Some("_mirador") => mirador::serve(),
+        Some("_table") => table::run(rest, &args),
         Some("--version") => {
             println!("corral {} (Rust; el resto en {})", env!("CARGO_PKG_VERSION"), env::repo().join("bin/corral").display());
             Ok(())
