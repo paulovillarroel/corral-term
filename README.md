@@ -16,7 +16,7 @@ Written in Rust. DuckDB for your data.</p>
 <p align="center"><img src="site/assets/shots/corral-layout.webp" width="860" alt="A Corral layout in herdr: Claude Code on the left runs code in the R console; on the right, the script editor, the R console and the variables pane"></p>
 
 - **Script, console, variables, tables and plots** in a [herdr TUI](https://herdr.dev/tui/) workspace: R on [Ark](https://github.com/posit-dev/ark), Python in IPython.
-- **Big tables at once.** `View()` asks DuckDB only for what's on screen: ten million rows show up in about 34 ms.
+- **Big tables at once.** `View()` saves the table as Parquet and asks DuckDB only for what's on screen: ten million rows take about a second to save with nanoparquet, then about 30 ms a screen.
 - **Agents in your session.** Corral is the harness between your agent and your live session: the agent runs code in your console with `corral eval`, guided by an [Agent Skills](https://agentskills.io) skill, within rules you set ([the agent harness](https://corral-term.dev/docs/agents.html#the-agent-harness)).
 - **Light.** R ready in 0.45 s and 155 MB in use (200 MB counting herdr), against 13.3 s and 3.2 GB for Positron ([how it was measured](https://corral-term.dev/docs/performance.html)).
 
