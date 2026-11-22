@@ -7,3 +7,4 @@ __pycache__/
 # The website: Vercel copies install.sh into site/ when it builds (vercel.json).
 site/install.sh
 .vercel
+node_modules

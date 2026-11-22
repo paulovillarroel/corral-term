@@ -29,4 +29,4 @@ You need Linux x86_64 or Windows with WSL, herdr TUI 0.9.5 or newer, and R with 
 
 Then open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>. <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut.
 
-Version 0.1.0 · Linux and WSL; macOS not yet.
+Version 0.1.0 · Linux and WSL; macOS not yet · [MIT license](LICENSE).

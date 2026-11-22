@@ -349,7 +349,7 @@
     </details>
     <details>
       <summary>Does my data leave my machine?</summary>
-      <p>Corral runs everything locally. Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does; Corral sends nothing anywhere.</p>
+      <p>Your data and code never leave it: Corral runs everything locally, and Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does. The one thing Corral sends is an anonymous ping when an installation finishes (version, system and country, no IP), to count installs; <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>).</p>
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>

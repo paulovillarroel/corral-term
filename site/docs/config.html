@@ -89,6 +89,7 @@
     <tr><td><code>CORRAL_BROWSER</code></td><td>The browser for Mirador and help pages: <code>firefox</code>, <code>edge</code>, <code>chrome</code>, <code>print</code> (only prints the URL), or a command with <code>{url}</code></td><td>On WSL, Firefox, or Edge or Chrome without it; on Linux, <code>xdg-open</code></td></tr>
     <tr><td><code>CORRAL_MIRADOR_PORT</code></td><td>Mirador's port; if it is taken, Mirador uses another free one</td><td><code>7317</code></td></tr>
     <tr><td><code>CORRAL_TABLE_VIEWER</code></td><td>Another table viewer; <code>{file}</code> is replaced by the table's path</td><td>Corral's, with DuckDB</td></tr>
+    <tr><td><code>CORRAL_NO_TELEMETRY</code></td><td>Set to <code>1</code> so the installer doesn't send its anonymous install count (see <a href="install.html#install-count">Install</a>). <code>DO_NOT_TRACK=1</code> does the same.</td><td>unset</td></tr>
     <tr><td><code>CORRAL_CLIPBOARD</code></td><td>A command that prints the clipboard, for <kbd>ctrl+b</kbd> <kbd>enter</kbd></td><td><code>wl-paste</code>, <code>xclip</code> or PowerShell</td></tr>
     <tr><td><code>CORRAL_OPEN_PLOTS</code></td><td><code>0</code> keeps Python's first plot from opening anything</td><td><code>1</code></td></tr>
     <tr><td><code>CORRAL_DIR</code></td><td>The folder the installer puts Corral in</td><td><code>~/.local/share/corral-term</code></td></tr>

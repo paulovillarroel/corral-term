@@ -2,7 +2,7 @@
 name = "corral"
 version = "0.1.0"
 edition = "2021"
-description = "Corral's fast path: the commands that run on every keystroke, without Python's startup"
+description = "Corral: an agentic Data Science IDE in your terminal, for R and Python"
 license = "MIT"
 publish = false
 

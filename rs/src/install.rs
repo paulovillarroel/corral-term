@@ -810,7 +810,37 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         println!("{}{}{}", s.dim, tr("Corral speaks English; corral config language es switches it to Spanish.",
                                      "Corral habla inglés por defecto; corral config language es lo deja en español."), s.off);
     }
+    count_install(before.get("version").str().is_some(), in_place);
     Ok(())
+}
+
+/// One anonymous ping after a successful install, so the project knows how many
+/// people install Corral and from which countries: the version, the system (linux or
+/// wsl), new install or update, and published package or clone. The site adds the
+/// country from Vercel's geolocation and stores no IP (api/installed.js).
+/// CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1 turns it off; CORRAL_TELEMETRY_URL points it
+/// elsewhere (tests). It waits 5 seconds at most and never fails the install.
+fn count_install(update: bool, in_place: bool) {
+    let set = |var: &str| std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0");
+    if set("CORRAL_NO_TELEMETRY") || set("DO_NOT_TRACK") {
+        return;
+    }
+    let Some(curl) = env::which("curl") else { return };
+    let body = format!(r#"{{"version":"{VERSION}","system":"{}","kind":"{}","source":"{}"}}"#,
+                       if is_wsl() { "wsl" } else { "linux" }, if update { "update" } else { "new" },
+                       if in_place { "clone" } else { "release" });
+    let url = std::env::var("CORRAL_TELEMETRY_URL").unwrap_or_else(|_| "https://corral-term.dev/api/installed".into());
+    let sent = Command::new(curl)
+        .args(["-fsS", "-m", "5", "-X", "POST", "-H", "Content-Type: application/json", "--data", &body, &url])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|st| st.success());
+    if sent {
+        let s = style();
+        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
+                                     "Conté esta instalación de forma anónima (versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
+    }
 }
 
 /// `corral install [--from FOLDER] [--in-place] [--check] [--rerun COMMAND]`.

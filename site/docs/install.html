@@ -122,6 +122,18 @@ Optional
     <p>The line in <code>~/.Rprofile</code> looks like this, with the full path to your copy of Corral:</p>
     <pre><code>if (interactive()) try(source("~/.local/share/corral-term/r/corral.R"))  # Corral</code></pre>
 
+    <h2 id="install-count">Anonymous install count</h2>
+    <p>When an installation finishes, the installer sends one anonymous ping to <code>corral-term.dev</code>, so the project knows how many people install Corral and from which countries. The ping says only:</p>
+    <ul>
+      <li>the version of Corral (<code>0.1.0</code>);</li>
+      <li>the system: Linux or WSL;</li>
+      <li>whether it is a new install or an update;</li>
+      <li>whether it came from the published package or a clone.</li>
+    </ul>
+    <p>The country comes from the request itself, through Vercel's geolocation; the IP address is never stored. No names, paths, hostnames or anything about your data or code. The code that receives it is <a href="https://github.com/paulovillarroel/corral-term/blob/main/api/installed.js"><code>api/installed.js</code></a>. Checking (<code>--check</code>) sends nothing.</p>
+    <p>To install without it, set <code>CORRAL_NO_TELEMETRY=1</code> (<code>DO_NOT_TRACK=1</code> works too):</p>
+    <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | CORRAL_NO_TELEMETRY=1 sh</code></pre>
+
     <h2>Check without installing</h2>
     <p>To see the checklist without changing anything, add <code>--check</code>:</p>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh -s -- --check</code></pre>
