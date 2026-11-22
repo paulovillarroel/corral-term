@@ -71,7 +71,7 @@ Todo lo que tiene estado vive en un panel de herdr (las sesiones de R y Python, 
 
 7. [DuckDB](https://duckdb.org) (el binario `duckdb` en el PATH), que consulta las tablas de `View()` en la terminal y en Mirador. VisiData es opcional, si prefieres su visor: `uv tool install visidata --with pyarrow` y `corral config table_viewer visidata`.
 
-8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto y el autocompletado con `uv run --with python-lsp-server`; la primera vez uv descarga IPython y python-lsp-server a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff, con `uvx ruff`.
+8. Para Python, [uv](https://docs.astral.sh/uv/). Corral abre la consola con `uv run --with ipython` en el proyecto, y el autocompletado con [ty](https://docs.astral.sh/ty/), de Astral, igual que uv y Ruff. La primera vez uv descarga IPython, ty y Ruff a su caché, sin instalarlos en el proyecto. Los diagnósticos y el formato son de Ruff.
 
 9. Para la consola de R con Ark (recomendado), el kernel de Ark. Sin él, Corral usa R normal:
 
@@ -254,11 +254,11 @@ También bajó lo que se repite después de cada comando y lo que queda corriend
 | El editor sigue un cambio de tema de herdr | hasta 2 s | 0,4 s |
 | Fresh en reposo, con los plugins que no usa desactivados | 60 MB, 0,57 % de CPU | 48 MB, 0,20 % |
 | Cargar Corral en R (`corral.R`) | 85 ms, 23 MB | 27 ms, 17 MB |
-| Servidores de lenguaje de Python (pylsp y Ruff) | 340 MB | 182 MB |
+| Servidores de lenguaje de Python | 340 MB (pylsp y Ruff) | 159 MB (ty y Ruff) |
 
 Durante el uso, cada comando en la consola de R tarda unos 2,5 ms de Enter al siguiente prompt (1,5 ms sin Corral), también con una tabla de 2 millones de celdas en memoria; en Python, unos 6 ms con o sin Corral.
 
-`corral.R` ya no carga paquetes que no necesita al arrancar: httpgd (con unigd, systemfonts, lifecycle y cli) se carga con el primer gráfico, y la firma de cada variable usa la dirección en memoria que da R base, sin rlang (que tardaba 54 ms en cargarse). pylsp y Ruff corren directo desde el entorno que uv guarda en su caché para ellos (`corral _lsp python`, `corral _lsp ruff`): con `uvx` o `uv run`, uv se quedaba esperando como proceso padre todo el tiempo, unos 45 MB por cada uno. pylsp sigue viendo los paquetes del proyecto a través de su `.venv`. La consola de Python sigue con `uv run`, porque IPython tiene que correr dentro del entorno del proyecto.
+`corral.R` ya no carga paquetes que no necesita al arrancar: httpgd (con unigd, systemfonts, lifecycle y cli) se carga con el primer gráfico, y la firma de cada variable usa la dirección en memoria que da R base, sin rlang (que tardaba 54 ms en cargarse). El servidor de Python y Ruff corren directo desde el entorno que uv guarda en su caché para ellos (`corral _lsp python`, `corral _lsp ruff`): con `uvx` o `uv run`, uv se quedaba esperando como proceso padre todo el tiempo, unos 45 MB por cada uno. El servidor de Python pasó de pylsp a ty: en la misma prueba con pandas, ty usa 141 MB en un proceso (pylsp, 172 MB en dos), arranca en milisegundos (pylsp, medio segundo), completa en la mitad del tiempo y muestra la ayuda en 2 ms, con la documentación completa (pylsp tardaba 0,3–0,4 s y solo mostraba la firma). La consola de Python sigue con `uv run`, porque IPython tiene que correr dentro del entorno del proyecto.
 
 Las variables se describen de nuevo solo si el objeto cambió (otra dirección en memoria, otro largo, otras dimensiones o, en las tablas, otros tipos de columna), y el archivo que lee el panel se reescribe solo cuando algo cambió. El plugin de Fresh ya no revisa nada a intervalos: copia el borrador cuando dejas de escribir 0,4 s (al menos cada 2 s si sigues escribiendo), vigila los archivos de tema con el sistema de archivos y abre la vista de carpetas cuando aparece un borrador. Fresh trae unos 50 plugins; Corral desactiva en `fresh/config.json` los que no usa (orquestación de agentes, que ya hace herdr, pantallas de bienvenida, Kubernetes, devcontainers y lenguajes como C# o C++). Con eso Fresh abre con 48 MB en vez de 60 y en reposo usa 0,20 % de CPU en vez de 0,57 %. Revisar cada 2 s si cambiaron los archivos abiertos (por ejemplo, cuando Claude los edita) cuesta tan poco que no se nota al medirlo, así que se mantiene.
 
@@ -316,7 +316,7 @@ En Python, Ctrl+R envía la instrucción completa bajo el cursor: una función c
 
 Las figuras de matplotlib (y de seaborn o plotnine, que dibujan con matplotlib) van a Mirador al terminar cada ejecución, como en Jupyter; `plt.show()` las envía en ese momento. Una figura guardada en una variable aparece en la pestaña Gráficos del panel de variables, y Enter la muestra. Enter sobre un DataFrame de pandas o polars lo abre en el visor de tablas, y `View(df)` en la consola hace lo mismo.
 
-En el editor, el autocompletado y la ayuda vienen de python-lsp-server, que corre en el entorno del proyecto y por eso conoce tus paquetes. Los diagnósticos son de Ruff con sus reglas por defecto (errores reales: nombres sin definir, imports sin usar, errores de sintaxis), y Ruff formatea al guardar, igual que Air en R. Si el proyecto tiene configuración de Ruff en `pyproject.toml` o `ruff.toml`, se usa esa.
+En el editor, el autocompletado, la ayuda y el salto a la definición vienen de ty, que lee el `.venv` del proyecto y por eso conoce tus paquetes. ty todavía es una versión 0.0; si algo falla, `corral config python_lsp pylsp` vuelve a python-lsp-server, y `corral config python_lsp ty` a ty (rige al reabrir el editor). ty también sabe revisar tipos, pero en Corral esos diagnósticos están apagados para no repetir los de Ruff. Los diagnósticos son de Ruff con sus reglas por defecto (errores reales: nombres sin definir, imports sin usar, errores de sintaxis), y Ruff formatea al guardar, igual que Air en R. Si el proyecto tiene configuración de Ruff en `pyproject.toml` o `ruff.toml`, se usa esa.
 
 Para usar otro comando en la consola de Python (por ejemplo, con más paquetes), `corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/workspace/personal/corral-term/py/startup.py'`.
 

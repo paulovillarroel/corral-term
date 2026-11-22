@@ -1204,7 +1204,7 @@ def cmd_config(args: argparse.Namespace) -> None:
         print(json.dumps(cfg.get(args.key) if args.key else cfg, ensure_ascii=False))
         return
     allowed = {"images": {"auto", "kitty", "symbols"}, "mirador_window": {"derecha", "libre"},
-               "ark_frontend": {"corral", "jupyter"}}
+               "ark_frontend": {"corral", "jupyter"}, "python_lsp": {"ty", "pylsp"}}
     if args.key in allowed and args.value not in allowed[args.key]:
         raise CorralError(f"{args.key} acepta: {', '.join(sorted(allowed[args.key]))}")
     cfg[args.key] = args.value
@@ -1434,13 +1434,18 @@ def cmd_lsp(args: argparse.Namespace) -> None:
 
     R: languageserver, with lintr reporting real problems only, like Positron
     (style is Air's job), unless the project brings its own .lintr.
-    Python: python-lsp-server (completion, help, definitions) in the project's
-    environment through uv; Ruff gives the diagnostics as a second server.
+    Python: ty (or python-lsp-server with `python_lsp: pylsp`) for completion,
+    help and definitions, reading the project's .venv; Ruff gives the
+    diagnostics as a second server. All of them through uv.
     """
     if args.lang == "ruff":
         os.execvp("uvx", ["uvx", "--quiet", "ruff", "server"])
     if args.lang == "python":
-        os.execvp("uv", ["uv", "run", "--quiet", "--with", "python-lsp-server", "pylsp"])
+        if corral_config().get("python_lsp") == "pylsp":
+            os.execvp("uv", ["uv", "run", "--quiet", "--with", "python-lsp-server", "pylsp"])
+        venv = next((d / ".venv" for d in (Path.cwd(), *Path.cwd().parents) if (d / ".venv" / "bin" / "python").exists()), None)
+        env = dict(os.environ, VIRTUAL_ENV=str(venv)) if venv else dict(os.environ)
+        os.execvpe("uvx", ["uvx", "--quiet", "ty", "server"], env)
     # R under Ark: Ark's own language server (it knows the live session), through
     # a small bridge. The editor may start before the console: wait for it.
     ark = ark_connection()

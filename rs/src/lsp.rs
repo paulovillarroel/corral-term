@@ -4,8 +4,9 @@
 //! local port. This asks the kernel for that server and copies bytes both
 //! ways. Without Ark, the Python version starts the usual one.
 //!
-//! `corral _lsp python` and `corral _lsp ruff`: pylsp and Ruff straight from the
-//! environment uv keeps for them in its cache. Through `uvx` or `uv run`, uv
+//! `corral _lsp python` and `corral _lsp ruff`: ty (or pylsp, with
+//! `python_lsp: pylsp`) and Ruff straight from the environment uv keeps for
+//! them in its cache. Through `uvx` or `uv run`, uv
 //! would stay alive as a waiting parent (about 45 MB each) for the whole session.
 
 use crate::console;
@@ -25,7 +26,8 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str).unwrap_or("r") {
         "r" => {}
         "ruff" => tool("ruff", "ruff", &["server"], false),
-        "python" => tool("python-lsp-server", "pylsp", &[], true),
+        "python" if env::config().get("python_lsp").str() == Some("pylsp") => tool("python-lsp-server", "pylsp", &[], true),
+        "python" => tool("ty", "ty", &["server"], true),
         _ => python_fallback(all),
     }
     let mut conn = ark_connection();
@@ -43,8 +45,8 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
 
 /// Run a Python tool's program from uv's cached environment for it (installed
 /// there on first use, as uvx would), or from the PATH if it is installed as a
-/// tool. With `project_env`, Jedi (pylsp's completion) reads the project's
-/// `.venv`, so it knows the project's packages.
+/// tool. With `project_env`, the server reads the project's `.venv`
+/// (VIRTUAL_ENV), so it knows the project's packages.
 fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
     let mut cmd = match tool_path(package, program) {
         Some(bin) => {

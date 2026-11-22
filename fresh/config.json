@@ -77,7 +77,7 @@
     },
     "python": [
       {
-        "name": "pylsp",
+        "name": "python",
         "command": "corral",
         "args": [
           "_lsp",

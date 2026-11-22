@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 736" width="760" height="736" role="img" font-family='system-ui, -apple-system, "Segoe UI", sans-serif'>
-<title>Antes y ahora</title><desc>El editor sigue un cambio de tema: hasta 2000 → 400; Arranque de la consola de Ark: 470 → 330; corral eval: 210 → 20–40; Cargar Corral en R: 85 → 27; Variables de R por comando: 79 → 3; toggle y switch (ctrl+b t, ctrl+b y): 50–60 → 10–30; corral send (Ctrl+R): 50 → menos de 10; Variables de Python por comando: 2,4 → 0,5; Visor de tablas (2 millones de filas): 740 → 4; Ark con el servidor de lenguaje: 641 → 112; Servidores de lenguaje de Python: 340 → 182; Fresh en reposo: 60 → 48; Consola de Ark: 55 → 3; Puente del servidor de lenguaje: 45 → 3; Panel de variables: 26 → 3; Servidor de Mirador: 26 → 3; corral send: 26 → 2,5</desc>
+<title>Antes y ahora</title><desc>El editor sigue un cambio de tema: hasta 2000 → 400; Arranque de la consola de Ark: 470 → 330; corral eval: 210 → 20–40; Cargar Corral en R: 85 → 27; Variables de R por comando: 79 → 3; toggle y switch (ctrl+b t, ctrl+b y): 50–60 → 10–30; corral send (Ctrl+R): 50 → menos de 10; Variables de Python por comando: 2,4 → 0,5; Visor de tablas (2 millones de filas): 740 → 4; Ark con el servidor de lenguaje: 641 → 112; Servidores de lenguaje de Python: 340 → 159; Fresh en reposo: 60 → 48; Consola de Ark: 55 → 3; Puente del servidor de lenguaje: 45 → 3; Panel de variables: 26 → 3; Servidor de Mirador: 26 → 3; corral send: 26 → 2,5</desc>
 <rect width="760" height="736" rx="8" fill="#1a1a19"/>
 <text x="24.0" y="36.0" font-size="18" font-weight="600" fill="#f0efec" text-anchor="start">Antes y ahora</text>
 <text x="24.0" y="58.0" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">Cada fila es una pieza de Corral. Escala logarítmica: cada línea vertical vale 10 veces la anterior.</text>
@@ -78,10 +78,10 @@
 <circle cx="480.6" cy="470" r="5" fill="#86b6ef" stroke="#1a1a19" stroke-width="2"/>
 <text x="736.0" y="474.5" font-size="13" font-weight="400" fill="#f0efec" text-anchor="end" style="font-variant-numeric: tabular-nums">641 → 112</text>
 <text x="24.0" y="502.5" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">Servidores de lenguaje de Python</text>
-<line x1="494.1" y1="498" x2="511.5" y2="498" stroke="#52514e" stroke-width="2" stroke-linecap="round"/>
+<line x1="490.4" y1="498" x2="511.5" y2="498" stroke="#52514e" stroke-width="2" stroke-linecap="round"/>
 <circle cx="511.5" cy="498" r="5" fill="#256abf" stroke="#1a1a19" stroke-width="2"/>
-<circle cx="494.1" cy="498" r="5" fill="#86b6ef" stroke="#1a1a19" stroke-width="2"/>
-<text x="736.0" y="502.5" font-size="13" font-weight="400" fill="#f0efec" text-anchor="end" style="font-variant-numeric: tabular-nums">340 → 182</text>
+<circle cx="490.4" cy="498" r="5" fill="#86b6ef" stroke="#1a1a19" stroke-width="2"/>
+<text x="736.0" y="502.5" font-size="13" font-weight="400" fill="#f0efec" text-anchor="end" style="font-variant-numeric: tabular-nums">340 → 159</text>
 <text x="24.0" y="530.5" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">Fresh en reposo</text>
 <line x1="457.1" y1="526" x2="463.3" y2="526" stroke="#52514e" stroke-width="2" stroke-linecap="round"/>
 <circle cx="463.3" cy="526" r="5" fill="#256abf" stroke="#1a1a19" stroke-width="2"/>
