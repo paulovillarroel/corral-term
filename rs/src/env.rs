@@ -150,6 +150,11 @@ pub fn which(cmd: &str) -> Option<PathBuf> {
     std::env::split_paths(&path).map(|d| d.join(cmd)).find(|p| p.is_file())
 }
 
+/// True when a command's arguments ask for its usage (`-h` or `--help`): the
+/// command prints it and stops before it touches herdr or any state.
+pub fn wants_help(args: &[String]) -> bool {
+    args.iter().any(|a| a == "-h" || a == "--help")
+}
 
 pub fn notify(title: &str, body: &str) {
     if body.is_empty() {

@@ -131,11 +131,19 @@ fn label_of(mode: &str, code: bool) -> &'static str {
     }
 }
 
+fn toggle_usage() -> &'static str {
+    tr("usage: corral toggle [both|script|agent|console]", "uso: corral toggle [both|script|agent|console]")
+}
+
 pub fn toggle(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", toggle_usage());
+        return Ok(());
+    }
     let wanted = match args.first().map(String::as_str) {
         None => None,
         Some(m @ ("both" | "script" | "agent" | "console")) => Some(m.to_string()),
-        Some(_) => return Err(tr("usage: corral toggle [both|script|agent|console]", "uso: corral toggle [both|script|agent|console]").into()),
+        Some(_) => return Err(toggle_usage().into()),
     };
     let ws = env::current_workspace();
     let panes = herdr::panes(ws.as_deref())?;
@@ -240,16 +248,25 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn switch_usage() -> &'static str {
+    tr("usage: corral switch [r|python]", "uso: corral switch [r|python]")
+}
+
 /// `corral switch [r|python]` (ctrl+b y): the console spot shows that language;
 /// without one, the other. Starts it the first time.
 pub fn switch(args: &[String]) -> Result<(), String> {
-    let ws = env::current_workspace();
-    let panes = herdr::panes(ws.as_deref())?;
-    let current = env::active_lang(ws.as_deref(), &panes);
+    if env::wants_help(args) {
+        println!("{}", switch_usage());
+        return Ok(());
+    }
     let lang = match args.first().map(String::as_str) {
-        None => if current == "r" { "python" } else { "r" },
+        None => {
+            let ws = env::current_workspace();
+            let panes = herdr::panes(ws.as_deref())?;
+            if env::active_lang(ws.as_deref(), &panes) == "r" { "python" } else { "r" }
+        }
         Some(l @ ("r" | "python")) => l,
-        Some(_) => return Err(tr("usage: corral switch [r|python]", "uso: corral switch [r|python]").into()),
+        Some(_) => return Err(switch_usage().into()),
     };
     let (pane, started) = console::show(lang, true)?;
     crate::workspace::draft_follows(lang);

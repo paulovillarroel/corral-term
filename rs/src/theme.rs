@@ -468,8 +468,19 @@ pub fn sources_mtime() -> f64 {
     [herdr_config(), corral_config_file()].iter().filter_map(|f| mtime(f)).fold(0.0, f64::max)
 }
 
+fn theme_usage() -> &'static str {
+    tr("usage: corral theme [--show]", "uso: corral theme [--show]")
+}
+
 /// `corral theme [--show]`.
 pub fn cmd_theme(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", theme_usage());
+        return Ok(());
+    }
+    if let Some(bad) = args.iter().find(|a| *a != "--show") {
+        return Err(trf!("unknown option {bad}\n{}", "opción desconocida {bad}\n{}", theme_usage()));
+    }
     let show = args.iter().any(|a| a == "--show");
     let p = if show { palette() } else { apply() };
     let name = p.get("name").str().unwrap_or("").to_string();
@@ -501,8 +512,17 @@ pub fn cmd_theme(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn config_usage() -> &'static str {
+    tr("usage: corral config [KEY [VALUE]]   (the keys: corral-term.dev/docs/config.html)",
+       "uso: corral config [CLAVE [VALOR]]   (las claves: corral-term.dev/docs/config.html)")
+}
+
 /// `corral config [KEY [VALUE]]`: read or change Corral's settings.
 pub fn cmd_config(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", config_usage());
+        return Ok(());
+    }
     let mut cfg = env::config();
     if args.len() == 1 && args[0] == "language" {
         println!("{}", crate::i18n::resolve());

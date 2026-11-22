@@ -67,8 +67,16 @@ pub fn install_ark(version: &str) -> Result<PathBuf, String> {
     Ok(target)
 }
 
+fn ark_usage() -> &'static str {
+    tr("usage: corral ark [--install [VERSION]]", "uso: corral ark [--install [VERSIÓN]]")
+}
+
 /// `corral ark [--install [VERSION]]`.
 pub fn cmd_ark(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", ark_usage());
+        return Ok(());
+    }
     match args.first().map(String::as_str) {
         None => {}
         Some("--install") => {
@@ -78,8 +86,7 @@ pub fn cmd_ark(args: &[String]) -> Result<(), String> {
             let target = install_ark(version)?;
             println!("{}", trf!("Ark {version} installed in {}", "Ark {version} instalado en {}", target.display()));
         }
-        Some(other) => return Err(trf!("unknown option {other}\nusage: corral ark [--install [VERSION]]",
-                                       "opción desconocida {other}\nuso: corral ark [--install [VERSIÓN]]")),
+        Some(other) => return Err(trf!("unknown option {other}\n{}", "opción desconocida {other}\n{}", ark_usage())),
     }
     let cfg = env::config();
     let ark = console::ark_binary(&cfg);
@@ -116,7 +123,15 @@ pub fn r_packages(rscript: &Path, pkgs: &[&str]) -> Vec<bool> {
 }
 
 /// `corral doctor`: what Corral needs and how it is set up, one line each.
-pub fn cmd_doctor(_args: &[String]) -> Result<(), String> {
+pub fn cmd_doctor(args: &[String]) -> Result<(), String> {
+    let usage = tr("usage: corral doctor", "uso: corral doctor");
+    if env::wants_help(args) {
+        println!("{usage}");
+        return Ok(());
+    }
+    if let Some(bad) = args.first() {
+        return Err(trf!("unknown option {bad}\n{usage}", "opción desconocida {bad}\n{usage}"));
+    }
     let mut rows: Vec<(bool, String, String)> = Vec::new();
     let mut check = |ok: bool, name: &str, detail: String| rows.push((ok, name.to_string(), detail));
 
