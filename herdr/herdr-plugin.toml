@@ -95,6 +95,44 @@ title = "Corral: back to herdr's theme"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "theme", "herdr"]
 
+# What agents may do in your consoles (Security model in the docs). Each title says
+# what you get; Corral notifies you of the choice.
+[[actions]]
+id = "agents-on"
+title = "Corral: agents run code without asking"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agents", "on"]
+
+[[actions]]
+id = "agents-ask"
+title = "Corral: agents ask before each request"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agents", "ask"]
+
+[[actions]]
+id = "agents-off"
+title = "Corral: agents can't run code"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agents", "off"]
+
+[[actions]]
+id = "output-full"
+title = "Corral: agents see full results"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent_output", "full"]
+
+[[actions]]
+id = "output-review"
+title = "Corral: review results before agents see them"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent_output", "review"]
+
+[[actions]]
+id = "output-structure"
+title = "Corral: agents see only the structure of results"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent_output", "structure"]
+
 # Corral's language: English by default. Commands stay in English either way. Each
 # title is written in the language it switches to, so you can find yours.
 [[actions]]

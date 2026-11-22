@@ -184,6 +184,12 @@ fn title_es(id: &str) -> Option<&'static str> {
         "keys" => "Corral: atajos y acciones (paleta)",
         "theme-dark-2026" => "Corral: tema Dark 2026 (el de VS Code y Positron)",
         "theme-herdr" => "Corral: volver al tema de herdr",
+        "agents-on" => "Corral: los agentes ejecutan código sin preguntar",
+        "agents-ask" => "Corral: los agentes preguntan antes de cada petición",
+        "agents-off" => "Corral: los agentes no pueden ejecutar código",
+        "output-full" => "Corral: los agentes ven los resultados completos",
+        "output-review" => "Corral: revisar los resultados antes de que los vean los agentes",
+        "output-structure" => "Corral: los agentes ven solo la estructura de los resultados",
         _ => return None,
     })
 }

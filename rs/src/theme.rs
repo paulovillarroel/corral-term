@@ -567,6 +567,19 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     }
     cfg.set(key, value.as_str().into());
     write_config(&cfg);
-    println!("{key} = {value}");
+    // The security settings come from the palette too: say what they mean.
+    let meaning = match (key.as_str(), value.as_str()) {
+        ("agents", "on") => Some((tr("Agents: on", "Agentes: activados"), tr("They run code in your console without asking.", "Ejecutan código en tu consola sin preguntar."))),
+        ("agents", "ask") => Some((tr("Agents: ask", "Agentes: preguntan"), tr("Each request waits until you approve it.", "Cada petición espera hasta que la apruebes."))),
+        ("agents", "off") => Some((tr("Agents: off", "Agentes: desactivados"), tr("They can't run code in your consoles.", "No pueden ejecutar código en tus consolas."))),
+        ("agent_output", "full") => Some((tr("Agent output: full", "Salida para agentes: completa"), tr("They see what their code prints, and new plots.", "Ven lo que imprime su código, y los gráficos nuevos."))),
+        ("agent_output", "review") => Some((tr("Agent output: review", "Salida para agentes: revisar"), tr("You see each result first, and decide whether they get it.", "Ves cada resultado primero y decides si lo reciben."))),
+        ("agent_output", "structure") => Some((tr("Agent output: structure", "Salida para agentes: estructura"), tr("They see whether it worked and the shape of objects, never values.", "Ven si funcionó y la forma de los objetos, nunca valores."))),
+        _ => None,
+    };
+    match meaning {
+        Some((title, body)) => say(title, body),
+        None => println!("{key} = {value}"),
+    }
     Ok(())
 }
