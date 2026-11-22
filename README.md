@@ -101,6 +101,10 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, never values), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
 
+## Telemetry
+
+For transparency: the installer sends one anonymous ping when an installation finishes, only to measure how many times Corral is installed and from which countries. It carries the version, the system (Linux or WSL), whether it is a new install or an update, and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Nothing is sent while you use Corral, and your data and code never leave your machine through it. `CORRAL_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) turns it off; the code that receives it is [`api/installed.js`](api/installed.js).
+
 ---
 
 Version 0.1.2 · Linux and WSL; macOS not yet · [MIT license](LICENSE).
