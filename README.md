@@ -4,7 +4,7 @@ Corral junta en la terminal lo que hoy obliga a abrir Positron: escribir un scri
 
 Todo ocurre dentro de herdr. Los visores aparecen encima de la terminal cuando los pides y se cierran con `q` o `Esc`, así que nada ocupa espacio mientras trabajas. Si quieres ver algo en grande, **Mirador** muestra lo mismo en el navegador.
 
-Estado: versión 0.1.0, en uso diario en WSL con Warp. La consola de R es [Ark](https://github.com/posit-dev/ark), el kernel de R de Positron (o R normal, si lo prefieres), y la de Python es IPython en el entorno uv del proyecto.
+Estado: versión 0.0.1, en uso diario en WSL con Warp. La consola de R es [Ark](https://github.com/posit-dev/ark), el kernel de R de Positron (o R normal, si lo prefieres), y la de Python es IPython en el entorno uv del proyecto.
 
 ## Piezas
 
@@ -72,7 +72,7 @@ Quita el plugin y los atajos de herdr, la línea de `~/.Rprofile`, los atajos, e
 El instalador descarga el paquete de la última versión publicada en GitHub, que trae `corral` ya compilado para que nadie necesite Rust. Lo arma la acción [`.github/workflows/version.yml`](.github/workflows/version.yml) al subir una etiqueta:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.0.2 && git push origin v0.0.2
 ```
 
 Sin ninguna versión publicada, el instalador descarga el código de `main` y compila `corral` con `cargo`. Si no hay `cargo`, se detiene antes de cambiar nada y da el comando para instalar Rust.

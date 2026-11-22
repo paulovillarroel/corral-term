@@ -3,7 +3,7 @@
 
 id = "corral"
 name = "Corral"
-version = "0.1.0"
+version = "0.0.1"
 min_herdr_version = "0.9.5"
 description = "Consola de R, tablas y gráficos junto a tus agentes"
 platforms = ["linux"]

@@ -15,7 +15,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const VERSION: &str = "0.1.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ACTIVE_WINDOW_S: f64 = 6.0;
 const MAX_PAGE: i64 = 500;
 /// How long a page's /api/state?wait= request may wait for a change.
