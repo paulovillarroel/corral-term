@@ -79,10 +79,10 @@
   <span style="color:#ffc799;font-weight:700;">An agent wants to run this in your R console</span>
   <span style="color:#a0a0a0;">from pane w1:p2 · it will only see the structure of the result (restricted output)</span>
 
-  <span style="color:#5c5c5c;">1</span>  <span style="color:#ffffff;">pacientes |&gt;</span>
+  <span style="color:#5c5c5c;">1</span>  <span style="color:#ffffff;">patients |&gt;</span>
   <span style="color:#5c5c5c;">2</span>  <span style="color:#ffffff;">  dplyr::group_by(region) |&gt;</span>
-  <span style="color:#5c5c5c;">3</span>  <span style="color:#ffffff;">  dplyr::summarise(n = dplyr::n(), edad_media = mean(edad))</span>
-  <span style="color:#5c5c5c;">4</span>  <span style="color:#ffffff;">readr::write_csv(pacientes, &quot;salida/pacientes.csv&quot;)</span>
+  <span style="color:#5c5c5c;">3</span>  <span style="color:#ffffff;">  dplyr::summarise(n = dplyr::n(), mean_age = mean(age))</span>
+  <span style="color:#5c5c5c;">4</span>  <span style="color:#ffffff;">readr::write_csv(patients, &quot;output/patients.csv&quot;)</span>
 
 
 
@@ -95,7 +95,7 @@
     <p>The code still runs on your real data and you see its output in your console, but the agent only gets back whether it worked, the first line of an error, how many warnings there were, and the shape of the session's objects: names, classes, the dimensions of tables, the signatures of functions. No printed values, no previews, no plots. For example:</p>
     <pre><code>[corral] restricted output: the agent doesn't see values (5 lines printed in the user's console)
 [corral] 1 warning(s), not shown
-[corral] objects: pacientes (data.frame, 3 × 3); resumen (summaryDefault)
+[corral] objects: patients (data.frame, 3 × 3); overview (summaryDefault)
 [corral] 1 new plot(s) for the user (ctrl+b f); not shared with the agent (restricted output)</code></pre>
     <p><code>full</code> (the default) returns everything.</p>
 
@@ -108,11 +108,11 @@
   <span style="color:#ffc799;font-weight:700;">Share this result with the agent?</span>
   <span style="color:#a0a0a0;">from pane w1:p2 · exactly what it would get; keep it and it gets only the structure</span>
 
-  <span style="color:#ffffff;">&gt; pacientes |&gt; dplyr::count(region)</span>
+  <span style="color:#ffffff;">&gt; patients |&gt; dplyr::count(region)</span>
   <span style="color:#ffffff;">  region      n</span>
-  <span style="color:#ffffff;">1 Norte     412</span>
-  <span style="color:#ffffff;">2 Centro   1035</span>
-  <span style="color:#ffffff;">3 Sur       688</span>
+  <span style="color:#ffffff;">1 North     412</span>
+  <span style="color:#ffffff;">2 Central  1035</span>
+  <span style="color:#ffffff;">3 South     688</span>
 
   <span style="color:#ffffff;">+ 1 new plot(s), shared as PNG if you share this</span>
 
@@ -146,7 +146,7 @@
       <li><strong>It is not a sandbox.</strong> <code>corral eval</code> runs arbitrary code; that is what it is for. It runs with your user's permissions, in your real session: whatever R or Python can do, an approved request can do, including reading files or using the network.</li>
       <li><strong>An agent with a free shell can go around it.</strong> It runs as you, so it could change Corral's settings, write files or use other tools. Corral's controls hold when the agent's own permissions only let it call <code>corral eval</code> and <code>corral vars</code> (next section).</li>
       <li><strong>Restricted output hides values in replies, not in actions.</strong> Approved code could still write data somewhere the agent can read; that is why approval shows you the code first.</li>
-      <li><strong>Restricted output guards against accidents, not against an agent trying to get the values.</strong> The agent writes the code, so it can put a value where the structure still shows: in the first line of an error (<code>stop(pacientes$nombre[1])</code>), in an object's name, in a table's dimensions, in whether the code worked or how many warnings it gave. A result you keep to yourself in review mode has the same limit. Against that, the control is approval: with <code>ask</code> you read the code before it runs, and sensitive sessions always ask. An agent can also be steered into this by text it read somewhere else, a file or a web page, without anyone meaning it.</li>
+      <li><strong>Restricted output guards against accidents, not against an agent trying to get the values.</strong> The agent writes the code, so it can put a value where the structure still shows: in the first line of an error (<code>stop(patients$name[1])</code>), in an object's name, in a table's dimensions, in whether the code worked or how many warnings it gave. A result you keep to yourself in review mode has the same limit. Against that, the control is approval: with <code>ask</code> you read the code before it runs, and sensitive sessions always ask. An agent can also be steered into this by text it read somewhere else, a file or a web page, without anyone meaning it.</li>
     </ul>
 
     <h2>For sensitive data</h2>

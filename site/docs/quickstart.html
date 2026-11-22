@@ -52,21 +52,21 @@
 
     <h2>Write and run code</h2>
     <p>The editor opens an empty draft, ready to use. It is temporary: if you don't save it (<kbd>Ctrl</kbd>+<kbd>S</kbd>), it is deleted when you close Corral. Type a couple of lines:</p>
-    <pre><code>autos &lt;- mtcars
-summary(autos$mpg)</code></pre>
+    <pre><code>cars_df &lt;- mtcars
+summary(cars_df$mpg)</code></pre>
     <p>Put the cursor on the first line and press <kbd>Ctrl</kbd>+<kbd>R</kbd>. Corral runs the whole statement under the cursor, even when it spans several lines, and moves to the next one. Press it again for <code>summary()</code>. <kbd>F5</kbd> runs the whole file.</p>
-    <p>Two more keys you will use often: <kbd>Ctrl</kbd>+<kbd>L</kbd> inserts <code>&lt;-</code> and <kbd>Ctrl</kbd>+<kbd>U</kbd> inserts <code>|&gt;</code>. Completion appears while you type. Write <code>autos$</code> and it offers the columns of your <code>autos</code>, because the language server is the same R as your console.</p>
+    <p>Two more keys you will use often: <kbd>Ctrl</kbd>+<kbd>L</kbd> inserts <code>&lt;-</code> and <kbd>Ctrl</kbd>+<kbd>U</kbd> inserts <code>|&gt;</code>. Completion appears while you type. Write <code>cars_df$</code> and it offers the columns of your <code>cars_df</code>, because the language server is the same R as your console.</p>
 
     <h2>See your variables</h2>
-    <p>The variables pane under the console now lists <code>autos</code>. It updates after every command, yours or the agent's. Its tabs sort your objects into data, plots, values, functions and other; <kbd>←</kbd> <kbd>→</kbd> or the keys <kbd>1</kbd> to <kbd>5</kbd> move between them.</p>
+    <p>The variables pane under the console now lists <code>cars_df</code>. It updates after every command, yours or the agent's. Its tabs sort your objects into data, plots, values, functions and other; <kbd>←</kbd> <kbd>→</kbd> or the keys <kbd>1</kbd> to <kbd>5</kbd> move between them.</p>
 
     <h2>Open a table</h2>
     <p>Run this in the editor or type it in the console:</p>
-    <pre><code>View(autos)</code></pre>
+    <pre><code>View(cars_df)</code></pre>
     <p>The table opens over the terminal. <kbd>s</kbd> sorts by the current column, <kbd>f</kbd> filters with a condition such as <code>mpg &gt; 20 &amp; cyl == 6</code>, and <kbd>i</kbd> shows a summary of each column. <kbd>q</kbd> closes it. <kbd>Enter</kbd> on a data frame in the variables pane opens it the same way.</p>
 
     <h2>Draw a plot</h2>
-    <pre><code>plot(autos$wt, autos$mpg)</code></pre>
+    <pre><code>plot(cars_df$wt, cars_df$mpg)</code></pre>
     <p>The first plot of a session opens Mirador, a light page in your browser. Later plots appear there about 80 ms after they are drawn, without taking your focus. <kbd>←</kbd> <kbd>→</kbd> go through the history, and <kbd>c</kbd> copies the plot as an image. Back in herdr, <kbd>ctrl+b</kbd> <kbd>f</kbd> brings Mirador to the front at the latest plot.</p>
 
     <h2>Switch to Python</h2>
@@ -74,7 +74,7 @@ summary(autos$mpg)</code></pre>
     <p>You rarely need to switch by hand: <kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.py</code> file brings the Python console, and in a <code>.R</code> file, the R one. Python needs <a href="https://docs.astral.sh/uv/">uv</a>.</p>
 
     <h2>Ask the agent</h2>
-    <p>Go to the Claude Code pane and ask for something that needs your data, for example: "fit a linear model of mpg on wt with autos and plot the residuals". With Corral's skill, Claude runs its code in your console with <code>corral eval</code>. You see each command appear there, and the model and the plot stay in your session, where you can keep working with them.</p>
+    <p>Go to the Claude Code pane and ask for something that needs your data, for example: "fit a linear model of mpg on wt with cars_df and plot the residuals". With Corral's skill, Claude runs its code in your console with <code>corral eval</code>. You see each command appear there, and the model and the plot stay in your session, where you can keep working with them.</p>
 
     <h2>Close</h2>
     <p><kbd>ctrl+b</kbd> <kbd>shift+c</kbd> closes the script, the console and the variables, and leaves Claude as a normal herdr pane. Closing the console ends that R session. The draft is discarded, so press <kbd>Ctrl</kbd>+<kbd>S</kbd> first if you want to keep it: in the draft, it asks for a name and saves the file in your project.</p>
