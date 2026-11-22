@@ -102,7 +102,7 @@ Después borra la línea de Corral de `~/.Rprofile` y el bloque `# Corral` de `~
 
 ### Salir de Corral
 
-`ctrl+b shift+c` cierra el script, la consola y las variables (también el que esté oculto por `ctrl+b t`), y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar queda unos días en la carpeta `.corral/` del proyecto por si lo necesitas. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
+`ctrl+b shift+c` cierra el script, la consola y las variables (también el que esté oculto por `ctrl+b t`), y deja la pestaña con Claude, como cualquier pestaña de herdr. Cerrar la consola termina esa sesión de R. El borrador sin guardar se descarta. Mirador sigue abierto hasta que cierres su ventana; `corral mirador --stop` detiene su servidor.
 
 ## Cuándo actúa Corral
 
@@ -188,7 +188,7 @@ Atajos de Corral. Desde Warp, a través de herdr, solo llegan bien `Ctrl+letra` 
 | `Ctrl+Space` | Autocompletado. También aparece solo mientras escribes. |
 | `Ctrl+S` | Guarda y formatea con Air. En el borrador temporal, pregunta dónde guardarlo. |
 
-**El borrador es temporal.** Cada `ctrl+b a` abre un `borrador.R` nuevo y vacío dentro del proyecto, en `.corral/<workspace>-<fecha>/`. Así Air, lintr y el servidor de lenguaje usan la configuración del proyecto (`air.toml`, `.lintr`, `DESCRIPTION`, `renv.lock`). Corral crea `.corral/.gitignore` con `*`, de modo que git no ve esos archivos y no hace falta tocar tu `.gitignore`. El explorador de archivos no muestra `.corral/` porque empieza con punto. Los borradores de más de dos días se borran al abrir uno nuevo en ese proyecto. Si abres el layout en tu carpeta personal o en una carpeta sin permiso de escritura, el borrador va a `$XDG_RUNTIME_DIR/corral/borradores/`, que WSL vacía al reiniciar.
+**El borrador es temporal.** Cada `ctrl+b a` abre un `borrador.R` nuevo y vacío dentro del proyecto, en `.corral/<workspace>-<fecha>/`. Así Air, lintr y el servidor de lenguaje usan la configuración del proyecto (`air.toml`, `.lintr`, `DESCRIPTION`, `renv.lock`). Corral crea `.corral/.gitignore` con `*`, de modo que git no ve esos archivos y no hace falta tocar tu `.gitignore`. El explorador de archivos no muestra `.corral/` porque empieza con punto. El borrador se borra al cerrar el editor, el panel o el layout; lo que quieras conservar lo guardas en el proyecto con `Ctrl+S`. Si algo cierra el editor de golpe, el borrador abandonado se borra la próxima vez que abras un layout en ese proyecto. Un archivo que guardaste a mano dentro de la carpeta del borrador se conserva, y esa carpeta se borra a los dos días. Si abres el layout en tu carpeta personal o en una carpeta sin permiso de escritura, el borrador va a `$XDG_RUNTIME_DIR/corral/borradores/`, que WSL vacía al reiniciar.
 
 Se pierde al cerrar el layout, salvo que lo guardes:
 
@@ -208,20 +208,22 @@ La configuración está en [`fresh/config.json`](fresh/config.json) y el plugin 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/graficos/positron-oscuro.svg">
-  <img alt="Corral frente a Positron: R listo en 0,49 s frente a 14,6 s; 181 MB frente a 3,0 GB; 0,7 % de CPU en reposo frente a 18,7 %" src="docs/graficos/positron-claro.svg" width="760">
+  <img alt="Corral frente a Positron: R listo en 0,51 s frente a 11,4 s; 165 MB frente a 2,9 GB; 0,4 % de CPU en reposo frente a 16,4 %" src="docs/graficos/positron-claro.svg" width="760">
 </picture>
 
-Medido el 21 de noviembre de 2026 en el mismo equipo, con la carpeta `test-codigo` y R en WSL. Positron es la versión 2026.11.1 en Windows, conectada a WSL; Corral es un layout completo (editor, consola de Ark, panel de variables y servidor de lenguaje). De Positron se usa el valor más bajo que medí y de Corral el más alto.
+Medido el 21 de noviembre de 2026 en el mismo equipo, con la carpeta `test-codigo` y R en WSL, dos veces cada uno. Positron es la versión 2026.11.1 en Windows, conectada a WSL; Corral es un layout completo (editor, consola de Ark, panel de variables y servidor de lenguaje). En el gráfico, de Positron se usa el valor más bajo que medí y de Corral el más alto.
 
 | Qué | Positron | Corral |
 |---|---|---|
-| Desde que lo abres hasta tener R listo | 14,6–17,6 s | 0,41–0,49 s |
-| Memoria en uso | 3,0–3,4 GB (1,2–1,4 GB en Windows y 1,6–2,3 GB en WSL) | 181 MB |
-| CPU en reposo | 15 % de un núcleo en Windows y 3,5 % en WSL | 0,7 % |
-| R (Ark) | 117 MB | 112 MB |
+| Desde que lo abres hasta tener R listo | 11,4–17,0 s | 0,48–0,51 s |
+| Memoria en uso | 2,9–3,2 GB (1,2–1,6 GB en Windows y 1,6–1,7 GB en WSL) | 164–165 MB |
+| CPU en reposo | 16–21 % de un núcleo (12,5–17,3 % en Windows y 3,4–3,8 % en WSL) | 0,3–0,4 % |
+| R (Ark) | 117 MB | 104–106 MB |
 | De Ctrl+R a ver el resultado | sin medir | 9–17 ms |
 
-R pesa lo mismo en los dos, porque ambos usan Ark. La diferencia es la interfaz: en WSL, el proceso de extensiones de Positron ocupa 660 MB, su servidor 293 MB y Copilot 241 MB, y la ventana de Windows suma otros 1,2–1,4 GB. En una de las dos aperturas Positron también arrancó Python con su servidor de lenguaje (unos 440 MB), porque la carpeta tiene `pyproject.toml`; Corral abre Python solo cuando lo usas. Para Corral no cuento herdr ni la terminal, que están abiertos de todos modos para Claude. El tiempo de ejecución dentro de Positron no lo medí, porque habría que manejar su interfaz con clics. El tiempo de Positron incluye menos de 1 s que tarda PowerShell en lanzarlo, y su CPU se midió entre 30 y 60 s después de abrirlo, cuando puede que todavía no se hubiera asentado.
+R pesa lo mismo en los dos, porque ambos usan Ark. La diferencia es la interfaz: en WSL, el proceso de extensiones de Positron ocupa 674–711 MB, su servidor 276–289 MB y Copilot 241 MB, y la ventana de Windows suma otros 1,2–1,6 GB. En una medición anterior Positron también arrancó Python con su servidor de lenguaje (unos 440 MB), porque la carpeta tiene `pyproject.toml`; Corral abre Python solo cuando lo usas. Para Corral no cuento herdr ni la terminal, que están abiertos de todos modos para Claude. El tiempo de ejecución dentro de Positron no lo medí, porque habría que manejar su interfaz con clics. El tiempo de Positron incluye entre 0,7 y 2,2 s que tarda PowerShell en lanzarlo, y su CPU se midió entre 30 y 60 s después de abrirlo, cuando puede que todavía no se hubiera asentado.
+
+Una medición anterior del mismo día, antes de optimizar Fresh, la carga de R y los servidores de lenguaje, daba para Corral 181 MB y 0,7 % de CPU en reposo.
 
 #### corral en Rust
 
@@ -250,8 +252,15 @@ También bajó lo que se repite después de cada comando y lo que queda corriend
 | Variables de Python después de cada comando | 2,4 ms | 0,4–0,6 ms |
 | Plugin de Fresh en reposo (CPU del editor) | 1,0 % | 0,56 % |
 | El editor sigue un cambio de tema de herdr | hasta 2 s | 0,4 s |
+| Fresh en reposo, con los plugins que no usa desactivados | 60 MB, 0,57 % de CPU | 48 MB, 0,20 % |
+| Cargar Corral en R (`corral.R`) | 85 ms, 23 MB | 27 ms, 17 MB |
+| Servidores de lenguaje de Python (pylsp y Ruff) | 340 MB | 182 MB |
 
-Las variables se describen de nuevo solo si el objeto cambió (otra dirección en memoria, otro largo, otras dimensiones o, en las tablas, otros tipos de columna), y el archivo que lee el panel se reescribe solo cuando algo cambió. El plugin de Fresh ya no revisa nada a intervalos: copia el borrador 0,4 s después de la última edición, vigila los archivos de tema con el sistema de archivos y abre la vista de carpetas cuando aparece un borrador. Lo que queda de CPU en reposo es de Fresh mismo, que revisa cada 2 s si cambiaron los archivos abiertos (por ejemplo, cuando Claude los edita) y cada 3 s la carpeta del proyecto.
+Durante el uso, cada comando en la consola de R tarda unos 2,5 ms de Enter al siguiente prompt (1,5 ms sin Corral), también con una tabla de 2 millones de celdas en memoria; en Python, unos 6 ms con o sin Corral.
+
+`corral.R` ya no carga paquetes que no necesita al arrancar: httpgd (con unigd, systemfonts, lifecycle y cli) se carga con el primer gráfico, y la firma de cada variable usa la dirección en memoria que da R base, sin rlang (que tardaba 54 ms en cargarse). pylsp y Ruff corren directo desde el entorno que uv guarda en su caché para ellos (`corral _lsp python`, `corral _lsp ruff`): con `uvx` o `uv run`, uv se quedaba esperando como proceso padre todo el tiempo, unos 45 MB por cada uno. pylsp sigue viendo los paquetes del proyecto a través de su `.venv`. La consola de Python sigue con `uv run`, porque IPython tiene que correr dentro del entorno del proyecto.
+
+Las variables se describen de nuevo solo si el objeto cambió (otra dirección en memoria, otro largo, otras dimensiones o, en las tablas, otros tipos de columna), y el archivo que lee el panel se reescribe solo cuando algo cambió. El plugin de Fresh ya no revisa nada a intervalos: copia el borrador cuando dejas de escribir 0,4 s (al menos cada 2 s si sigues escribiendo), vigila los archivos de tema con el sistema de archivos y abre la vista de carpetas cuando aparece un borrador. Fresh trae unos 50 plugins; Corral desactiva en `fresh/config.json` los que no usa (orquestación de agentes, que ya hace herdr, pantallas de bienvenida, Kubernetes, devcontainers y lenguajes como C# o C++). Con eso Fresh abre con 48 MB en vez de 60 y en reposo usa 0,20 % de CPU en vez de 0,57 %. Revisar cada 2 s si cambiaron los archivos abiertos (por ejemplo, cuando Claude los edita) cuesta tan poco que no se nota al medirlo, así que se mantiene.
 
 El binario habla con herdr por su socket y con Ark por el protocolo de Jupyter (ZeroMQ y firmas HMAC-SHA256, implementados en `rs/src/zmtp.rs` y `rs/src/sha256.rs`). Lo poco frecuente (abrir una consola o cambiar de lenguaje desde `eval`, el portapapeles, dibujar un objeto gráfico) y los demás comandos (`layout`, `close`, `doctor`…) pasan a `bin/corral`. Sin el binario, `bin/corral` y `mirador/server.py` hacen todo igual, con Python.
 

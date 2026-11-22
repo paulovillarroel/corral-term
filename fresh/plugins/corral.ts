@@ -292,11 +292,13 @@ registerHandler("corral_run_file", async function () {
 
 // Scratch files: Fresh does not let outside programs read unsaved buffers, so
 // mirror each Corral scratch buffer to ".actual.R" next to it. `corral script
-// --guardar/--leer` (and Claude) read that copy. It is written a moment after
-// an edit (several keys in a row make one write) and when the buffer shows up.
+// --guardar/--leer` (and Claude) read that copy. It is written when typing
+// pauses for 0.4 s (at least every 2 s while typing goes on) and when the
+// buffer shows up.
 const mirrored: Record<string, string> = {};
 const dirty: Record<number, boolean> = {};
-let mirrorPending = false;
+let mirrorTimer = -1;
+let dirtySince = 0;
 
 function scratchCopy(id: number): [string, string] | null {
   const path = editor.getBufferPath(id) || "";
@@ -318,14 +320,19 @@ async function mirror(id: number): Promise<void> {
 registerHandler("corral_scratch_modified", function (args: { buffer_id: number }) {
   if (!scratchCopy(args.buffer_id)) return;
   dirty[args.buffer_id] = true;
-  if (mirrorPending) return;
-  mirrorPending = true;
-  editor.setTimeout(400, "corral_mirror_scratch");
+  const now = Date.now();
+  if (mirrorTimer >= 0) {
+    if (now - dirtySince >= 2000) return; // typing goes on: let the pending write happen
+    editor.clearInterval(mirrorTimer);
+  } else {
+    dirtySince = now;
+  }
+  mirrorTimer = editor.setTimeout(400, "corral_mirror_scratch");
 });
 editor.on("buffer_modified", "corral_scratch_modified");
 
 registerHandler("corral_mirror_scratch", async function () {
-  mirrorPending = false;
+  mirrorTimer = -1;
   for (const key of Object.keys(dirty)) {
     delete dirty[Number(key)];
     try {

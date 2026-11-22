@@ -159,14 +159,20 @@ local({
   # rows, and the value itself when it is a single number or string, since R
   # can modify an object in place without moving it) together with its
   # description and JSON. If no signature changed, nothing is done at all.
-  has_rlang <- requireNamespace("rlang", quietly = TRUE)
+  # The address comes from base R (`.Internal(address())`, as fast as rlang's
+  # and with no package to load at startup); rlang only where that is missing.
+  address_of <- tryCatch({
+    .Internal(address(globalenv()))
+    function(x) .Internal(address(x))
+  }, error = function(e) if (requireNamespace("rlang", quietly = TRUE)) rlang::obj_address)
   described <- new.env(hash = TRUE, parent = emptyenv())
   last_signature <- NULL
 
+  # A list, compared with identical(): addresses stay pointers, no text needed.
   signature_of <- function(x) {
-    paste(rlang::obj_address(x), length(x),
-          if (is.data.frame(x)) .row_names_info(x, 2L) else "",
-          if (is.atomic(x) && length(x) == 1L) format(x) else "")
+    list(address_of(x), length(x),
+         if (is.data.frame(x)) .row_names_info(x, 2L) else 0L,
+         if (is.atomic(x) && length(x) == 1L) format(x) else "")
   }
 
   snapshot <- function() {
@@ -176,21 +182,21 @@ local({
     }
     genv <- globalenv()
     names <- sort(ls(genv))
-    if (!has_rlang) {
+    if (is.null(address_of)) {
       vars <- lapply(names, function(n) describe(n, get(n, envir = genv)))
       return(write_json_atomic(list(updated = as.numeric(Sys.time()), vars = vars),
                                file.path(session_dir, "vars.json")))
     }
-    sigs <- vapply(names, function(n) signature_of(get(n, envir = genv)), character(1), USE.NAMES = FALSE)
-    whole <- paste(names, sigs, sep = "=", collapse = "|")
-    if (identical(whole, last_signature)) return(invisible())
+    sigs <- lapply(names, function(n) signature_of(get(n, envir = genv)))
+    names(sigs) <- names
+    if (identical(sigs, last_signature)) return(invisible())
     parts <- character(length(names))
     for (i in seq_along(names)) {
       hit <- described[[names[i]]]
-      if (is.null(hit) || !identical(hit$sig, sigs[i])) {
+      if (is.null(hit) || !identical(hit$sig, sigs[[i]])) {
         d <- describe(names[i], get(names[i], envir = genv))
         json <- jsonlite::toJSON(d, auto_unbox = TRUE, na = "null", null = "null", digits = NA)
-        hit <- list(sig = sigs[i], json = json)
+        hit <- list(sig = sigs[[i]], json = json)
         assign(names[i], hit, envir = described)
       }
       parts[i] <- hit$json
@@ -202,14 +208,16 @@ local({
     writeLines(paste0('{"updated":', format(as.numeric(Sys.time()), digits = 15), ',"vars":[',
                       paste(parts, collapse = ","), "]}"), tmp, useBytes = TRUE)
     file.rename(tmp, path)
-    last_signature <<- whole
+    last_signature <<- sigs
     invisible()
   }
 
   # The httpgd device (it shows up as "unigd" in dev.list() since httpgd 2).
+  # NA when there is none (not NULL: `is.na(NULL) || …` would go on and load unigd).
   plot_device <- function() {
     d <- grDevices::dev.list()
-    d[names(d) %in% c("unigd", "httpgd")][1]
+    d <- d[names(d) %in% c("unigd", "httpgd")]
+    if (length(d)) d[[1]] else NA_integer_
   }
 
   # A plot object printed by hand (typing its name, Ctrl+R in the script):
@@ -368,8 +376,11 @@ local({
   }
 
   # grDevices only sets `device` when it is still unset, so this survives startup.
+  # httpgd is only looked up here, not loaded: it (with unigd, systemfonts,
+  # lifecycle and cli) loads with the first plot, so a session without plots
+  # starts faster and uses less memory.
   use_httpgd <- function() {
-    if (requireNamespace("httpgd", quietly = TRUE) && !isFALSE(getOption("corral.httpgd"))) {
+    if (nzchar(system.file(package = "httpgd")) && !isFALSE(getOption("corral.httpgd"))) {
       options(device = start_httpgd)
     }
     invisible()

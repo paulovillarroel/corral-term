@@ -196,7 +196,7 @@ def cmd_layout(args: argparse.Namespace) -> None:
         console = herdr("pane", "split", right, "--direction", "down", "--ratio", str(SCRIPT_SHARE), "--cwd", cwd,
                         "--no-focus")["pane"]["pane_id"]
         herdr("pane", "rename", right, "corral:script")
-        herdr("pane", "run", right, editor_command(editor, scratch_script(ws, cwd)))
+        herdr("pane", "run", right, editor_command(editor, scratch_script(ws, cwd), scratch=True))
     else:
         console = right
     herdr("pane", "rename", console, label)
@@ -250,9 +250,15 @@ def scratch_script(workspace: str | None, project: str | None = None) -> Path:
         ignore = root / ".gitignore"
         if not ignore.exists():
             ignore.write_text("# Borradores temporales de Corral\n*\n")
+    open_paths = open_command_lines()
     for old in root.iterdir():
         try:
-            if old.is_dir() and time.time() - old.stat().st_mtime > SCRATCH_MAX_AGE:
+            if not old.is_dir():
+                continue
+            # A draft whose editor is gone (normally removed when the editor ends).
+            if not any(str(old) in c for c in open_paths):
+                discard_scratch(old / "borrador.R")
+            if old.exists() and time.time() - old.stat().st_mtime > SCRATCH_MAX_AGE:
                 shutil.rmtree(old, ignore_errors=True)
         except OSError:
             pass
@@ -267,6 +273,42 @@ def scratch_script(workspace: str | None, project: str | None = None) -> Path:
     return path
 
 
+def open_command_lines() -> list[str]:
+    """Command lines of this user's running processes (an editor shows the file it has open)."""
+    lines = []
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            try:
+                lines.append((d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace"))
+            except OSError:
+                pass
+    return lines
+
+
+def discard_scratch(file: Path) -> None:
+    """Remove a draft and Corral's live copy of it, then its folder if nothing else is there."""
+    if file.name != "borrador.R" or not (file.parent.parent.name == ".corral" or file.parent.parent == SCRATCH_ROOT):
+        return
+    for name in ("borrador.R", ".actual.R"):
+        (file.parent / name).unlink(missing_ok=True)
+    try:
+        file.parent.rmdir()  # only if empty: a file saved there by hand stays
+    except OSError:
+        pass
+
+
+def cmd_editor_run(args: argparse.Namespace) -> None:
+    """The script pane without the Rust binary: run the editor, then throw the draft away."""
+    import signal
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    child = subprocess.Popen(command)
+    for sig in (signal.SIGHUP, signal.SIGTERM):
+        signal.signal(sig, signal.SIG_IGN)  # closing the pane hangs us up too: stay to clean up
+    code = child.wait()
+    discard_scratch(Path(args.file))
+    sys.exit(code)
+
+
 def read_json_file(path: Path) -> dict:
     try:
         return json.loads(path.read_text())
@@ -274,14 +316,18 @@ def read_json_file(path: Path) -> dict:
         return {}
 
 
-def editor_command(editor: str, target: Path | str) -> str:
-    """Command line for the script pane. Fresh starts clean (--no-restore), without old tabs."""
+def editor_command(editor: str, target: Path | str, scratch: bool = False) -> str:
+    """Command line for the script pane. Fresh starts clean (--no-restore), without old tabs.
+    A draft goes through `corral _editor`, which throws it away when the editor ends."""
     is_fresh = any(Path(t).name == "fresh" for t in shlex.split(editor))
     extra = " --no-restore" if is_fresh else ""
     # WSLg's Wayland has no clipboard protocol for Fresh: it warns and falls back
     # to X11 anyway, so start it on X11 directly.
     prefix = "env -u WAYLAND_DISPLAY " if is_fresh and os.environ.get("WSL_DISTRO_NAME") and os.environ.get("DISPLAY") else ""
-    return f"{prefix}{editor}{extra} {shlex.quote(str(target))}"
+    command = f"{prefix}{editor}{extra} {shlex.quote(str(target))}"
+    if scratch:
+        command = f"{corral_command()} _editor {shlex.quote(str(target))} -- {command}"
+    return command
 
 
 def scratch_text(scratch: str) -> str:
@@ -704,7 +750,8 @@ def cmd_script(args: argparse.Namespace) -> None:
     herdr("pane", "swap", "--source-pane", new, "--target-pane", console)
     herdr("pane", "rename", new, "corral:script")
     project = plugin_context().get("focused_pane_cwd") or os.getcwd()
-    herdr("pane", "run", new, editor_command(editor, args.file or scratch_script(current_workspace(), project)))
+    target = args.file or scratch_script(current_workspace(), project)
+    herdr("pane", "run", new, editor_command(editor, target, scratch=not args.file))
 
 
 CORRAL_LABELS = ("corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell")
@@ -734,7 +781,6 @@ def cmd_close(args: argparse.Namespace) -> None:
     if not targets:
         notify("Corral", "no hay paneles de Corral en esta pestaña")
         return
-    scratch = read_json_file(SCRATCH_INDEX).get(current_workspace() or "default")
     for p in targets:
         try:
             herdr("pane", "close", p["pane_id"])
@@ -742,9 +788,7 @@ def cmd_close(args: argparse.Namespace) -> None:
             pass
     if parked:
         save_layout_state(saved)
-    note = f"{len(targets)} paneles cerrados"
-    if scratch and Path(scratch).exists():
-        note += "; el borrador queda unos días en " + str(Path(scratch).parent)  # in .corral/ when there's a project
+    note = f"{len(targets)} paneles cerrados; el borrador sin guardar se descartó"
     notify("Corral cerrado", note)
     print(note)
 
@@ -1393,6 +1437,8 @@ def cmd_lsp(args: argparse.Namespace) -> None:
     Python: python-lsp-server (completion, help, definitions) in the project's
     environment through uv; Ruff gives the diagnostics as a second server.
     """
+    if args.lang == "ruff":
+        os.execvp("uvx", ["uvx", "--quiet", "ruff", "server"])
     if args.lang == "python":
         os.execvp("uv", ["uv", "run", "--quiet", "--with", "python-lsp-server", "pylsp"])
     # R under Ark: Ark's own language server (it knows the live session), through
@@ -1949,8 +1995,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("lang", choices=list(LANG_NAMES))
     p.set_defaults(func=cmd_console_run)
 
+    p = sub.add_parser("_editor", help=argparse.SUPPRESS)
+    p.add_argument("file")
+    p.add_argument("command", nargs=argparse.REMAINDER)
+    p.set_defaults(func=cmd_editor_run)
+
     p = sub.add_parser("_lsp", help=argparse.SUPPRESS)
-    p.add_argument("lang", nargs="?", choices=list(LANG_NAMES), default="r")
+    p.add_argument("lang", nargs="?", choices=[*LANG_NAMES, "ruff"], default="r")
     p.set_defaults(func=cmd_lsp)
 
     p = sub.add_parser("theme", help="aplica el tema de herdr al editor, los visores, VisiData y Mirador")

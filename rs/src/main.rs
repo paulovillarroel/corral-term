@@ -5,6 +5,7 @@
 
 mod ark;
 mod console;
+mod editor;
 mod env;
 mod eval;
 mod herdr;
@@ -26,6 +27,7 @@ fn main() {
         Some("send") => send::run(rest, &args),
         Some("eval") => eval::run(rest, &args),
         Some("_console") => console::run(rest, &args),
+        Some("_editor") => editor::run(rest),
         Some("toggle") => layout::toggle(rest, &args),
         Some("switch") => layout::switch(rest, &args),
         Some("_lsp") => lsp::run(rest, &args),

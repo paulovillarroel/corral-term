@@ -2,7 +2,11 @@
 //! inside the console's R. Fresh talks LSP over stdin/stdout; Ark starts its
 //! server when a client opens the `positron.lsp` comm and then listens on a
 //! local port. This asks the kernel for that server and copies bytes both
-//! ways. Without Ark (or for Python), the Python version starts the usual one.
+//! ways. Without Ark, the Python version starts the usual one.
+//!
+//! `corral _lsp python` and `corral _lsp ruff`: pylsp and Ruff straight from the
+//! environment uv keeps for them in its cache. Through `uvx` or `uv run`, uv
+//! would stay alive as a waiting parent (about 45 MB each) for the whole session.
 
 use crate::console;
 use crate::env::{self, python_fallback};
@@ -11,13 +15,18 @@ use crate::json::{obj, Value};
 use crate::zmtp::{self, Connection, Socket};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::path::Path;
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
-    if args.first().map(String::as_str).unwrap_or("r") != "r" {
-        python_fallback(all);
+    match args.first().map(String::as_str).unwrap_or("r") {
+        "r" => {}
+        "ruff" => tool("ruff", "ruff", &["server"], false),
+        "python" => tool("python-lsp-server", "pylsp", &[], true),
+        _ => python_fallback(all),
     }
     let mut conn = ark_connection();
     if conn.is_none() && console::r_flavor(&env::config()) == "ark" {
@@ -30,6 +39,64 @@ pub fn run(args: &[String], all: &[String]) -> Result<(), String> {
     }
     let Some(conn) = conn else { python_fallback(all) }; // plain R: languageserver
     bridge(&conn)
+}
+
+/// Run a Python tool's program from uv's cached environment for it (installed
+/// there on first use, as uvx would), or from the PATH if it is installed as a
+/// tool. With `project_env`, Jedi (pylsp's completion) reads the project's
+/// `.venv`, so it knows the project's packages.
+fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
+    let mut cmd = match tool_path(package, program) {
+        Some(bin) => {
+            let mut c = Command::new(bin);
+            c.args(args);
+            c
+        }
+        None => {
+            let mut c = Command::new("uvx");
+            c.args(["--quiet", "--from", package, program]).args(args);
+            c
+        }
+    };
+    if project_env {
+        if let Some(venv) = project_venv() {
+            cmd.env("VIRTUAL_ENV", venv);
+        }
+    }
+    let err = cmd.exec();
+    eprintln!("corral: no pude iniciar {program}: {err}");
+    std::process::exit(1)
+}
+
+fn tool_path(package: &str, program: &str) -> Option<PathBuf> {
+    if let Some(p) = env::which(program) {
+        return Some(p);
+    }
+    let known_file = env::state_dir().join("herramientas.json");
+    let mut known = env::read_json(&known_file);
+    if let Some(p) = known.get(package).str().map(PathBuf::from).filter(|p| p.is_file()) {
+        return Some(p);
+    }
+    let out = Command::new("uvx")
+        .args(["--quiet", "--from", package, "python", "-c", "import sys; print(sys.prefix)"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    let prefix = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let bin = Path::new(&prefix).join("bin").join(program);
+    if !bin.is_file() {
+        return None;
+    }
+    known.set(package, bin.to_string_lossy().as_ref().into());
+    env::write_json(&known_file, &known);
+    Some(bin)
+}
+
+/// The project's `.venv`, in this folder or one above it.
+fn project_venv() -> Option<PathBuf> {
+    let here = std::env::current_dir().ok()?;
+    here.ancestors().map(|d| d.join(".venv")).find(|v| v.join("bin/python").exists())
 }
 
 /// Connection file of the R console's Ark kernel: this workspace's, or one in this folder.

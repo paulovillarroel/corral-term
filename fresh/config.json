@@ -101,10 +101,10 @@
       },
       {
         "name": "ruff",
-        "command": "uvx",
+        "command": "corral",
         "args": [
-          "ruff",
-          "server"
+          "_lsp",
+          "ruff"
         ],
         "enabled": true,
         "auto_start": true,
@@ -222,5 +222,73 @@
     "quick_suggestions": true,
     "quick_suggestions_delay_ms": 200,
     "suggest_on_trigger_characters": true
+  },
+  "plugins": {
+    "orchestrator": {
+      "enabled": false
+    },
+    "workboard": {
+      "enabled": false
+    },
+    "live_sessions": {
+      "enabled": false
+    },
+    "agent_discovery": {
+      "enabled": false
+    },
+    "agent_sessions": {
+      "enabled": false
+    },
+    "agent_sessions_claude_code": {
+      "enabled": false
+    },
+    "agent_sessions_codex": {
+      "enabled": false
+    },
+    "agent_sessions_multiplexers": {
+      "enabled": false
+    },
+    "agent_sessions_orchestrators": {
+      "enabled": false
+    },
+    "agent_sessions_tmux": {
+      "enabled": false
+    },
+    "dashboard": {
+      "enabled": false
+    },
+    "welcome": {
+      "enabled": false
+    },
+    "welcome_screen": {
+      "enabled": false
+    },
+    "k8s-workspace": {
+      "enabled": false
+    },
+    "devcontainer": {
+      "enabled": false
+    },
+    "code-tour": {
+      "enabled": false
+    },
+    "audit_mode": {
+      "enabled": false
+    },
+    "csharp_support": {
+      "enabled": false
+    },
+    "clangd_support": {
+      "enabled": false
+    },
+    "deno_lsp": {
+      "enabled": false
+    },
+    "asm-lsp": {
+      "enabled": false
+    },
+    "slang-lsp": {
+      "enabled": false
+    }
   }
 }
