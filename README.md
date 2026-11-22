@@ -39,7 +39,7 @@ Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…), [uv](https://d
 curl -LsSf https://corral-term.dev/install.sh | sh
 ```
 
-The installer first prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
+The installer downloads the latest published version, says which, and checks its SHA-256 before opening it (each package also has a [build provenance attestation](https://corral-term.dev/docs/install.html#how-the-download-is-checked)); it never falls back to unreleased code. It prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
 
 - puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, checking the checksum when one is published;
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;

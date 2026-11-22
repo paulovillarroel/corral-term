@@ -86,7 +86,9 @@
     <h2>Install with one line</h2>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
-    <pre><code>Corral 0.1.2: what it needs, without changing anything.
+    <pre><code>Downloading Corral 0.1.3...
+✓ SHA-256 checked
+Corral 0.1.3: what it needs, without changing anything.
 
 Required
   ✓ System            Linux x86_64 (WSL)
@@ -95,7 +97,7 @@ Required
   ✓ R packages        httpgd and jsonlite
 
 Provided by the installer
-  ✓ corral            0.1.2, built
+  ✓ corral            0.1.3, built
   ↓ Fresh             will download 0.5.9 (script editor)
   ↓ DuckDB            will download 1.4.4 (View() tables)
   ✓ Air               0.13.0, you already have it
@@ -106,6 +108,15 @@ Optional
   ✓ Skill for agents  goes in ~/.agents/skills (Codex and other agents) and ~/.claude/skills (Claude Code)
   ✓ Browser           the Windows one, for Mirador
   ✓ PATH              ~/.local/bin is on the PATH</code></pre>
+    <h3 id="how-the-download-is-checked">How the download is checked</h3>
+    <ul>
+      <li>It installs a published version, the latest unless you pick one with <code>CORRAL_VERSION=v0.1.3</code>, and says which. It never falls back to unreleased code: if the download fails, it stops and says why.</li>
+      <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ.</li>
+      <li>Each package also carries a build provenance attestation, which proves it was built by the project's GitHub workflow from that version's code. With the <a href="https://cli.github.com">GitHub CLI</a> you can check it yourself:
+<pre><code><span class="p">$ </span>gh attestation verify corral-term-x86_64-linux.tar.gz --repo paulovillarroel/corral-term</code></pre></li>
+      <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
+    </ul>
+
     <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there; if it isn't, add this line at the end of <code>~/.bashrc</code> (or <code>~/.zshrc</code>) and open a new terminal:</p>
     <pre><code>export PATH="$HOME/.local/bin:$PATH"</code></pre>
     <p>When it finishes, open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>. The <a href="quickstart.html">quick start</a> takes it from there.</p>
@@ -155,7 +166,7 @@ Optional
     <p>Your settings and sessions stay in <code>~/.config/corral</code> and <code>~/.local/state/corral</code>, in case you come back. Delete them if you won't.</p>
 
     <h2>Publish a version</h2>
-    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, then tag it with that number:</p>
+    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>, and publishes it with its SHA-256 and a build provenance attestation. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, then tag it with that number:</p>
     <pre><code><span class="p">$ </span>git tag v0.1.3
 <span class="p">$ </span>git push origin v0.1.3</code></pre>
     <p>The binary is static (musl), so it runs on any x86_64 Linux, WSL included.</p>
