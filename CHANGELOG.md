@@ -2,6 +2,11 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- `View()` no longer fills the disk in a long session. A new `View()` of the same object replaces its temporary copy, and each session keeps the copies of its latest 20 tables, up to 2 GB in all; before, every copy stayed until R or Python closed (twenty `View()` of ten million rows left 3.4 GB). A file you open with `corral view` is never deleted.
+- The table viewer says so when its file was replaced by a newer `View()`, instead of showing DuckDB's error.
+
 ## 0.1.5
 
 Big tables open faster.
