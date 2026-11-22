@@ -99,7 +99,7 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 ## Security
 
-Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output structure` (the agent sees whether it worked and the shape of objects, never values), `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
+Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents on|ask|off` (with `ask`, every request waits for your approval in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, never values), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
 
 ---
 

@@ -139,7 +139,7 @@
         <ul class="points">
           <li><b>In plain sight</b><span>the code is typed into the console you are looking at</span></li>
           <li><b>One at a time</b><span>requests queue, with a time limit and clipped output</span></li>
-          <li><b>Yours to decide</b><span>agents on, ask or off; full output, or only its structure</span></li>
+          <li><b>Yours to decide</b><span>agents on, ask or off; full results, your review first, or structure only</span></li>
           <li><b>Recorded</b><span>every request in a local audit log</span></li>
           <li><b>Any agent</b><span>shell commands plus an open Agent Skills skill</span></li>
         </ul>
@@ -409,7 +409,7 @@
     </details>
     <details>
       <summary>Can I use it with sensitive data?</summary>
-      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), let agents see only the shape of results and never values (<code>agent_output structure</code>), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
+      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), review each result before the agent sees it (<code>agent_output review</code>) or let it see only the shape of results and never values (<code>agent_output structure</code>), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>
