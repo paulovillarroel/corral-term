@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Variables and tables · Corral docs</title>
+<meta name="description" content="The variables pane and its tabs, what Enter does on each object, variables as JSON for agents, and the DuckDB table viewer behind View(): sorting, filters, summaries and millions of rows.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Variables and tables</h1>
+    <p class="intro">The variables pane lists the objects in your session after every command. <code>View()</code> opens any table in a viewer that asks DuckDB for one page at a time, so a table with millions of rows opens at once.</p>
+
+    <h2>The variables pane</h2>
+    <p>The pane under the console updates after every command, yours or Claude's, and follows the console when you restart R or switch to Python. It lists your objects, including plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>).</p>
+    <p>The objects are sorted into five tabs: Data (data frames), Plots (plot objects), Values, Functions and Other. Move between them with <kbd>←</kbd> <kbd>→</kbd>, <kbd>Tab</kbd>, the keys <kbd>1</kbd> to <kbd>5</kbd>, or a click. <kbd>/</kbd> searches.</p>
+
+    <h3>Enter on an object</h3>
+    <table>
+    <thead><tr><th>Object</th><th>What Enter does</th></tr></thead>
+    <tbody>
+    <tr><td>A data frame</td><td>Opens the table in the viewer, like <code>View()</code>. <kbd>m</kbd> opens it in Mirador instead.</td></tr>
+    <tr><td>A plot object</td><td>Draws it and opens it in Mirador. A plot that is already drawn opens without being drawn again.</td></tr>
+    <tr><td>Anything else, in R</td><td>Runs <code>str()</code> on it in the console.</td></tr>
+    <tr><td>A function, in Python</td><td>Shows its help in the console (<code>name?</code>).</td></tr>
+    <tr><td>Anything else, in Python</td><td>Prints it in the console.</td></tr>
+    </tbody>
+    </table>
+    <p>The history of everything you drew isn't in this pane: it is in Mirador (<kbd>ctrl+b</kbd> <kbd>f</kbd>).</p>
+
+    <h3>A bigger view</h3>
+    <p><kbd>ctrl+b</kbd> <kbd>d</kbd> (<code>corral vars</code>) opens the variables over the terminal, with the same keys; <kbd>q</kbd> closes it. If your layout has no variables pane, <code>corral vars --split</code> adds one under the R console.</p>
+    <p>Objects with more than a million elements don't show their size in memory, because computing it after every command would be slow. To stay fast, Corral describes a variable again only when the object changed (another address in memory, another length, other dimensions or, in tables, other column types).</p>
+
+    <h2>Variables for agents</h2>
+    <pre><code><span class="p">$ </span>corral vars --json
+<span class="p">$ </span>corral vars --json --lang python</code></pre>
+    <p>This prints the objects in the session (name, kind, class, dimensions or a preview, size) as JSON, without typing anything in the console. Without <code>--lang</code> it lists the console in view. Corral's skill tells Claude to use it before running code, so it doesn't guess names or overwrite your objects.</p>
+
+    <h2>The table viewer</h2>
+    <p><code>View(df)</code> (in R or in Python), <kbd>Enter</kbd> on a data frame in the variables pane, or <code>corral view</code> on a file open the table over the terminal, in a viewer that queries the file with <a href="https://duckdb.org">DuckDB</a>.</p>
+    <p>The session saves the table as parquet, and the viewer asks DuckDB only for what is on screen: a page of rows, the row count, a sort or a search are each a query of a few milliseconds. A table of 10 million rows shows its first screen in about 34 ms, and the viewer itself uses about 3 MB.</p>
+    <figure class="tui-shot" role="img" aria-label="The table viewer showing a 10,000,000-row sales table">
+      <div class="tui-bar"><span>table: sales</span><span>10,000,000 rows</span></div>
+      <pre> <span style="color:#ffc799;">▸▸</span> <span style="color:#ffffff;font-weight:700;">sales</span>                                                                           <span style="color:#a0a0a0;">10,000,000 rows · 7 columns</span>
+
+          <span style="color:#ffc799;background:#343434;font-weight:700;"> order_id</span>  <span style="color:#ffffff;font-weight:700;">date      </span>  <span style="color:#ffffff;font-weight:700;">region </span>  <span style="color:#ffffff;font-weight:700;">product </span>  <span style="color:#ffffff;font-weight:700;"> units</span>  <span style="color:#ffffff;font-weight:700;">  price</span>  <span style="color:#ffffff;font-weight:700;"> revenue</span>
+          <span style="color:#5c5c5c;">  integer  date        varchar  varchar   integ…   double    double  </span>
+
+<span style="color:#5c5c5c;background:#343434;">        1</span> <span style="color:#ffc799;">        1</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">2025-12-09</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">East   </span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">Headset </span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">     7</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;"> 241.42</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;"> 1689.94</span><span style="background:#343434;">                                   </span>
+<span style="color:#5c5c5c;">        2</span> <span style="color:#ffffff;">        2</span>  <span style="color:#ffffff;">2024-09-14</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 848.36</span>  <span style="color:#ffffff;"> 2545.08</span>
+<span style="color:#5c5c5c;">        3</span> <span style="color:#ffffff;">        3</span>  <span style="color:#ffffff;">2024-08-17</span>  <span style="color:#ffffff;">East   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">    11</span>  <span style="color:#ffffff;">1335.13</span>  <span style="color:#ffffff;">14686.43</span>
+<span style="color:#5c5c5c;">        4</span> <span style="color:#ffffff;">        4</span>  <span style="color:#ffffff;">2024-10-07</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Headset </span>  <span style="color:#ffffff;">     1</span>  <span style="color:#ffffff;">1231.24</span>  <span style="color:#ffffff;"> 1231.24</span>
+<span style="color:#5c5c5c;">        5</span> <span style="color:#ffffff;">        5</span>  <span style="color:#ffffff;">2025-12-03</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Laptop  </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 650.69</span>  <span style="color:#ffffff;"> 1952.07</span>
+<span style="color:#5c5c5c;">        6</span> <span style="color:#ffffff;">        6</span>  <span style="color:#ffffff;">2025-07-07</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Webcam  </span>  <span style="color:#ffffff;">     2</span>  <span style="color:#ffffff;"> 716.53</span>  <span style="color:#ffffff;"> 1433.06</span>
+<span style="color:#5c5c5c;">        7</span> <span style="color:#ffffff;">        7</span>  <span style="color:#ffffff;">2025-03-28</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     5</span>  <span style="color:#ffffff;">  532.7</span>  <span style="color:#ffffff;">  2663.5</span>
+<span style="color:#5c5c5c;">        8</span> <span style="color:#ffffff;">        8</span>  <span style="color:#ffffff;">2024-09-05</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">     1</span>  <span style="color:#ffffff;"> 657.58</span>  <span style="color:#ffffff;">  657.58</span>
+<span style="color:#5c5c5c;">        9</span> <span style="color:#ffffff;">        9</span>  <span style="color:#ffffff;">2025-09-22</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">    11</span>  <span style="color:#ffffff;"> 559.68</span>  <span style="color:#ffffff;"> 6156.48</span>
+<span style="color:#5c5c5c;">       10</span> <span style="color:#ffffff;">       10</span>  <span style="color:#ffffff;">2025-12-29</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">    10</span>  <span style="color:#ffffff;"> 690.15</span>  <span style="color:#ffffff;">  6901.5</span>
+<span style="color:#5c5c5c;">       11</span> <span style="color:#ffffff;">       11</span>  <span style="color:#ffffff;">2025-03-30</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">     9</span>  <span style="color:#ffffff;"> 791.22</span>  <span style="color:#ffffff;"> 7120.98</span>
+<span style="color:#5c5c5c;">       12</span> <span style="color:#ffffff;">       12</span>  <span style="color:#ffffff;">2025-04-26</span>  <span style="color:#ffffff;">Central</span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     2</span>  <span style="color:#ffffff;"> 534.37</span>  <span style="color:#ffffff;"> 1068.74</span>
+<span style="color:#5c5c5c;">       13</span> <span style="color:#ffffff;">       13</span>  <span style="color:#ffffff;">2025-10-22</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     4</span>  <span style="color:#ffffff;">1092.59</span>  <span style="color:#ffffff;"> 4370.36</span>
+<span style="color:#5c5c5c;">       14</span> <span style="color:#ffffff;">       14</span>  <span style="color:#ffffff;">2025-07-17</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     8</span>  <span style="color:#ffffff;"> 106.77</span>  <span style="color:#ffffff;">  854.16</span>
+<span style="color:#5c5c5c;">       15</span> <span style="color:#ffffff;">       15</span>  <span style="color:#ffffff;">2024-06-04</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Webcam  </span>  <span style="color:#ffffff;">    12</span>  <span style="color:#ffffff;">1068.48</span>  <span style="color:#ffffff;">12821.76</span>
+<span style="color:#5c5c5c;">       16</span> <span style="color:#ffffff;">       16</span>  <span style="color:#ffffff;">2024-06-30</span>  <span style="color:#ffffff;">East   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     7</span>  <span style="color:#ffffff;">1485.02</span>  <span style="color:#ffffff;">10395.14</span>
+<span style="color:#5c5c5c;">       17</span> <span style="color:#ffffff;">       17</span>  <span style="color:#ffffff;">2024-06-13</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Headset </span>  <span style="color:#ffffff;">     8</span>  <span style="color:#ffffff;">1421.45</span>  <span style="color:#ffffff;"> 11371.6</span>
+<span style="color:#5c5c5c;">       18</span> <span style="color:#ffffff;">       18</span>  <span style="color:#ffffff;">2025-04-22</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;">  688.5</span>  <span style="color:#ffffff;">  2065.5</span>
+<span style="color:#5c5c5c;">       19</span> <span style="color:#ffffff;">       19</span>  <span style="color:#ffffff;">2024-01-11</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Mouse   </span>  <span style="color:#ffffff;">     5</span>  <span style="color:#ffffff;">1734.62</span>  <span style="color:#ffffff;">  8673.1</span>
+<span style="color:#5c5c5c;">       20</span> <span style="color:#ffffff;">       20</span>  <span style="color:#ffffff;">2024-08-25</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 1070.4</span>  <span style="color:#ffffff;">  3211.2</span>
+ <span style="color:#5c5c5c;">/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Sh…</span></pre>
+    </figure>
+    <pre><code><span class="p">$ </span>corral view data/sales.parquet</code></pre>
+    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables. In R, it writes parquet with nanoparquet or arrow; without either, it uses CSV.</p>
+
+    <h3>Keys</h3>
+    <table>
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd>, <kbd>PgUp</kbd> <kbd>PgDn</kbd>, <kbd>g</kbd> <kbd>G</kbd></td><td>Move through the rows (the mouse wheel too)</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd>, <kbd>0</kbd> <kbd>$</kbd></td><td>Move through the columns; with the mouse, the horizontal wheel, a sideways swipe on the trackpad, or <kbd>Shift</kbd> and the wheel</td></tr>
+    <tr><td><kbd>s</kbd> (or a click on the header)</td><td>Sort by the column: ascending, descending, unsorted</td></tr>
+    <tr><td><kbd>/</kbd></td><td>Search a text in every column; <kbd>/</kbd> and an empty <kbd>Enter</kbd> clear the search</td></tr>
+    <tr><td><kbd>f</kbd></td><td>Filter with a condition; it starts with the name of the current column</td></tr>
+    <tr><td><kbd>=</kbd></td><td>Keep only the rows with the value of the selected cell</td></tr>
+    <tr><td><kbd>x</kbd></td><td>Remove every filter and the search</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>See the whole row</td></tr>
+    <tr><td><kbd>i</kbd></td><td>Summary of each column (DuckDB's <code>SUMMARIZE</code>)</td></tr>
+    <tr><td><kbd>m</kbd></td><td>Open the table in Mirador, in your browser; the viewer stays open</td></tr>
+    <tr><td><kbd>q</kbd></td><td>Close</td></tr>
+    </tbody>
+    </table>
+
+    <h3>Filters</h3>
+    <p>A filter takes R or DuckDB's SQL:</p>
+    <pre><code>mpg &gt; 20 &amp; cyl == 6
+region %in% c("a", "b")
+!is.na(x)
+region LIKE 'nor%'</code></pre>
+    <p>Filters add up, with each other and with the search, and the top line says which ones are active and how many rows are left. If a filter has an error, it isn't applied, and DuckDB says why.</p>
+
+    <h3>Tables in Mirador</h3>
+    <p>The terminal is the default, and Mirador opens a table only when you ask, for example when you want more room for a wide one. Any of these does it:</p>
+    <ul>
+      <li><kbd>m</kbd> in the table viewer, or on a data frame in the variables pane;</li>
+      <li><code>View(df, mirador = TRUE)</code> in R, <code>View(df, mirador=True)</code> in Python;</li>
+      <li><code>corral view FILE --mirador</code>.</li>
+    </ul>
+    <p>Mirador opens the same file in a tab of its own, and the table works as in the terminal, with the same DuckDB queries and the same keys: <kbd>/</kbd> searches, <kbd>f</kbd> adds a filter in R or SQL, <kbd>=</kbd> keeps the rows equal to the selected cell, <kbd>s</kbd> sorts (a click on a header too), <kbd>x</kbd> clears, <kbd>Enter</kbd> shows the whole row and <kbd>i</kbd> the summary. Each filter shows as a label you can remove with its ×, and the top line says how many rows are left. Every tab keeps its filters, sort and position while you look at another one.</p>
+    <figure class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span>127.0.0.1 · Mirador · sales</span></div>
+      <img src="../assets/shots/mirador-table.webp" width="2200" height="1400" loading="lazy" alt="A 10,000,000-row sales table in Mirador, filtered to 666,741 rows with units > 10 and two regions, sorted by revenue">
+    </figure>
+    <p>Outside herdr, <code>View()</code> opens tables in Mirador when Mirador is running; <code>CORRAL_VIEW</code> changes that (see <a href="config.html#environment-variables">Configuration</a>).</p>
+    <div class="note"><p>Tables from <code>View()</code> are saved in R's (or Python's) temporary folder, and they go away when you close the console.</p></div>
+
+    <h2>VisiData instead</h2>
+    <p>If you prefer <a href="https://www.visidata.org">VisiData</a> and have it installed (<code>vd</code>), tables open there, with Corral's colors:</p>
+    <pre><code><span class="p">$ </span>corral config table_viewer visidata</code></pre>
+    <p>Any other value, such as <code>corral</code>, goes back to Corral's viewer. To use a viewer of your own, set <code>CORRAL_TABLE_VIEWER</code> to its command; <code>{file}</code> is replaced by the table's path.</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

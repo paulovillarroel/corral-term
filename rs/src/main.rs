@@ -1,6 +1,8 @@
 //! corral: Corral's command, all of it. It talks to herdr's socket directly
 //! and has no dependencies beyond the C library.
 
+#[macro_use]
+mod i18n;
 mod ark;
 mod atajos;
 mod console;
@@ -26,35 +28,66 @@ mod workspace;
 mod zip;
 mod zmtp;
 
-const HELP: &str = "corral: consolas de R y Python, tablas y gráficos junto a tus agentes, en herdr.
+const HELP: &str = "corral: R and Python consoles, tables and plots next to your agents, in herdr.
+
+Usage: corral COMMAND [OPTIONS]   (corral COMMAND --help for its options)
+
+Workspace
+  layout       opens the workspace (ctrl+b a; --focus code, ctrl+b shift+a)
+  close        closes the script, the console and the variables; keeps the agent (ctrl+b shift+c)
+  toggle       expands the script (or the agent) or the console (ctrl+b t)
+  switch       switches the console between R and Python (ctrl+b y)
+  script       adds the editor, or reads, saves or writes the draft
+  console      marks a pane as the R or Python console (ctrl+b m)
+  keys         the shortcut palette (ctrl+b space); --list, --json, --change
+
+Code and data
+  send         sends code to the console (Ctrl+R, F5, ctrl+b enter)
+  eval         runs code in your console and prints the result (for agents)
+  vars         the variables (window, --json for agents, --split)
+  view         opens a table (parquet, csv…), --mirador for the browser
+  plots        the plots (ctrl+b f)
+  mirador      Mirador, the view in your browser (--open, --url, --stop)
+  open         opens a local link in the browser
+
+Setup
+  config       reads or changes the settings (language, agent, theme, R console…)
+  theme        applies herdr's theme to the editor, the viewers and Mirador
+  ark          Ark's status, or --install
+  doctor       checks that everything is in order
+  install      checks the requirements and repairs the installation (--check)
+  uninstall    removes Corral from herdr, R, the editor and your agents
+";
+
+const HELP_ES: &str = "corral: consolas de R y Python, tablas y gráficos junto a tus agentes, en herdr.
 
 Uso: corral COMANDO [OPCIONES]   (corral COMANDO --help para sus opciones)
 
 Espacio de trabajo
-  layout       abre el espacio de trabajo (ctrl+b a; --foco codigo, ctrl+b shift+a)
+  layout       abre el espacio de trabajo (ctrl+b a; --focus code, ctrl+b shift+a)
   close        cierra el script, la consola y las variables; deja al agente (ctrl+b shift+c)
   toggle       expande el script (o el agente) o la consola (ctrl+b t)
   switch       la consola pasa a R o a Python (ctrl+b y)
   script       agrega el editor, o lee, guarda o escribe el borrador
   console      marca un panel como consola de R o Python (ctrl+b m)
-  atajos       la paleta de atajos (ctrl+b space); --lista, --json, --cambiar
+  keys         la paleta de atajos (ctrl+b space); --list, --json, --change
 
 Código y datos
   send         envía código a la consola (Ctrl+R, F5, ctrl+b enter)
   eval         ejecuta código en tu consola e imprime el resultado (para agentes)
   vars         las variables (ventana, --json para agentes, --split)
-  view         abre una tabla (parquet, csv…)
+  view         abre una tabla (parquet, csv…), --mirador para el navegador
   plots        los gráficos (ctrl+b f)
   mirador      Mirador, la vista en el navegador (--open, --url, --stop)
   open         abre un enlace local en el navegador
 
 Instalación y ajustes
-  config       lee o cambia la configuración (tema, consola de R, servidor de Python…)
+  config       lee o cambia la configuración (idioma, agente, tema, consola de R…)
   theme        aplica el tema de herdr al editor, los visores y Mirador
-  ark          estado de Ark, o --instalar
+  ark          estado de Ark, o --install
   doctor       revisa que esté todo en orden
-  instalar     revisa los requisitos y repara la instalación (--revisar)
-  desinstalar  quita Corral de herdr, R, el editor y Claude Code
+  install      revisa los requisitos y repara la instalación (--check)
+  uninstall    quita Corral de herdr, R, el editor y tus agentes
 ";
 
 fn main() {
@@ -65,8 +98,8 @@ fn main() {
         Some("eval") => eval::run(rest),
         Some("_console") => console::run(rest),
         Some("_editor") => editor::run(rest),
-        Some("atajos") => atajos::run(rest, false),
-        Some("_atajos") => atajos::run(rest, true),
+        Some("keys") => atajos::run(rest, false),
+        Some("_keys") => atajos::run(rest, true),
         Some("toggle") => layout::toggle(rest),
         Some("switch") => layout::switch(rest),
         Some("_lsp") => lsp::run(rest),
@@ -88,18 +121,18 @@ fn main() {
         Some("mirador") => plots::cmd_mirador(rest),
         Some("ark") => setup::cmd_ark(rest),
         Some("doctor") => setup::cmd_doctor(rest),
-        Some("instalar") => install::cmd_install(rest),
-        Some("desinstalar") => install::cmd_uninstall(rest),
+        Some("install") => install::cmd_install(rest),
+        Some("uninstall") => install::cmd_uninstall(rest),
         Some("config") => theme::cmd_config(rest),
         Some("--version" | "-V") => {
             println!("corral {} ({})", env!("CARGO_PKG_VERSION"), env::repo().display());
             Ok(())
         }
-        None | Some("--help" | "-h" | "ayuda") => {
-            print!("{HELP}");
+        None | Some("--help" | "-h" | "help") => {
+            print!("{}", i18n::tr(HELP, HELP_ES));
             Ok(())
         }
-        Some(other) => Err(format!("no conozco el comando '{other}'; corral --help muestra los que hay")),
+        Some(other) => Err(trf!("unknown command '{other}'; corral --help lists them", "no conozco el comando '{other}'; corral --help muestra los que hay")),
     };
     if let Err(e) = result {
         eprintln!("corral: {e}");

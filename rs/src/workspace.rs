@@ -6,8 +6,9 @@ use crate::console;
 use crate::editor;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
-use crate::layout::PARKING_TAB;
+use crate::layout;
 use crate::theme;
 use crate::vars;
 use std::io::{IsTerminal, Read};
@@ -16,8 +17,9 @@ use std::time::{Duration, Instant};
 
 const SCRIPT_SHARE: f64 = 0.57;
 const CORRAL_LABELS: [&str; 5] = ["corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell"];
-const OLD_PARKING_TABS: [&str; 2] = ["consola (oculta)", "script (oculto)"];
 const SCRATCH_MAX_AGE: u64 = 2 * 86400;
+/// The draft's file name in each language; Corral and its editor plugin know both.
+const SCRATCH_NAMES: [&str; 2] = ["draft.R", "borrador.R"];
 
 /// Options like `--name value`, flags like `--name`, and the rest in order.
 struct Args {
@@ -38,12 +40,12 @@ impl Args {
                 println!("{usage}");
                 std::process::exit(0);
             } else if with_value.contains(&name.as_str()) {
-                let v = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("falta el valor de {name}\n{usage}"))?;
+                let v = inline.or_else(|| it.next().cloned()).ok_or_else(|| trf!("{name} needs a value\n{usage}", "falta el valor de {name}\n{usage}"))?;
                 out.opts.push((name, Some(v)));
             } else if flags.contains(&name.as_str()) {
                 out.opts.push((name, None));
             } else if a.starts_with("--") {
-                return Err(format!("opción desconocida {a}\n{usage}"));
+                return Err(trf!("unknown option {a}\n{usage}", "opción desconocida {a}\n{usage}"));
             } else {
                 out.rest.push(a.clone());
             }
@@ -71,35 +73,43 @@ fn layout_state() -> (Value, String) {
 
 // ----------------------------------------------------------------------- layout
 
-const LAYOUT_USAGE: &str = "uso: corral layout [--foco agente|codigo] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
-[--console COMANDO] [--ratio 0.516] [--shell] [--editor COMANDO]";
+fn layout_usage() -> &'static str {
+    tr("usage: corral layout [--focus agent|code] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
+[--console COMMAND] [--ratio 0.516] [--shell] [--editor COMMAND]",
+       "uso: corral layout [--focus agent|code] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
+[--console COMANDO] [--ratio 0.516] [--shell] [--editor COMANDO]")
+}
 
 /// New tab: the agent on the left; on the right, the script over the console and
-/// the variables below. With `--foco codigo` the script and the agent trade
+/// the variables below. With `--focus code` the script and the agent trade
 /// places: the script on the left, the agent over the console. The two panes
 /// above the variables share that area; ctrl+b t gives it to one or the other.
 pub fn layout(args: &[String]) -> Result<(), String> {
-    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--foco"], &["--shell"], LAYOUT_USAGE)?;
-    let code = match a.value("--foco").unwrap_or("agente") {
-        "agente" => false,
-        "codigo" => true,
-        other => return Err(format!("--foco acepta agente o codigo, no {other}")),
+    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus"], &["--shell"], layout_usage())?;
+    let code = match a.value("--focus").unwrap_or("agent") {
+        "agent" => false,
+        "code" => true,
+        other => return Err(trf!("--focus takes agent or code, not {other}", "--focus acepta agent o code, no {other}")),
     };
-    let ws = env::current_workspace().ok_or("no encontré un workspace de herdr")?;
+    let ws = env::current_workspace().ok_or(tr("no herdr workspace found", "no encontré un workspace de herdr"))?;
     let ctx = env::plugin_context();
     let cwd = a.value("--cwd").map(String::from)
         .or_else(|| ctx.get("focused_pane_cwd").str().map(String::from))
         .or_else(|| ctx.get("workspace_cwd").str().map(String::from))
         .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()))
         .unwrap_or_else(|| ".".into());
-    let agent = a.value("--agent").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_AGENT").unwrap_or_else(|_| "claude".into()));
+    // The agent pane runs any agent: --agent, then CORRAL_AGENT, then `corral config agent`, else Claude Code.
+    let agent = a.value("--agent").map(String::from)
+        .or_else(|| std::env::var("CORRAL_AGENT").ok())
+        .or_else(|| env::config().get("agent").str().map(String::from))
+        .unwrap_or_else(|| "claude".into());
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
-    let ratio: f64 = a.value("--ratio").map(|r| r.parse().map_err(|_| format!("--ratio no es un número: {r}"))).transpose()?.unwrap_or(0.516);
+    let ratio: f64 = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?.unwrap_or(0.516);
     let label = a.value("--label").unwrap_or("corral");
 
     theme::apply(); // herdr's theme rules every Corral window
     let tab = herdr::cli(&["tab", "create", "--workspace", &ws, "--label", label, "--cwd", &cwd, "--focus"])?;
-    let left = tab.get("root_pane").get("pane_id").str().ok_or("herdr no creó la pestaña")?.to_string();
+    let left = tab.get("root_pane").get("pane_id").str().ok_or(tr("herdr did not create the tab", "herdr no creó la pestaña"))?.to_string();
     let right = herdr::split(&left, "right", Some(ratio), Some(&cwd))?;
 
     // Only one of each per workspace: take the labels away from older panes.
@@ -115,7 +125,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let vars_pane = vars::split_under(&right, 0.73)?;
     let editor_ok = !editor_cmd.trim().is_empty() && editor_cmd.split_whitespace().next().and_then(env::which).is_some();
     if code && !editor_ok {
-        return Err("el layout con foco en el código necesita el editor (Fresh); corral doctor dice qué falta".into());
+        return Err(tr("the code-first layout needs the editor (Fresh); corral doctor tells what is missing",
+                      "el layout con foco en el código necesita el editor (Fresh); corral doctor dice qué falta").into());
     }
     let (agent_pane, script_pane) = if code { (right.clone(), left.clone()) } else { (left.clone(), right.clone()) };
     let console_pane = if editor_ok {
@@ -129,8 +140,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     };
     if code {
         // ctrl+b t expands the agent or the console over the variables.
-        state.set("foco", "codigo".into());
-        state.set("agente", agent_pane.as_str().into());
+        state.set("focus", "code".into());
+        state.set("agent", agent_pane.as_str().into());
     }
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
@@ -149,7 +160,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         ("tab", tab.get("tab").get("tab_id").clone()), ("agent", agent_pane.as_str().into()),
         ("console", console_pane.as_str().into()),
         ("script", if editor_ok { script_pane.as_str().into() } else { Value::Null }),
-        ("vars", vars_pane.as_str().into()), ("foco", if code { "codigo" } else { "agente" }.into()),
+        ("vars", vars_pane.as_str().into()), ("focus", if code { "code" } else { "agent" }.into()),
     ]).to_json());
     Ok(())
 }
@@ -177,6 +188,11 @@ fn scratch_root(project: &str) -> PathBuf {
     }
 }
 
+/// Is this file a draft's name (in either language)?
+pub fn is_scratch_name(name: &str) -> bool {
+    SCRATCH_NAMES.contains(&name)
+}
+
 /// A new, empty .R draft for the script pane, thrown away unless you save it. It
 /// must be a real file because the editor only offers completion on saved files.
 /// Drafts no editor has open, and folders older than two days, go away here.
@@ -199,7 +215,7 @@ pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String
         // Git ignores the whole folder without touching the project's .gitignore.
         let ignore = root.join(".gitignore");
         if !ignore.exists() {
-            let _ = std::fs::write(&ignore, "# Borradores temporales de Corral\n*\n");
+            let _ = std::fs::write(&ignore, tr("# Corral's temporary drafts\n*\n", "# Borradores temporales de Corral\n*\n"));
         }
     }
     let open = env::command_lines();
@@ -207,7 +223,9 @@ pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String
         for old in entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
             let shown = old.to_string_lossy().to_string();
             if !open.iter().any(|c| c.contains(&shown)) {
-                editor::discard(&old.join("borrador.R"));
+                for name in SCRATCH_NAMES {
+                    editor::discard(&old.join(name));
+                }
             }
             let age = std::fs::metadata(&old).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
             if old.exists() && age.is_some_and(|a| a.as_secs() > SCRATCH_MAX_AGE) {
@@ -217,7 +235,7 @@ pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String
     }
     let folder = root.join(format!("{label}-{}", env::stamp()));
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    let path = folder.join("borrador.R");
+    let path = folder.join(tr(SCRATCH_NAMES[0], SCRATCH_NAMES[1]));
     std::fs::write(&path, "").map_err(|e| format!("{}: {e}", path.display()))?;
     let mut index = env::read_json(&scratch_index());
     index.set(ws.unwrap_or("default"), path.to_string_lossy().to_string().into());
@@ -226,11 +244,16 @@ pub fn scratch_script(ws: Option<&str>, project: &str) -> Result<PathBuf, String
 }
 
 /// Command line for the script pane. Fresh starts clean (--no-restore), without
-/// old tabs. A draft goes through `corral _editor`, which throws it away when
+/// old tabs, and in Corral's language (--locale), unless the command already
+/// names one. A draft goes through `corral _editor`, which throws it away when
 /// the editor ends.
 pub fn editor_command(editor: &str, target: &Path, scratch: bool) -> String {
     let fresh = editor.split_whitespace().any(|t| Path::new(t).file_name().is_some_and(|n| n == "fresh"));
-    let extra = if fresh { " --no-restore" } else { "" };
+    let extra = match (fresh, editor.contains("--locale")) {
+        (true, false) => format!(" --no-restore --locale {}", crate::i18n::lang()),
+        (true, true) => " --no-restore".to_string(),
+        _ => String::new(),
+    };
     // WSLg's Wayland has no clipboard protocol for Fresh: it warns and falls back
     // to X11 anyway, so start it on X11 directly.
     let prefix = if fresh && std::env::var_os("WSL_DISTRO_NAME").is_some() && std::env::var_os("DISPLAY").is_some() {
@@ -261,7 +284,7 @@ fn scratch_text(scratch: &Path) -> String {
 /// request next to the draft; Corral's editor plugin applies it, as one edit the
 /// user can undo with Ctrl+Z, and answers.
 fn scratch_write(scratch: &Path, text: &str, replace: bool) -> Result<(), String> {
-    let folder = scratch.parent().ok_or("borrador sin carpeta")?;
+    let folder = scratch.parent().ok_or(tr("the draft has no folder", "borrador sin carpeta"))?;
     let rid = env::random_hex(4);
     let answer = folder.join(".respuesta.json");
     let tmp = folder.join(".pedido.tmp");
@@ -280,30 +303,42 @@ fn scratch_write(scratch: &Path, text: &str, replace: bool) -> Result<(), String
     }
     let _ = std::fs::remove_file(folder.join(".pedido.json"));
     if reply.get("id").str() != Some(rid.as_str()) {
-        return Err("el editor no respondió: ¿está abierto el borrador? Un editor abierto antes de actualizar Corral \
-                    necesita cerrarse (Ctrl+Q) y abrirse otra vez".into());
+        return Err(tr("the editor did not answer: is the draft open? An editor opened before Corral was updated \
+                       needs to be closed (Ctrl+Q) and opened again",
+                      "el editor no respondió: ¿está abierto el borrador? Un editor abierto antes de actualizar Corral \
+                       necesita cerrarse (Ctrl+Q) y abrirse otra vez").into());
     }
     if reply.get("ok") != &Value::Bool(true) {
-        return Err(reply.get("msg").str().unwrap_or("el editor no aplicó el cambio").to_string());
+        return Err(reply.get("msg").str().unwrap_or(tr("the editor did not apply the change", "el editor no aplicó el cambio")).to_string());
     }
     let lines = text.matches('\n').count() + usize::from(!text.ends_with('\n') && !text.is_empty());
-    let what = if replace { "reemplazó el borrador con" } else { "agregó al final del borrador" };
-    println!("se {what} {lines} línea{}; el usuario lo deshace con Ctrl+Z", if lines == 1 { "" } else { "s" });
+    let s = if lines == 1 { "" } else { "s" };
+    println!("{}", match replace {
+        true => trf!("replaced the draft with {lines} line{s}; the user can undo it with Ctrl+Z",
+                     "se reemplazó el borrador con {lines} línea{s}; el usuario lo deshace con Ctrl+Z"),
+        false => trf!("added {lines} line{s} at the end of the draft; the user can undo it with Ctrl+Z",
+                      "se agregó al final del borrador {lines} línea{s}; el usuario lo deshace con Ctrl+Z"),
+    });
     Ok(())
 }
 
-const SCRIPT_USAGE: &str = "uso: corral script [ARCHIVO] [--editor COMANDO]\n       \
-corral script --leer | --guardar RUTA [--forzar] | --escribir [--reemplazar] [ARCHIVO]";
+fn script_usage() -> &'static str {
+    tr("usage: corral script [FILE] [--editor COMMAND]\n       \
+corral script --read | --save PATH [--force] | --write [--replace] [FILE]",
+       "uso: corral script [ARCHIVO] [--editor COMANDO]\n     \
+corral script --read | --save RUTA [--force] | --write [--replace] [ARCHIVO]")
+}
 
 /// `corral script`: add the editor over the console, or read, save or write the draft.
 pub fn script(args: &[String]) -> Result<(), String> {
-    let a = Args::parse(args, &["--guardar", "--editor"], &["--split", "--leer", "--escribir", "--reemplazar", "--forzar"], SCRIPT_USAGE)?;
+    let a = Args::parse(args, &["--save", "--editor"], &["--split", "--read", "--write", "--replace", "--force"], script_usage())?;
     let file = a.rest.first().cloned();
     let ws = env::current_workspace();
-    if a.value("--guardar").is_some() || a.flag("--leer") || a.flag("--escribir") {
+    if a.value("--save").is_some() || a.flag("--read") || a.flag("--write") {
         let index = env::read_json(&scratch_index());
-        let scratch = PathBuf::from(index.get(ws.as_deref().unwrap_or("default")).str().ok_or("este workspace no tiene un borrador de Corral")?);
-        if a.flag("--escribir") {
+        let scratch = PathBuf::from(index.get(ws.as_deref().unwrap_or("default")).str()
+            .ok_or(tr("this workspace has no Corral draft", "este workspace no tiene un borrador de Corral"))?);
+        if a.flag("--write") {
             let text = match &file {
                 Some(f) => std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?,
                 None => {
@@ -314,37 +349,39 @@ pub fn script(args: &[String]) -> Result<(), String> {
                     s
                 }
             };
-            return scratch_write(&scratch, &text, a.flag("--reemplazar"));
+            return scratch_write(&scratch, &text, a.flag("--replace"));
         }
         let text = scratch_text(&scratch);
-        if a.flag("--leer") {
+        if a.flag("--read") {
             print!("{text}{}", if text.ends_with('\n') { "" } else { "\n" });
             return Ok(());
         }
-        let raw = a.value("--guardar").unwrap_or_default();
+        let raw = a.value("--save").unwrap_or_default();
         let expanded = raw.strip_prefix("~/").map(|r| env::home().join(r)).unwrap_or_else(|| PathBuf::from(raw));
         let target = if expanded.is_absolute() { expanded } else { std::env::current_dir().unwrap_or_default().join(expanded) };
-        if target.exists() && !a.flag("--forzar") {
-            return Err(format!("{} ya existe; usa --forzar para reemplazarlo", target.display()));
+        if target.exists() && !a.flag("--force") {
+            let shown = target.display();
+            return Err(trf!("{shown} already exists; use --force to replace it", "{shown} ya existe; usa --force para reemplazarlo"));
         }
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
         let body = if !text.is_empty() && !text.ends_with('\n') { format!("{text}\n") } else { text };
         std::fs::write(&target, body).map_err(|e| format!("{}: {e}", target.display()))?;
-        println!("borrador guardado en {}", target.display());
+        let shown = target.display();
+        println!("{}", trf!("draft saved to {shown}", "borrador guardado en {shown}"));
         return Ok(());
     }
 
     let panes = herdr::panes(ws.as_deref())?;
     if labeled(&panes, "corral:script").is_some() {
-        env::notify("Script", "ya hay un panel de script en este workspace");
+        env::notify("Script", tr("this workspace already has a script pane", "ya hay un panel de script en este workspace"));
         return Ok(());
     }
-    let console = console::find("r", ws.as_deref()).ok_or("no hay consola corral:r en este workspace")?;
+    let console = console::find("r", ws.as_deref()).ok_or(tr("no corral:r console in this workspace", "no hay consola corral:r en este workspace"))?;
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
     if editor_cmd.split_whitespace().next().and_then(env::which).is_none() {
-        return Err(format!("no encuentro el editor '{editor_cmd}'"));
+        return Err(trf!("editor '{editor_cmd}' not found", "no encuentro el editor '{editor_cmd}'"));
     }
     let new = herdr::split(&console, "down", Some(0.45), None)?;
     herdr::cli(&["pane", "swap", "--source-pane", &new, "--target-pane", &console])?;
@@ -382,7 +419,7 @@ pub fn close(_args: &[String]) -> Result<(), String> {
     // Panes hidden by ctrl+b t or by the R/Python switch live in a tab of their own.
     if let Some(ws) = &ws {
         let hidden: Vec<String> = herdr::tabs(ws)?.iter()
-            .filter(|t| { let l = t.get("label").str().unwrap_or(""); l == PARKING_TAB || OLD_PARKING_TABS.contains(&l) })
+            .filter(|t| t.get("label").str().is_some_and(layout::is_any_parking_tab))
             .filter_map(|t| t.get("tab_id").str().map(String::from)).collect();
         for p in all.iter().filter(|p| hidden.iter().any(|h| h == herdr::tab_id(p)) && is_corral(p)) {
             let id = herdr::pane_id(p).to_string();
@@ -394,7 +431,7 @@ pub fn close(_args: &[String]) -> Result<(), String> {
     let (mut saved, key) = layout_state();
     let had_state = !saved.get(&key).is_null();
     if targets.is_empty() {
-        env::notify("Corral", "no hay paneles de Corral en esta pestaña");
+        env::notify("Corral", tr("no Corral panes in this tab", "no hay paneles de Corral en esta pestaña"));
         return Ok(());
     }
     for p in &targets {
@@ -404,8 +441,9 @@ pub fn close(_args: &[String]) -> Result<(), String> {
         saved.remove(&key);
         env::write_json(&env::layout_file(), &saved);
     }
-    let note = format!("{} paneles cerrados; el borrador sin guardar se descartó", targets.len());
-    env::notify("Corral cerrado", &note);
+    let n = targets.len();
+    let note = trf!("{n} panes closed; the unsaved draft was discarded", "{n} paneles cerrados; el borrador sin guardar se descartó");
+    env::notify(tr("Corral closed", "Corral cerrado"), &note);
     println!("{note}");
     Ok(())
 }
@@ -415,8 +453,10 @@ pub fn close(_args: &[String]) -> Result<(), String> {
 /// `corral console` (ctrl+b m): mark a pane (this one by default) as the R or
 /// Python console, and switch Corral on if R or IPython already runs there.
 pub fn mark_console(args: &[String]) -> Result<(), String> {
-    let a = Args::parse(args, &["--pane", "--lang"], &[], "uso: corral console [--pane PANEL] [--lang r|python]")?;
-    let pane = a.value("--pane").map(String::from).or_else(env::current_pane).ok_or("no sé qué panel marcar; usa --pane")?;
+    let usage = tr("usage: corral console [--pane PANE] [--lang r|python]", "uso: corral console [--pane PANEL] [--lang r|python]");
+    let a = Args::parse(args, &["--pane", "--lang"], &[], usage)?;
+    let pane = a.value("--pane").map(String::from).or_else(env::current_pane)
+        .ok_or(tr("which pane to mark? Use --pane", "no sé qué panel marcar; usa --pane"))?;
     let names: Vec<String> = herdr::cli(&["pane", "process-info", "--pane", &pane]).ok()
         .map(|i| i.get("process_info").get("foreground_processes").arr().iter()
             .map(|p| p.get("name").str().unwrap_or("").to_string()).collect())
@@ -427,7 +467,7 @@ pub fn mark_console(args: &[String]) -> Result<(), String> {
     let is_python = !is_ark && names.iter().any(|n| matches!(n.as_str(), "ipython" | "python" | "python3") || n.starts_with("python3."));
     let lang = match a.value("--lang") {
         Some(l @ ("r" | "python")) => l.to_string(),
-        Some(other) => return Err(format!("--lang acepta r o python, no {other}")),
+        Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),
         None => known.unwrap_or_else(|| if is_python { "python".into() } else { "r".into() }),
     };
     let label = console::label(&lang);
@@ -441,7 +481,7 @@ pub fn mark_console(args: &[String]) -> Result<(), String> {
     // If R or IPython is already running there without Corral, switch it on.
     let mut activated = false;
     if session.is_none() && lang == "r" && (is_ark || names.iter().any(|n| n == "R")) {
-        herdr::run(&pane, "if (exists(\"corral_activar\")) corral_activar()")?;
+        herdr::run(&pane, "if (exists(\"corral_activate\")) corral_activate()")?;
         activated = true;
     } else if session.is_none() && lang == "python" && is_python {
         herdr::run(&pane, &format!("%run -i \"{}\"", env::repo().join("py/startup.py").display()))?;
@@ -452,6 +492,28 @@ pub fn mark_console(args: &[String]) -> Result<(), String> {
     state.set("active", lang.as_str().into());
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
-    env::notify("Consola marcada", &format!("{pane} es ahora {label}{}", if activated { " y Corral quedó activo" } else { "" }));
+    let note = if activated {
+        trf!("{pane} is now {label} and Corral is active", "{pane} es ahora {label} y Corral quedó activo")
+    } else {
+        trf!("{pane} is now {label}", "{pane} es ahora {label}")
+    };
+    env::notify(tr("Console marked", "Consola marcada"), &note);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_starts_in_corrals_language() {
+        std::env::set_var("CORRAL_LANG", "en");
+        let line = editor_command("fresh", Path::new("/tmp/a.R"), false);
+        assert!(line.contains("fresh --no-restore --locale en"), "{line}");
+        // A locale the user chose in CORRAL_EDITOR wins, and isn't doubled.
+        let line = editor_command("fresh --locale ja", Path::new("/tmp/a.R"), false);
+        assert_eq!(line.matches("--locale").count(), 1, "{line}");
+        // Other editors get nothing added.
+        assert!(!editor_command("nvim", Path::new("/tmp/a.R"), false).contains("--locale"));
+    }
 }

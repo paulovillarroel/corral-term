@@ -5,6 +5,7 @@
 
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{obj, Value};
 use crate::layout;
 use crate::send::main_tab;
@@ -58,7 +59,7 @@ pub fn r_flavor(cfg: &Value) -> &'static str {
 pub fn run(args: &[String]) -> Result<(), String> {
     let lang = args.first().map(String::as_str).unwrap_or("r");
     if lang != "r" && lang != "python" {
-        return Err("uso: corral _console r|python".into());
+        return Err(tr("usage: corral _console r|python", "uso: corral _console r|python").into());
     }
     print!("\x1b[H\x1b[2J\x1b[3J"); // the command corral typed goes away
     let _ = std::io::stdout().flush();
@@ -101,7 +102,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     };
     let err = cmd.env("CORRAL", "1").exec();
-    Err(format!("no pude abrir la consola: {err}"))
+    Err(trf!("could not open the console: {err}", "no pude abrir la consola: {err}"))
 }
 
 fn shell(command: &str) -> Command {
@@ -113,9 +114,9 @@ fn shell(command: &str) -> Command {
 /// Corral's own kernel spec for Ark, for jupyter-console: R_HOME and R's
 /// library path as the R script sets them. Your Jupyter setup stays as it is.
 pub fn kernelspec(cfg: &Value) -> Result<PathBuf, String> {
-    let ark = ark_binary(cfg).ok_or("Ark no está instalado (corral ark --instalar)")?;
+    let ark = ark_binary(cfg).ok_or(tr("Ark is not installed (corral ark --install)", "Ark no está instalado (corral ark --install)"))?;
     let probe = Command::new("R").args(["--vanilla", "--no-echo", "-e", r#"cat(R.home(), Sys.getenv("LD_LIBRARY_PATH"), sep = "\n")"#])
-        .output().map_err(|e| format!("no pude ejecutar R: {e}"))?;
+        .output().map_err(|e| trf!("could not run R: {e}", "no pude ejecutar R: {e}"))?;
     let text = String::from_utf8_lossy(&probe.stdout);
     let mut lines = text.trim().splitn(2, '\n');
     let r_home = lines.next().unwrap_or("").trim().to_string();
@@ -160,16 +161,21 @@ pub fn find(lang: &str, ws: Option<&str>) -> Option<String> {
 /// The console pane for `lang` and the Corral session in it.
 pub fn session(lang: &str, ws: Option<&str>) -> Result<(String, Value), String> {
     let Some(console) = find(lang, ws) else {
+        let label = label(lang);
         return Err(if lang == "python" {
-            "no hay consola de Python: se abre sola al ejecutar código de Python, o con ctrl+b y".into()
+            tr("no Python console: it opens on its own when Python code runs, or with ctrl+b y",
+               "no hay consola de Python: se abre sola al ejecutar código de Python, o con ctrl+b y").into()
         } else {
-            format!("no hay consola {} en herdr; ábrela con ctrl+b a o márcala con ctrl+b m", label(lang))
+            trf!("no {label} console in herdr; open one with ctrl+b a or mark one with ctrl+b m",
+                 "no hay consola {label} en herdr; ábrela con ctrl+b a o márcala con ctrl+b m")
         });
     };
     match env::session_for(&console) {
         Some(s) => Ok((console, s)),
-        None if lang == "python" => Err(format!("la consola {console} no tiene Corral activo (¿IPython sigue arrancando?)")),
-        None => Err(format!("la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activar() en ese R (ctrl+b m lo hace)")),
+        None if lang == "python" => Err(trf!("the console {console} does not have Corral active (is IPython still starting?)",
+                                             "la consola {console} no tiene Corral activo (¿IPython sigue arrancando?)")),
+        None => Err(trf!("the console {console} does not have Corral active: open R with `CORRAL=1 R` or run corral_activate() in that R (ctrl+b m does it)",
+                         "la consola {console} no tiene Corral activo: abre R con `CORRAL=1 R` o corre corral_activate() en ese R (ctrl+b m lo hace)")),
     }
 }
 
@@ -234,10 +240,13 @@ pub fn wait_for_prompt(pane: &str, timeout: f64, lang: &str, edir: Option<&Path>
         // An earlier request still running echoes its code like typed input: busy, not half-typed.
         let half = half && !edir.is_some_and(eval_running);
         if Instant::now() > end {
+            let name = lang_name(lang);
             return Err(if half {
-                "la consola tiene una línea a medio escribir; termínala o bórrala y vuelve a intentar".into()
+                tr("the console has a half-typed line; finish it or delete it and try again",
+                   "la consola tiene una línea a medio escribir; termínala o bórrala y vuelve a intentar").into()
             } else {
-                format!("la consola de {} está ocupada; espera a que termine o usa --wait-idle", lang_name(lang))
+                trf!("the {name} console is busy; wait for it to finish or use --wait-idle",
+                     "la consola de {name} está ocupada; espera a que termine o usa --wait-idle")
             });
         }
         std::thread::sleep(Duration::from_millis(50));
@@ -265,11 +274,12 @@ fn start_pane(lang: &str, ws: Option<&str>, cwd: &str, near: Option<&str>) -> Re
     } else if let (_, Some(other)) = layout::hidden_tab(ws)? {
         herdr::split(&other, "right", None, Some(cwd))?
     } else {
-        let mut args = vec!["tab", "create", "--label", layout::PARKING_TAB, "--cwd", cwd];
+        let mut args = vec!["tab", "create", "--label", layout::parking_tab(), "--cwd", cwd];
         if let Some(ws) = ws {
             args.extend(["--workspace", ws]);
         }
-        herdr::cli(&args)?.get("root_pane").get("pane_id").str().map(String::from).ok_or("herdr no creó la pestaña")?
+        herdr::cli(&args)?.get("root_pane").get("pane_id").str().map(String::from)
+            .ok_or(tr("herdr did not create the tab", "herdr no creó la pestaña"))?
     };
     herdr::rename(&pane, &label(lang))?;
     herdr::run(&pane, &command(lang))?;
@@ -354,7 +364,8 @@ pub fn ensure_running(pane: &str, lang: &str) -> bool {
 /// The console for `lang`, in view and running, ready for input (started if needed).
 pub fn ready(lang: &str) -> Result<String, String> {
     let (pane, started) = show(lang, true)?;
-    let pane = pane.ok_or_else(|| format!("No hay panel {}. Usa ctrl+b a", label(lang)))?;
+    let label = label(lang);
+    let pane = pane.ok_or_else(|| trf!("No {label} pane. Use ctrl+b a", "No hay panel {label}. Usa ctrl+b a"))?;
     let started = started || ensure_running(&pane, lang);
     if started || env::session_for(&pane).is_none() {
         // Just started, or still starting: wait for its Corral session, then an empty prompt.
@@ -362,7 +373,8 @@ pub fn ready(lang: &str) -> Result<String, String> {
         let end = Instant::now() + Duration::from_secs(if started { 180 } else { 30 });
         while env::session_for(&pane).is_none() {
             if Instant::now() > end {
-                return Err(format!("la consola {} ({pane}) no tiene Corral activo; ábrela con ctrl+b a o márcala con ctrl+b m", label(lang)));
+                return Err(trf!("the {label} console ({pane}) does not have Corral active; open one with ctrl+b a or mark it with ctrl+b m",
+                                "la consola {label} ({pane}) no tiene Corral activo; ábrela con ctrl+b a o márcala con ctrl+b m"));
             }
             std::thread::sleep(Duration::from_millis(100));
         }

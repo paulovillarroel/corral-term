@@ -1,6 +1,7 @@
 //! herdr's socket API: one newline-terminated JSON request, one JSON reply.
 //! Talking to the socket directly avoids starting the herdr CLI for every call.
 
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -16,7 +17,7 @@ fn socket_path() -> PathBuf {
 }
 
 pub fn call(method: &str, params: Value) -> Result<Value, String> {
-    let mut sock = UnixStream::connect(socket_path()).map_err(|e| format!("no pude hablar con herdr: {e}"))?;
+    let mut sock = UnixStream::connect(socket_path()).map_err(|e| trf!("couldn't talk to herdr: {e}", "no pude hablar con herdr: {e}"))?;
     sock.set_read_timeout(Some(Duration::from_secs(5))).ok();
     sock.set_write_timeout(Some(Duration::from_secs(5))).ok();
     let request = obj(vec![("id", "corral".into()), ("method", method.into()), ("params", params)]);
@@ -25,7 +26,7 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
     BufReader::new(&sock).read_line(&mut line).map_err(|e| e.to_string())?;
     let reply = json::parse(line.trim())?;
     if !reply.get("error").is_null() {
-        let msg = reply.get("error").get("message").str().unwrap_or("herdr falló");
+        let msg = reply.get("error").get("message").str().unwrap_or_else(|| tr("herdr failed", "herdr falló"));
         return Err(msg.to_string());
     }
     Ok(reply.get("result").clone())
@@ -65,13 +66,13 @@ pub fn tab_id(p: &Value) -> &str {
 /// tab create, process info, plugin panes). Returns its JSON `result`.
 pub fn cli(args: &[&str]) -> Result<Value, String> {
     let bin = std::env::var_os("HERDR_BIN_PATH").map(PathBuf::from)
-        .or_else(|| crate::env::which("herdr")).ok_or("herdr no está en el PATH")?;
-    let out = Command::new(bin).args(args).output().map_err(|e| format!("no pude ejecutar herdr: {e}"))?;
+        .or_else(|| crate::env::which("herdr")).ok_or_else(|| tr("herdr isn't on the PATH", "herdr no está en el PATH"))?;
+    let out = Command::new(bin).args(args).output().map_err(|e| trf!("couldn't run herdr: {e}", "no pude ejecutar herdr: {e}"))?;
     let data = json::parse(String::from_utf8_lossy(&out.stdout).trim()).unwrap_or_else(|_| Value::obj());
     if !out.status.success() || !data.get("error").is_null() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let msg = data.get("error").get("message").str().map(String::from)
-            .unwrap_or(if stderr.is_empty() { format!("herdr {} falló", args.join(" ")) } else { stderr });
+            .unwrap_or(if stderr.is_empty() { trf!("herdr {} failed", "herdr {} falló", args.join(" ")) } else { stderr });
         return Err(msg);
     }
     Ok(if data.get("result").is_null() { data } else { data.get("result").clone() })
@@ -97,5 +98,5 @@ pub fn split(pane: &str, direction: &str, ratio: Option<f64>, cwd: Option<&str>)
         args.extend(["--cwd", c]);
     }
     let res = cli(&args)?;
-    res.get("pane").get("pane_id").str().map(String::from).ok_or_else(|| "herdr no dijo qué panel creó".into())
+    res.get("pane").get("pane_id").str().map(String::from).ok_or_else(|| tr("herdr didn't say which pane it created", "herdr no dijo qué panel creó").into())
 }

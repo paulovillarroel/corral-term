@@ -5,106 +5,120 @@ id = "corral"
 name = "Corral"
 version = "0.0.1"
 min_herdr_version = "0.9.5"
-description = "Consola de R, tablas y gráficos junto a tus agentes"
+description = "R and Python consoles, tables and plots next to your agents"
 platforms = ["linux"]
 
 [[actions]]
 id = "layout"
-title = "Corral: layout con foco en el agente"
+title = "Corral: layout, agent first"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "layout"]
 
 # Layouts (a group of their own in the palette): the same panes, with the script on the
 # left and the agent over the console.
 [[actions]]
-id = "layout-codigo"
-title = "Corral: layout con foco en el código"
+id = "layout-code"
+title = "Corral: layout, code first"
 contexts = ["global", "workspace"]
-command = ["../rs/target/release/corral", "layout", "--foco", "codigo"]
+command = ["../rs/target/release/corral", "layout", "--focus", "code"]
 
 [[actions]]
 id = "send"
-title = "Corral: enviar la selección a la consola (R o Python)"
+title = "Corral: send the selection to the console (R or Python)"
 contexts = ["selection", "pane"]
 command = ["../rs/target/release/corral", "send"]
 
 [[actions]]
 id = "console"
-title = "Corral: usar este panel como consola"
+title = "Corral: use this pane as the console"
 contexts = ["pane"]
 command = ["../rs/target/release/corral", "console"]
 
 [[actions]]
 id = "close"
-title = "Corral: cerrar (deja a Claude y el resto de la pestaña)"
+title = "Corral: close (keeps the agent and the rest of the tab)"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "close"]
 
 [[actions]]
 id = "toggle"
-title = "Corral: expandir script (o agente) o consola"
+title = "Corral: expand the script (or agent) or the console"
 contexts = ["global", "workspace", "pane"]
 command = ["../rs/target/release/corral", "toggle"]
 
 [[actions]]
 id = "switch"
-title = "Corral: consola de R o de Python"
+title = "Corral: R or Python console"
 contexts = ["global", "workspace", "pane"]
 command = ["../rs/target/release/corral", "switch"]
 
 [[actions]]
 id = "script"
-title = "Corral: agregar el editor de scripts sobre la consola"
+title = "Corral: add the script editor above the console"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "script"]
 
 [[actions]]
 id = "plots"
-title = "Corral: ver los gráficos"
+title = "Corral: show the plots"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "plots"]
 
 [[actions]]
 id = "vars"
-title = "Corral: ver las variables"
+title = "Corral: show the variables"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "vars"]
 
 [[actions]]
 id = "mirador"
-title = "Corral: abrir Mirador (gráficos y tablas en el navegador)"
+title = "Corral: open Mirador (plots and tables in the browser)"
 contexts = ["global"]
 command = ["../rs/target/release/corral", "mirador", "--open"]
 
 [[actions]]
-id = "atajos"
-title = "Corral: atajos y acciones (paleta)"
+id = "keys"
+title = "Corral: shortcuts and actions (palette)"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["../rs/target/release/corral", "atajos"]
+command = ["../rs/target/release/corral", "keys"]
 
 # Corral's own themes (herdr can't install themes); choosing another one in herdr drops it.
 [[actions]]
-id = "tema-dark-2026"
-title = "Corral: tema Dark 2026 (el de VS Code y Positron)"
+id = "theme-dark-2026"
+title = "Corral: Dark 2026 theme (VS Code's and Positron's)"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["../rs/target/release/corral", "config", "tema", "dark-2026"]
+command = ["../rs/target/release/corral", "config", "theme", "dark-2026"]
 
 [[actions]]
-id = "tema-herdr"
-title = "Corral: volver al tema de herdr"
+id = "theme-herdr"
+title = "Corral: back to herdr's theme"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["../rs/target/release/corral", "config", "tema", "herdr"]
+command = ["../rs/target/release/corral", "config", "theme", "herdr"]
+
+# Corral's language: English by default. Commands stay in English either way. Each
+# title is written in the language it switches to, so you can find yours.
+[[actions]]
+id = "language-en"
+title = "Corral: language: English"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "language", "en"]
+
+[[actions]]
+id = "language-es"
+title = "Corral: idioma: español"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "language", "es"]
 
 [[actions]]
 id = "open-url"
-title = "Corral: abrir enlace local en el navegador"
+title = "Corral: open a local link in the browser"
 contexts = ["global"]
 command = ["../rs/target/release/corral", "open"]
 
 # Viewers open on demand over the terminal and close with q or Esc.
 [[panes]]
 id = "plots"
-title = "Corral: gráficos"
+title = "Corral: plots"
 placement = "popup"
 width = "96%"
 height = "94%"
@@ -120,17 +134,17 @@ command = ["../rs/target/release/corral", "_vars"]
 
 # ctrl+b space: every Corral shortcut, searchable; Enter runs the actions.
 [[panes]]
-id = "atajos"
-title = "Corral: atajos"
+id = "keys"
+title = "Corral: shortcuts"
 placement = "popup"
 width = "70%"
 height = "80%"
-command = ["../rs/target/release/corral", "_atajos"]
+command = ["../rs/target/release/corral", "_keys"]
 
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]
 id = "table"
-title = "Corral: tabla"
+title = "Corral: table"
 placement = "popup"
 width = "95%"
 height = "90%"
@@ -139,6 +153,6 @@ command = ["../rs/target/release/corral", "_table"]
 # Ctrl+click on local URLs (`quarto preview`, httpgd, Shiny) opens them in the browser.
 [[link_handlers]]
 id = "local-url"
-title = "Abrir en el navegador"
+title = "Open in the browser"
 pattern = '^https?://(127\.0\.0\.1|localhost):\d+(/.*)?$'
 action = "open-url"

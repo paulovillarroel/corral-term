@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layouts and panes · Corral docs</title>
+<meta name="description" content="The two Corral layouts and their proportions, expanding a pane, switching between R and Python, the hidden tab, closing Corral, and when Corral acts.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Layouts and panes</h1>
+    <p class="intro">A Corral layout puts the agent, the script, the console and the variables in one herdr tab. There are two arrangements, and you can expand or swap panes without losing anything, because every session keeps running in its herdr pane.</p>
+
+    <h2>The two layouts</h2>
+    <table>
+    <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+a</kbd>)</th></tr></thead>
+    <tbody>
+    <tr><td>Left, 52 % of the width</td><td>Claude Code</td><td>Script</td></tr>
+    <tr><td>Right, top</td><td>Script</td><td>Claude Code</td></tr>
+    <tr><td>Right, middle</td><td>Console</td><td>Console</td></tr>
+    <tr><td>Right, bottom</td><td>Variables</td><td>Variables</td></tr>
+    </tbody>
+    </table>
+    <p>On the right, the two upper panes share 73 % of the height, 57/43, and the variables take the other 27 %. The editor opens with the file explorer in view.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+a</kbd> when you spend more time in the code; it needs the editor (Fresh). Each one opens a new tab, and both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts» group.</p>
+
+    <h3>From the command line</h3>
+    <pre><code><span class="p">$ </span>corral layout
+<span class="p">$ </span>corral layout --focus code
+<span class="p">$ </span>corral layout --shell
+<span class="p">$ </span>corral layout --ratio 0.6</code></pre>
+    <p><code>--focus code</code> opens the layout focused on the code. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
+
+    <h3>Another agent</h3>
+    <p>The agent pane runs Claude Code. To run another agent there every time, set its command:</p>
+    <pre><code><span class="p">$ </span>corral config agent codex</code></pre>
+    <p><code>--agent</code> and the <code>CORRAL_AGENT</code> variable win over this setting.</p>
+
+    <h2>Expand the script or the console</h2>
+    <p><kbd>ctrl+b</kbd> <kbd>t</kbd> expands the pane you are in (the script or the console) to the whole area they share, above the variables. In the layout focused on the code, it expands Claude or the console. <kbd>ctrl+b</kbd> <kbd>t</kbd> again brings both back, with the same proportion as before.</p>
+    <p>herdr doesn't shrink a pane below 10 %, so the pane that makes room moves to a tab of its own, "corral (hidden)", where it keeps running. <kbd>Ctrl</kbd>+<kbd>R</kbd> and Claude keep running code in the console even while you can't see it.</p>
+    <pre><code><span class="p">$ </span>corral toggle script
+<span class="p">$ </span>corral toggle console
+<span class="p">$ </span>corral toggle both</code></pre>
+    <p>From the command line, say what you want to see: <code>script</code>, <code>console</code> or <code>both</code>. In the layout focused on the code, use <code>agent</code> instead of <code>script</code>. Without an argument, <code>corral toggle</code> does what the shortcut does.</p>
+
+    <h2>Switch between R and Python</h2>
+    <p><kbd>ctrl+b</kbd> <kbd>y</kbd> switches the console spot between R and Python. The first time, it starts Python. The console you are not using waits in the hidden tab and keeps its variables; if you go to that tab, you can use it there as well.</p>
+    <pre><code><span class="p">$ </span>corral switch python
+<span class="p">$ </span>corral switch r</code></pre>
+    <p>Running code switches too: <kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.py</code> file brings the Python console, and in a <code>.R</code> file, the R one. The variables pane, Mirador and <code>View()</code> follow the console in view. <a href="consoles.html">Consoles</a> has the details.</p>
+
+    <h2>The hidden tab</h2>
+    <p>Each workspace has at most one hidden tab, named "corral (oculto)". It holds the pane that <kbd>ctrl+b</kbd> <kbd>t</kbd> moved out of the way and the console of the language you are not using. Everything there keeps running, and Corral brings each pane back to its place when you need it.</p>
+
+    <h2>Close Corral</h2>
+    <p><kbd>ctrl+b</kbd> <kbd>shift+c</kbd> (<code>corral close</code>) closes the script, the console and the variables, including the panes in the hidden tab, and leaves the tab with Claude, like any herdr tab. Closing the console ends that R session, and the unsaved draft is discarded. Mirador stays open until you close its window; <code>corral mirador --stop</code> stops its server.</p>
+
+    <h2>Add panes to a layout you already have</h2>
+    <p>If you set up your own tab and marked a pane as the R console (<kbd>ctrl+b</kbd> <kbd>m</kbd>), you can add the other panes to it:</p>
+    <pre><code><span class="p">$ </span>corral script
+<span class="p">$ </span>corral vars --split</code></pre>
+    <p><code>corral script</code> adds the editor over the console, with a new draft or with the file you name. <code>corral vars --split</code> adds the variables pane under the R console. Both need an R console in the workspace.</p>
+    <p>Corral finds its panes by their herdr labels: <code>corral:script</code>, <code>corral:r</code>, <code>corral:python</code>, <code>corral:vars</code> and <code>corral:shell</code>. A workspace has one of each; a new layout takes the labels away from older panes.</p>
+
+    <h2>Sessions live in herdr panes</h2>
+    <p>Everything with state lives in a herdr pane: the R and Python sessions and the agents. The viewers (the variables window, tables, Mirador) read from those sessions each time they open, so you can close them at any time and lose nothing. Closing the terminal window loses nothing either, because herdr keeps the panes running.</p>
+    <div class="note warn"><p>If the herdr server itself stops (a Windows restart, <code>wsl --shutdown</code>), the R and Python sessions are lost. herdr restores the panes, but not their memory.</p></div>
+
+    <h2 id="when-corral-acts">When Corral acts</h2>
+    <p>Corral changes nothing until you ask:</p>
+    <ul>
+    <li><strong>In R</strong>, it only switches on in the console a layout opens (which starts R with <code>CORRAL=1</code>), or in an R where you turn it on: <kbd>ctrl+b</kbd> <kbd>m</kbd> in that pane, or <code>corral_activate()</code> in the console. Any other R works as always, with its own <code>View()</code> and graphics device, and Corral never switches on inside RStudio or Positron. To switch it on in every R, add <code>options(corral.always = TRUE)</code> to your <code>.Rprofile</code>, before Corral's line.</li>
+    <li><strong>The layout</strong> (script, console and variables) only appears with <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+a</kbd>.</li>
+    <li><strong>The <kbd>ctrl+b</kbd> shortcuts</strong> only do something when you use them.</li>
+    <li><strong>Claude</strong> uses your console only if the workspace has an active Corral console. Otherwise, it works as usual.</li>
+    </ul>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

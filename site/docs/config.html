@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration · Corral docs</title>
+<meta name="description" content="Every corral config key with its values, every CORRAL_ environment variable, the R options, and where Corral keeps its files.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Configuration</h1>
+    <p class="intro">Corral's settings live in <code>~/.config/corral/config.json</code>, and <code>corral config</code> reads and changes them. A few environment variables and R options cover the rest.</p>
+
+    <h2>corral config</h2>
+    <pre><code><span class="p">$ </span>corral config
+<span class="p">$ </span>corral config r_console
+<span class="p">$ </span>corral config r_console r</code></pre>
+    <p>Without arguments it prints every setting as JSON. With a key, it prints that value; with a key and a value, it sets it. The keys with a fixed list of values refuse anything else and tell you what they take.</p>
+
+    <h3>Language</h3>
+    <p>Corral speaks English. To see its windows, messages and Mirador in Spanish:</p>
+    <pre><code><span class="p">$ </span>corral config language es
+<span class="p">$ </span>corral config language en</code></pre>
+    <p>Or pick "Corral: idioma: español" or "Corral: language: English" in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>). Open windows and consoles switch within a couple of seconds; the script editor, the next time it opens. The editor (Fresh) follows Corral's language whatever your system's is; to give it another one, add <code>--locale</code> to <code>CORRAL_EDITOR</code>, for example <code>fresh --locale fr</code>. Commands, options and settings keep their English names in both languages.</p>
+
+    <h3>Keys</h3>
+    <table>
+    <thead><tr><th>Key</th><th>Values</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>language</code></td><td><code>en</code>, <code>es</code></td><td><code>en</code></td><td>The language of Corral's windows, messages and Mirador: English or Spanish. It switches at once; the script editor when you open it again. Commands and options stay in English. The palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>) has it too: "Corral: language: English" and "Corral: idioma: español".</td></tr>
+    <tr><td><code>agent</code></td><td>a command</td><td><code>claude</code></td><td>The agent the layout runs in its agent pane. <code>--agent</code> and <code>CORRAL_AGENT</code> win over it.</td></tr>
+    <tr><td><code>r_console</code></td><td><code>ark</code>, <code>r</code>, or a command</td><td><code>ark</code></td><td>The R console: Ark, plain R (<code>R --quiet --no-save</code>), or your own command. Without Ark installed, it is plain R. Applies to the consoles you open afterwards.</td></tr>
+    <tr><td><code>ark_frontend</code></td><td><code>corral</code>, <code>jupyter</code></td><td><code>corral</code></td><td>Ark's front end: Corral's console, or <code>jupyter-console</code>.</td></tr>
+    <tr><td><code>ark_bin</code></td><td>a path</td><td>the newest Ark in <code>~/.local/share/corral/ark</code></td><td>A specific Ark binary to use.</td></tr>
+    <tr><td><code>python_console</code></td><td>a command</td><td><code>uv run --with ipython ipython --no-banner -i …/py/startup.py</code></td><td>The command that starts the Python console. See <a href="consoles.html#another-python-command">Consoles</a>.</td></tr>
+    <tr><td><code>python_lsp</code></td><td><code>ty</code>, <code>pylsp</code></td><td><code>ty</code></td><td>The editor's Python language server. Applies when the editor opens again.</td></tr>
+    <tr><td><code>images</code></td><td><code>auto</code>, <code>kitty</code>, <code>symbols</code></td><td><code>auto</code></td><td>How to draw plots inside herdr: detect the terminal, Kitty images, or block characters.</td></tr>
+    <tr><td><code>mirador_window</code></td><td><code>right</code>, <code>free</code></td><td><code>right</code></td><td><code>right</code> puts each new Mirador window on the right of the screen; <code>free</code> leaves its size and position alone. Windows with WSL only.</td></tr>
+    <tr><td><code>mirador_size</code></td><td>width x height, as fractions of the screen</td><td><code>0.5x0.85</code></td><td>The size of a new Mirador window, for example <code>0.4x0.7</code>. Each fraction goes from 0.2 to 1. Windows with WSL only.</td></tr>
+    <tr><td><code>table_viewer</code></td><td><code>visidata</code></td><td>Corral's viewer</td><td><code>visidata</code> opens tables in VisiData when <code>vd</code> is installed.</td></tr>
+    <tr><td><code>theme</code></td><td><code>dark-2026</code>, <code>herdr</code></td><td><code>herdr</code></td><td>Corral's own theme, or follow herdr's theme. See <a href="themes.html">Themes</a>.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="environment-variables">Environment variables</h2>
+    <table>
+    <thead><tr><th>Variable</th><th>What for</th><th>Default</th></tr></thead>
+    <tbody>
+    <tr><td><code>CORRAL_LANG</code></td><td>The language for one process or session: <code>en</code> or <code>es</code>. Wins over <code>corral config language</code>.</td><td>the setting</td></tr>
+    <tr><td><code>CORRAL_IMAGES</code></td><td>How to draw plots in the terminal: <code>auto</code>, <code>kitty</code> or <code>symbols</code>. Wins over <code>corral config images</code>.</td><td><code>auto</code></td></tr>
+    <tr><td><code>CORRAL_AGENT</code></td><td>The command for the agent's pane in <code>corral layout</code> (<code>''</code> leaves a shell). Wins over <code>corral config agent</code>.</td><td><code>claude</code></td></tr>
+    <tr><td><code>CORRAL_R</code></td><td>The command for the console in <code>corral layout</code></td><td><code>corral _console r</code>, which starts Ark or plain R according to <code>r_console</code></td></tr>
+    <tr><td><code>CORRAL_EDITOR</code></td><td>The editor for the script pane (<code>''</code> leaves out the script)</td><td><code>fresh</code></td></tr>
+    <tr><td><code>CORRAL_VIEW</code></td><td>Where <code>View()</code> opens: <code>auto</code> (a popup inside herdr; outside herdr, Mirador if it is running), <code>mirador</code> or <code>popup</code></td><td><code>auto</code></td></tr>
+    <tr><td><code>CORRAL_BROWSER</code></td><td>The browser for Mirador and help pages: <code>firefox</code>, <code>edge</code>, <code>chrome</code>, <code>print</code> (only prints the URL), or a command with <code>{url}</code></td><td>On WSL, Firefox, or Edge or Chrome without it; on Linux, <code>xdg-open</code></td></tr>
+    <tr><td><code>CORRAL_MIRADOR_PORT</code></td><td>Mirador's port; if it is taken, Mirador uses another free one</td><td><code>7317</code></td></tr>
+    <tr><td><code>CORRAL_TABLE_VIEWER</code></td><td>Another table viewer; <code>{file}</code> is replaced by the table's path</td><td>Corral's, with DuckDB</td></tr>
+    <tr><td><code>CORRAL_CLIPBOARD</code></td><td>A command that prints the clipboard, for <kbd>ctrl+b</kbd> <kbd>enter</kbd></td><td><code>wl-paste</code>, <code>xclip</code> or PowerShell</td></tr>
+    <tr><td><code>CORRAL_OPEN_PLOTS</code></td><td><code>0</code> keeps Python's first plot from opening anything</td><td><code>1</code></td></tr>
+    <tr><td><code>CORRAL_DIR</code></td><td>The folder the installer puts Corral in</td><td><code>~/.local/share/corral-term</code></td></tr>
+    <tr><td><code>CORRAL_URL</code></td><td>The package <code>install.sh</code> downloads</td><td>the latest published version</td></tr>
+    <tr><td><code>CORRAL_BIN</code></td><td>The <code>corral</code> command that R and Python call</td><td>the one on the <code>PATH</code></td></tr>
+    <tr><td><code>CORRAL_REPO</code></td><td>Corral's folder, for the files the binary reads (the plugin, the R and Python sides)</td><td>the folder the binary sits in</td></tr>
+    </tbody>
+    </table>
+
+    <h3>Set by Corral</h3>
+    <p>Corral sets these itself, for its own processes. You rarely need them, but you may see them:</p>
+    <table>
+    <thead><tr><th>Variable</th><th>What it is</th></tr></thead>
+    <tbody>
+    <tr><td><code>CORRAL</code></td><td><code>1</code> in the consoles Corral starts. It is what switches Corral on in R (<code>CORRAL=1 R</code> does it by hand).</td></tr>
+    <tr><td><code>CORRAL_SESSION</code></td><td>The id of the session a command should use.</td></tr>
+    <tr><td><code>CORRAL_SESSION_DIR</code>, <code>CORRAL_PLOT_ID</code>, <code>CORRAL_FILE</code>, <code>CORRAL_TITLE</code></td><td>What a popup shows: the session, the plot, the table file and its title.</td></tr>
+    <tr><td><code>CORRAL_ARK_CONNECTION</code></td><td>Ark's connection file, so the editor's language server can reach the console's R.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="r-options">R options</h2>
+    <p>Set them in your <code>.Rprofile</code>.</p>
+    <table>
+    <thead><tr><th>Option</th><th>Effect</th></tr></thead>
+    <tbody>
+    <tr><td><code>options(corral.viewer = "mirador")</code></td><td>The first plot opens Mirador inside herdr too. <code>"httpgd"</code> opens httpgd's own viewer.</td></tr>
+    <tr><td><code>options(corral.open_plots = FALSE)</code></td><td>The first plot doesn't notify or open anything.</td></tr>
+    <tr><td><code>options(corral.httpgd = FALSE)</code></td><td>Keeps R's default graphics device.</td></tr>
+    <tr><td><code>options(corral.vars = FALSE)</code></td><td>Doesn't publish the variables.</td></tr>
+    <tr><td><code>options(corral.always = TRUE)</code></td><td>Switches Corral on in every R session you open. It goes before Corral's line in <code>.Rprofile</code>.</td></tr>
+    <tr><td><code>options(corral.bin = "/path/to/corral")</code></td><td>The <code>corral</code> command R calls, instead of the one on the <code>PATH</code>.</td></tr>
+    </tbody>
+    </table>
+
+    <h2>Where Corral keeps things</h2>
+    <table>
+    <thead><tr><th>Path</th><th>What is there</th></tr></thead>
+    <tbody>
+    <tr><td><code>~/.config/corral/config.json</code></td><td>The settings of <code>corral config</code>.</td></tr>
+    <tr><td><code>~/.config/corral/palette.json</code></td><td>The palette in use, which the viewers, VisiData and Mirador read.</td></tr>
+    <tr><td><code>~/.local/state/corral/</code></td><td>Sessions, the R console's history (<code>historial-r.jsonl</code>), Mirador's address and token (<code>mirador.json</code>), and the logs <code>ark.log</code> and <code>mirador.log</code>.</td></tr>
+    <tr><td><code>~/.local/share/corral/</code></td><td>Ark and the programs the installer downloaded.</td></tr>
+    <tr><td><code>~/.local/share/corral-term/</code></td><td>Corral itself.</td></tr>
+    </tbody>
+    </table>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

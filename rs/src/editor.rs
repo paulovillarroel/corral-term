@@ -3,6 +3,7 @@
 //! throws the scratch file away: a draft is for writing something quick, and
 //! what you want to keep you save into the project with Ctrl+S.
 
+use crate::i18n::tr;
 use std::path::Path;
 use std::process::Command;
 
@@ -14,11 +15,14 @@ const SIGTERM: i32 = 15;
 const SIG_IGN: usize = 1;
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let split = args.iter().position(|a| a == "--").ok_or("uso: corral _editor ARCHIVO -- EDITOR…")?;
-    let file = args[..split].first().ok_or("uso: corral _editor ARCHIVO -- EDITOR…")?;
+    let usage = tr("usage: corral _editor FILE -- EDITOR…", "uso: corral _editor ARCHIVO -- EDITOR…");
+    let split = args.iter().position(|a| a == "--").ok_or(usage)?;
+    let file = args[..split].first().ok_or(usage)?;
     let cmd = &args[split + 1..];
-    let program = cmd.first().ok_or("falta el comando del editor")?;
-    let mut child = Command::new(program).args(&cmd[1..]).spawn().map_err(|e| format!("no pude abrir {program}: {e}"))?;
+    let program = cmd.first().ok_or(tr("the editor command is missing", "falta el comando del editor"))?;
+    // Corral's editor plugin reads the language setting itself, so it follows a switch live.
+    let mut child = Command::new(program).args(&cmd[1..]).spawn()
+        .map_err(|e| trf!("could not open {program}: {e}", "no pude abrir {program}: {e}"))?;
     // Closing the pane hangs up the editor and this process together: this one
     // stays (after starting the editor, so the editor doesn't inherit it) to clean up.
     // SAFETY: setting signal dispositions to "ignore" for this process only.
@@ -34,7 +38,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// Remove a scratch file and Corral's live copy of it, then its folder if
 /// nothing else is left there (a file you saved there by hand stays).
 pub fn discard(file: &Path) {
-    if file.file_name().and_then(|n| n.to_str()) != Some("borrador.R") {
+    let Some(name) = file.file_name().and_then(|n| n.to_str()) else { return };
+    if !crate::workspace::is_scratch_name(name) {
         return;
     }
     let Some(dir) = file.parent() else { return };
@@ -42,7 +47,7 @@ pub fn discard(file: &Path) {
     if !in_scratch {
         return;
     }
-    for name in ["borrador.R", ".actual.R", ".pedido.json", ".pedido.tmp", ".respuesta.json"] {
+    for name in [name, ".actual.R", ".pedido.json", ".pedido.tmp", ".respuesta.json"] {
         let _ = std::fs::remove_file(dir.join(name));
     }
     let _ = std::fs::remove_dir(dir); // fails, as it should, if something else is there

@@ -32,7 +32,7 @@ impl Socket {
         let mut peer = [0u8; 64];
         stream.read_exact(&mut peer)?;
         if peer[0] != 0xFF || peer[9] != 0x7F || peer[10] < 3 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "el kernel no habla ZMTP 3"));
+            return Err(io::Error::new(io::ErrorKind::InvalidData, crate::i18n::tr("the kernel does not speak ZMTP 3", "el kernel no habla ZMTP 3")));
         }
         // READY with our socket type, then the peer's READY.
         let mut ready = vec![5u8];
@@ -137,7 +137,7 @@ impl Connection {
     pub fn read(path: &str) -> Result<Connection, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
         let v = json::parse(&text)?;
-        let port = |k: &str| v.get(k).num().map(|n| n as u16).ok_or_else(|| format!("falta {k} en {path}"));
+        let port = |k: &str| v.get(k).num().map(|n| n as u16).ok_or_else(|| trf!("{k} is missing in {path}", "falta {k} en {path}"));
         Ok(Connection {
             ip: v.get("ip").str().unwrap_or("127.0.0.1").to_string(),
             key: v.get("key").str().unwrap_or("").as_bytes().to_vec(),

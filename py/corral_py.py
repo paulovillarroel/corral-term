@@ -14,6 +14,9 @@ Figures are served with the same endpoints as R's httpgd (/state, /plots, /plot,
 
 Only the standard library is required; pandas, polars, pyarrow, numpy and
 matplotlib are used when the session has them.
+
+Messages follow Corral's language: CORRAL_LANG (en or es), else `language` in
+~/.config/corral/config.json (what `corral config language` writes), else English.
 """
 
 from __future__ import annotations
@@ -47,6 +50,39 @@ _session: Session | None = None
 
 
 # --------------------------------------------------------------------------- helpers
+
+
+_lang_cache: list = [float("-inf"), "en"]
+
+
+def _normalize_lang(value) -> str | None:
+    value = str(value or "").strip().lower()
+    if value in ("en", "english", "inglés", "ingles"):
+        return "en"
+    if value in ("es", "spanish", "español", "espanol"):
+        return "es"
+    return None
+
+
+def lang() -> str:
+    """"en" or "es", looked up again every couple of seconds so a switch shows up live."""
+    now = time.monotonic()
+    if now - _lang_cache[0] < 2:
+        return _lang_cache[1]
+    value = _normalize_lang(os.environ.get("CORRAL_LANG"))
+    if value is None:
+        config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "corral" / "config.json"
+        try:
+            value = _normalize_lang(json.loads(config.read_text(encoding="utf-8")).get("language"))
+        except (OSError, ValueError, AttributeError):
+            value = None
+    _lang_cache[:] = [now, value or "en"]
+    return _lang_cache[1]
+
+
+def tr(en: str, es: str) -> str:
+    """The text in the user's language."""
+    return es if lang() == "es" else en
 
 
 def write_json_atomic(path: Path, data) -> None:
@@ -190,7 +226,8 @@ def figure_of(x):
         return x, False
     if hasattr(x, "get_figure"):
         return x.get_figure(), False
-    raise TypeError(f"{short_class(x)} no es un gráfico")
+    name = short_class(x)
+    raise TypeError(tr(f"{name} is not a plot", f"{name} no es un gráfico"))
 
 
 # --------------------------------------------------------------------------- plots (httpgd's API)
@@ -329,7 +366,8 @@ class PlotServer:
                         server.upid += 1
                     return self._json(server.state())
                 if path in ("", "/live"):
-                    return self._send(200, b"Corral (Python): los graficos se ven en Mirador.", "text/plain")
+                    text = tr("Corral (Python): the plots are shown in Mirador.", "Corral (Python): los graficos se ven en Mirador.")
+                    return self._send(200, text.encode(), "text/plain; charset=utf-8")
                 self._send(404, b"not found", "text/plain")
 
         return Handler
@@ -513,8 +551,9 @@ class Session:
 # --------------------------------------------------------------------------- what the user and agents call
 
 
-def View(x, title: str | None = None) -> None:
-    """Open a table (pandas, polars, pyarrow, a 2-D numpy array) in Corral's table viewer."""
+def View(x, title: str | None = None, mirador: bool = False) -> None:
+    """Open a table (pandas, polars, pyarrow, a 2-D numpy array) in Corral's table viewer,
+    or in Mirador, in the browser, with mirador=True."""
     session = _require()
     if title is None:
         title = next((k for k, v in session.shell.user_ns.items() if v is x and not k.startswith("_")),
@@ -522,9 +561,11 @@ def View(x, title: str | None = None) -> None:
     path = write_table(x, session.tmp)
     corral = corral_bin()
     if not corral:
-        raise RuntimeError("`corral` no está en el PATH")
+        raise RuntimeError(tr("`corral` is not on the PATH", "`corral` no está en el PATH"))
     args = [corral, "view", str(path), "--title", str(title), "--session", session.id]
-    if in_herdr():
+    if mirador:
+        args.append("--mirador")
+    if in_herdr() or mirador:
         subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
     else:
@@ -552,7 +593,8 @@ def write_table(x, folder: Path) -> Path:
         try:
             import pandas as pd
         except ImportError:
-            raise TypeError("View() necesita un DataFrame de pandas, polars o pyarrow") from None
+            raise TypeError(tr("View() needs a pandas, polars or pyarrow DataFrame",
+                               "View() necesita un DataFrame de pandas, polars o pyarrow")) from None
         x = pd.DataFrame(x)
     elif t.__name__ == "Series":
         x = x.to_frame()
@@ -627,7 +669,8 @@ def corral_eval(rid: str) -> None:
     except (OSError, ValueError):
         deadline = None
     if deadline and time.time() > deadline:
-        print("# corral eval: la petición venció antes de empezar; no se ejecutó")
+        print(tr("# corral eval: the request expired before it started; it did not run",
+                 "# corral eval: la petición venció antes de empezar; no se ejecutó"))
         status["status"] = "expired"
         return done()
 
@@ -663,7 +706,7 @@ def flush_figures() -> None:
 
 def _require() -> Session:
     if _session is None:
-        raise RuntimeError("Corral no está activo en este Python")
+        raise RuntimeError(tr("Corral is not active in this Python", "Corral no está activo en este Python"))
     return _session
 
 
@@ -673,7 +716,7 @@ def _require() -> Session:
 def activate(shell=None) -> None:
     global _session
     if _session is not None:
-        print("Corral ya está activo en esta sesión.")
+        print(tr("Corral is already active in this session.", "Corral ya está activo en esta sesión."))
         return
     if shell is None:
         try:
@@ -682,7 +725,8 @@ def activate(shell=None) -> None:
         except ImportError:
             shell = None
     if shell is None:
-        print("Corral necesita IPython: corral lo abre con `uv run --with ipython ipython`.")
+        print(tr("Corral needs IPython: corral opens it with `uv run --with ipython ipython`.",
+                 "Corral necesita IPython: corral lo abre con `uv run --with ipython ipython`."))
         return
 
     # IPython takes the startup script's folder off sys.path when the script ends,
@@ -702,7 +746,7 @@ def activate(shell=None) -> None:
     def figure_text(fig, p, cycle):
         pid = _session.add_figure(fig)
         n = _session.plots.number(pid) if pid is not None else 0
-        p.text(f"<Figure en Mirador{f' (gráfico {n})' if n else ''}>")
+        p.text(tr(f"<Figure in Mirador{f' (plot {n})' if n else ''}>", f"<Figure en Mirador{f' (gráfico {n})' if n else ''}>"))
 
     try:
         shell.display_formatter.formatters["text/plain"].for_type_by_name("matplotlib.figure", "Figure", figure_text)
@@ -715,4 +759,5 @@ def activate(shell=None) -> None:
     _session.snapshot()
     venv = os.environ.get("VIRTUAL_ENV") or (sys.prefix if sys.prefix != sys.base_prefix else "")
     where = f" · {Path(venv).name}" if venv and "/.cache/" not in venv else ""
-    print(f"Corral activo · Python {platform.python_version()}{where}")
+    version = platform.python_version()
+    print(tr(f"Corral active · Python {version}{where}", f"Corral activo · Python {version}{where}"))

@@ -8,6 +8,8 @@
 //   Ctrl+U (or Ctrl+Shift+M)  " |> "
 //   Ctrl+S                    save; in the temporary scratch file, ask for a name in the project
 //
+// Messages and the palette's names follow Corral's language (English or Spanish).
+//
 // Code from a .py file goes to the Python console and code from a .R file to
 // the R console; corral brings the right one into view (and starts Python the
 // first time). Other files go to whichever console is showing.
@@ -18,9 +20,45 @@
 
 const editor = getEditor();
 
-// Corral scratch files: <project>/.corral/<name>/borrador.R, or the temp folder.
+// Corral's language: CORRAL_LANG (Corral sets it when it opens the editor), else
+// `language` in ~/.config/corral/config.json (`corral config language`), else English.
+let langCache: [number, string] = [-Infinity, "en"];
+
+function normalizeLang(value: unknown): string | null {
+  const v = String(value || "").trim().toLowerCase();
+  if (["en", "english", "inglés", "ingles"].includes(v)) return "en";
+  if (["es", "spanish", "español", "espanol"].includes(v)) return "es";
+  return null;
+}
+
+function lang(): string {
+  const now = Date.now();
+  if (now - langCache[0] < 2000) return langCache[1];
+  let value = normalizeLang(editor.getEnv("CORRAL_LANG"));
+  if (!value) {
+    const config = editor.getEnv("XDG_CONFIG_HOME") || (editor.getEnv("HOME") || "") + "/.config";
+    try {
+      const text = editor.readFile(config + "/corral/config.json");
+      if (text) value = normalizeLang(JSON.parse(text).language);
+    } catch (e) {
+      // No settings, or not readable: English.
+    }
+  }
+  langCache = [now, value || "en"];
+  return langCache[1];
+}
+
+// The text in the user's language.
+function tr(en: string, es: string): string {
+  return lang() === "es" ? es : en;
+}
+
+// Corral scratch files: <project>/.corral/<name>/draft.R (borrador.R in Spanish),
+// or the temp folder.
+const SCRATCH_NAME = /^(draft|borrador)\.R$/;
+
 function isScratch(path: string): boolean {
-  return /\/(\.corral|corral\/borradores)\/[^/]+\/borrador\.R$/.test(path || "");
+  return /\/(\.corral|corral\/borradores)\/[^/]+\/(draft|borrador)\.R$/.test(path || "");
 }
 
 // Any file inside a scratch folder (git-ignored, removed after two days).
@@ -229,7 +267,7 @@ function dedent(text: string): string {
 async function runCorral(args: string[]): Promise<boolean> {
   const res = await editor.spawnProcess("corral", args);
   if (res.exit_code !== 0) {
-    const msg = (res.stderr || res.stdout || "").trim().split("\n").pop() || "corral falló";
+    const msg = (res.stderr || res.stdout || "").trim().split("\n").pop() || tr("corral failed", "corral falló");
     editor.setStatus("Corral: " + msg.replace(/^corral:\s*/, ""));
     return false;
   }
@@ -248,7 +286,7 @@ registerHandler("corral_run_line", async function () {
       let text = await editor.getBufferText(buf, cur.selection.start, cur.selection.end);
       if (python) text = dedent(text);
       if (text.trim() && (await runCorral(["send", ...lang, "--", text])))
-        editor.setStatus("Corral: selección enviada a la consola");
+        editor.setStatus(tr("Corral: selection sent to the console", "Corral: selección enviada a la consola"));
       return;
     }
     if (cur.line === null) return;
@@ -270,7 +308,8 @@ registerHandler("corral_run_line", async function () {
     if (pos !== null) editor.setBufferCursor(buf, pos);
     if (ok) {
       const n = last - first + 1;
-      editor.setStatus(`Corral: ${n} línea${n === 1 ? "" : "s"} enviada${n === 1 ? "" : "s"} a la consola`);
+      const s = n === 1 ? "" : "s";
+      editor.setStatus(tr(`Corral: ${n} line${s} sent to the console`, `Corral: ${n} línea${s} enviada${s} a la consola`));
     }
   } catch (e) {
     editor.setStatus("Corral: " + String(e));
@@ -284,7 +323,7 @@ registerHandler("corral_run_file", async function () {
     if (!text.trim()) return;
     const path = editor.getBufferPath(buf) || "script";
     if (await runCorral(["send", ...langArgs(buf), "--source", "--name", path, "--", text]))
-      editor.setStatus("Corral: archivo completo enviado a la consola");
+      editor.setStatus(tr("Corral: whole file sent to the console", "Corral: archivo completo enviado a la consola"));
   } catch (e) {
     editor.setStatus("Corral: " + String(e));
   }
@@ -292,7 +331,7 @@ registerHandler("corral_run_file", async function () {
 
 // Scratch files: Fresh does not let outside programs read unsaved buffers, so
 // mirror each Corral scratch buffer to ".actual.R" next to it. `corral script
-// --guardar/--leer` (and Claude) read that copy. It is written when typing
+// --save/--read` (and Claude) read that copy. It is written when typing
 // pauses for 0.4 s (at least every 2 s while typing goes on) and when the
 // buffer shows up.
 const mirrored: Record<string, string> = {};
@@ -302,8 +341,8 @@ let dirtySince = 0;
 
 function scratchCopy(id: number): [string, string] | null {
   const path = editor.getBufferPath(id) || "";
-  if (!isScratch(path) || !path.endsWith("borrador.R")) return null;
-  return [path, path.replace(/borrador\.R$/, ".actual.R")];
+  if (!isScratch(path)) return null;
+  return [path, path.replace(/(draft|borrador)\.R$/, ".actual.R")];
 }
 
 async function mirror(id: number): Promise<void> {
@@ -355,28 +394,28 @@ registerHandler("corral_save", async function () {
       return;
     }
     const project = projectOf(path);
-    const answer = await editor.prompt("Guardar en el proyecto: ", project + "/");
+    const answer = await editor.prompt(tr("Save in the project: ", "Guardar en el proyecto: "), project + "/");
     if (!answer || !answer.trim() || answer.trim() === project + "/") return;
     let target = answer.trim();
     if (!target.startsWith("/")) target = project + "/" + target;
     if (!/\.[A-Za-z0-9]+$/.test(target)) target += ".R";
     if (editor.fileExists(target)) {
-      const confirm = await editor.prompt(`${target} ya existe. ¿Reemplazarlo? (s/n): `, "");
-      if (!confirm || !/^s/i.test(confirm.trim())) {
-        editor.setStatus("Corral: no se guardó");
+      const confirm = await editor.prompt(tr(`${target} already exists. Replace it? (y/n): `, `${target} ya existe. ¿Reemplazarlo? (s/n): `), "");
+      if (!confirm || !/^[sy]/i.test(confirm.trim())) {
+        editor.setStatus(tr("Corral: not saved", "Corral: no se guardó"));
         return;
       }
     }
     // The save is confirmed later (Fresh can still refuse it, e.g. when the file
     // is open in another Fresh): only claim success once the buffer moved there.
     if (!editor.saveBufferToPath(id, target)) {
-      editor.setStatus("Corral: no pude guardar en " + target);
+      editor.setStatus(tr("Corral: could not save to ", "Corral: no pude guardar en ") + target);
       return;
     }
     for (let i = 0; i < 10; i++) {
       await editor.delay(200);
       if (editor.getBufferPath(id) === target) {
-        editor.setStatus("Corral: guardado en " + target);
+        editor.setStatus(tr("Corral: saved to ", "Corral: guardado en ") + target);
         return;
       }
     }
@@ -485,7 +524,7 @@ editor.on("ready", "corral_show_explorer");
 editor.setTimeout(800, "corral_show_explorer");  // the file Fresh opened at start
 
 // A scratch buffer that shows up gets its copy right away, and its folder is
-// watched for text sent from the terminal (`corral script --escribir`).
+// watched for text sent from the terminal (`corral script --write`).
 registerHandler("corral_scratch_shown", async function (args?: { buffer_id: number }) {
   try {
     const id = args && typeof args.buffer_id === "number" ? args.buffer_id : editor.getActiveBufferId();
@@ -501,7 +540,7 @@ editor.on("after_file_open", "corral_scratch_shown");
 editor.setTimeout(800, "corral_scratch_shown");
 
 // Text sent to the draft from the terminal: Fresh doesn't let other programs
-// change an unsaved buffer, so `corral script --escribir` leaves a request in
+// change an unsaved buffer, so `corral script --write` leaves a request in
 // the draft's folder (.pedido.json) and this applies it to the buffer as one
 // edit (Ctrl+Z undoes it), then answers in .respuesta.json.
 const scratchWatches: Record<number, string> = {}; // watch handle -> draft folder
@@ -533,9 +572,10 @@ registerHandler("corral_scratch_request", async function (args: { handle: number
   let ok = false;
   let msg = "";
   try {
-    const id = editor.findBufferByPath(folder + "/borrador.R");
+    const id = editor.findBufferByPath(folder + "/draft.R") || editor.findBufferByPath(folder + "/borrador.R");
     if (!id) {
-      msg = "el borrador no está abierto en el editor (si lo guardaste en el proyecto, edita ese archivo)";
+      msg = tr("the draft is not open in the editor (if you saved it in the project, edit that file)",
+        "el borrador no está abierto en el editor (si lo guardaste en el proyecto, edita ese archivo)");
     } else {
       const len = editor.getBufferLength(id);
       let text = String(req.texto || "");
@@ -549,9 +589,10 @@ registerHandler("corral_scratch_request", async function (args: { handle: number
       }
       if (ok) {
         await mirror(id); // the plugin's own edits fire no buffer_modified
-        editor.setStatus("Corral: se escribió en el borrador desde la terminal (Ctrl+Z lo deshace)");
+        editor.setStatus(tr("Corral: text from the terminal was written to the draft (Ctrl+Z undoes it)",
+          "Corral: se escribió en el borrador desde la terminal (Ctrl+Z lo deshace)"));
       }
-      else msg = "el editor no aceptó el cambio";
+      else msg = tr("the editor did not accept the change", "el editor no aceptó el cambio");
     }
   } catch (e) {
     msg = String(e);
@@ -567,10 +608,11 @@ registerHandler("corral_after_save", async function (args: { path: string; buffe
   try {
     const path = args.path || "";
     const name = path.split("/").pop() || "";
-    if (!inScratchFolder(path) || name === "borrador.R" || name.startsWith(".")) return;
+    if (!inScratchFolder(path) || SCRATCH_NAME.test(name) || name.startsWith(".")) return;
     const target = projectOf(path) + "/" + name;
     if (editor.fileExists(target)) {
-      editor.setStatus(`Corral: ${name} quedó en la carpeta del borrador porque ya existe en el proyecto; usa Ctrl+S para elegir otro nombre`);
+      editor.setStatus(tr(`Corral: ${name} stayed in the draft's folder because it already exists in the project; use Ctrl+S to choose another name`,
+        `Corral: ${name} quedó en la carpeta del borrador porque ya existe en el proyecto; usa Ctrl+S para elegir otro nombre`));
       return;
     }
     if (!editor.saveBufferToPath(args.buffer_id, target)) return;
@@ -578,7 +620,7 @@ registerHandler("corral_after_save", async function (args: { path: string; buffe
       await editor.delay(200);
       if (editor.getBufferPath(args.buffer_id) === target) {
         await editor.spawnProcess("rm", ["-f", "--", path]);
-        editor.setStatus("Corral: guardado en el proyecto, " + target);
+        editor.setStatus(tr("Corral: saved in the project, ", "Corral: guardado en el proyecto, ") + target);
         return;
       }
     }
@@ -591,15 +633,22 @@ editor.on("after_file_save", "corral_after_save");
 // The shortcut palette (also ctrl+b space in herdr): every Corral key, searchable.
 registerHandler("corral_shortcuts", async function () {
   try {
-    await editor.spawnProcess("corral", ["atajos"]);
+    await editor.spawnProcess("corral", ["keys"]);
   } catch (e) {
     editor.setStatus("Corral: " + String(e));
   }
 });
 
-editor.registerCommand("Corral: atajos de teclado", "Todos los atajos de Corral, con búsqueda (ctrl+b space)", "corral_shortcuts", null);
-editor.registerCommand("Corral: ejecutar línea o selección", "Envía el código a la consola (R o Python, según el archivo)", "corral_run_line", null);
-editor.registerCommand("Corral: ejecutar archivo", "Ejecuta el archivo completo en la consola (R o Python, según el archivo)", "corral_run_file", null);
-editor.registerCommand("Corral: guardar", "Guarda; en un borrador temporal, pregunta dónde", "corral_save", null);
-editor.registerCommand("Corral: insertar <-", "Inserta el operador de asignación", "corral_insert_assign", null);
-editor.registerCommand("Corral: insertar |>", "Inserta el pipe nativo", "corral_insert_pipe", null);
+// The palette's names, in the language the editor started with.
+editor.registerCommand(tr("Corral: keyboard shortcuts", "Corral: atajos de teclado"),
+  tr("All of Corral's shortcuts, searchable (ctrl+b space)", "Todos los atajos de Corral, con búsqueda (ctrl+b space)"), "corral_shortcuts", null);
+editor.registerCommand(tr("Corral: run line or selection", "Corral: ejecutar línea o selección"),
+  tr("Sends the code to the console (R or Python, depending on the file)", "Envía el código a la consola (R o Python, según el archivo)"), "corral_run_line", null);
+editor.registerCommand(tr("Corral: run file", "Corral: ejecutar archivo"),
+  tr("Runs the whole file in the console (R or Python, depending on the file)", "Ejecuta el archivo completo en la consola (R o Python, según el archivo)"), "corral_run_file", null);
+editor.registerCommand(tr("Corral: save", "Corral: guardar"),
+  tr("Saves; for a temporary draft, asks where", "Guarda; en un borrador temporal, pregunta dónde"), "corral_save", null);
+editor.registerCommand(tr("Corral: insert <-", "Corral: insertar <-"),
+  tr("Inserts the assignment operator", "Inserta el operador de asignación"), "corral_insert_assign", null);
+editor.registerCommand(tr("Corral: insert |>", "Corral: insertar |>"),
+  tr("Inserts the native pipe", "Inserta el pipe nativo"), "corral_insert_pipe", null);

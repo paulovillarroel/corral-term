@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commands · Corral docs</title>
+<meta name="description" content="Every corral command and its options: the workspace, code and data, installation and settings, and the internal commands Corral's panes run.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Commands</h1>
+    <p class="intro">Every <code>corral</code> command, with its options. <code>corral --help</code> lists them, and <code>corral COMMAND --help</code> shows a command's usage.</p>
+    <div class="note"><p>Corral's messages are in Spanish, and some commands and options keep Spanish names: <code>instalar</code> (install), <code>desinstalar</code> (uninstall), <code>atajos</code> (shortcuts), <code>--check</code> (check), <code>--read</code> (read), <code>--save</code> (save), <code>--write</code> (write), <code>--replace</code> (replace), <code>--force</code> (force).</p></div>
+
+    <h2>Workspace</h2>
+
+    <h3 id="corral-layout">corral layout</h3>
+    <p>Opens the workspace in a new tab: the agent, the script, the console and the variables (<kbd>ctrl+b</kbd> <kbd>a</kbd>; with <code>--focus code</code>, <kbd>ctrl+b</kbd> <kbd>shift+a</kbd>).</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--focus agent|codigo</code></td><td>Focused on the agent (the default) or on the code, with the script on the left and the agent over the console</td></tr>
+    <tr><td><code>--shell</code></td><td>Adds a shell next to the variables</td></tr>
+    <tr><td><code>--ratio N</code></td><td>Width of the left pane, as a fraction (0.516)</td></tr>
+    <tr><td><code>--agent COMMAND</code></td><td>The agent's command (<code>CORRAL_AGENT</code>, then <code>corral config agent</code>, else <code>claude</code>); <code>''</code> leaves a shell</td></tr>
+    <tr><td><code>--editor COMMAND</code></td><td>The editor (<code>fresh</code>, or <code>CORRAL_EDITOR</code>); <code>''</code> leaves out the script</td></tr>
+    <tr><td><code>--console COMMAND</code></td><td>The console's command (<code>CORRAL_R</code>, or <code>corral _console r</code>)</td></tr>
+    <tr><td><code>--cwd FOLDER</code></td><td>The folder to open it in (the pane's current folder)</td></tr>
+    <tr><td><code>--label NAME</code></td><td>The tab's name (<code>corral</code>)</td></tr>
+    </tbody>
+    </table>
+
+    <h3>corral close</h3>
+    <p>Closes Corral's panes in the tab (script, console, variables, the shell from <code>--shell</code>, and the ones in the hidden tab) and leaves the rest, Claude included (<kbd>ctrl+b</kbd> <kbd>shift+c</kbd>). The R session closes with its pane, and the unsaved draft is discarded.</p>
+
+    <h3>corral toggle</h3>
+    <pre><code><span class="p">$ </span>corral toggle script</code></pre>
+    <p>Expands the script or the console, or shows both again (<kbd>ctrl+b</kbd> <kbd>t</kbd>). It takes <code>script</code>, <code>consola</code> (console) or <code>ambos</code> (both), and <code>agente</code> (agent) instead of <code>script</code> in the layout focused on the code. Without an argument, it expands the pane you are in, or goes back to both.</p>
+
+    <h3>corral switch</h3>
+    <pre><code><span class="p">$ </span>corral switch python</code></pre>
+    <p>The layout's console switches to <code>r</code> or <code>python</code>; without an argument, to the other one (<kbd>ctrl+b</kbd> <kbd>y</kbd>). The first time, it starts Python. The other console keeps running in the "corral (oculto)" tab.</p>
+
+    <h3>corral script</h3>
+    <p>Adds the editor over the console in an existing layout, with a new draft or the file you name. With one of these options, it works on the workspace's draft instead:</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--read</code></td><td>Prints the current draft, including what you haven't saved</td></tr>
+    <tr><td><code>--save PATH</code></td><td>Saves the draft to that file; <code>--force</code> replaces an existing one</td></tr>
+    <tr><td><code>--write [FILE]</code></td><td>Adds the text from stdin (or from the file) at the end of the draft, as one edit that <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes; <code>--replace</code> replaces everything</td></tr>
+    <tr><td><code>--editor COMMAND</code></td><td>The editor to add (<code>fresh</code>, or <code>CORRAL_EDITOR</code>)</td></tr>
+    </tbody>
+    </table>
+
+    <h3>corral console</h3>
+    <p>Marks the current pane as the R or Python console, by what runs in it, and switches Corral on if R or IPython is open there (<kbd>ctrl+b</kbd> <kbd>m</kbd>). <code>--lang r|python</code> sets the language and <code>--pane PANE</code> marks another pane.</p>
+
+    <h3>corral keys</h3>
+    <p>The shortcut palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>).</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--list</code></td><td>Prints every shortcut, with its ID</td></tr>
+    <tr><td><code>--json</code></td><td>The same list as JSON, for agents</td></tr>
+    <tr><td><code>--change ID KEY</code></td><td>Changes a herdr shortcut (<code>corral keys --change herdr:toggle shift+e</code>) or an editor one (<code>editor:corral_run_line ctrl+e</code>); it refuses keys already in use unless you add <code>--force</code></td></tr>
+    </tbody>
+    </table>
+
+    <h2>Code and data</h2>
+
+    <h3>corral send</h3>
+    <pre><code><span class="p">$ </span>corral send 'summary(mtcars)'</code></pre>
+    <p>Sends code to the console in view, bringing it into view (and starting it) if needed; this is what <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd> and <kbd>ctrl+b</kbd> <kbd>enter</kbd> run. Without code in the arguments, it reads stdin or herdr's selection.</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--lang r|python</code></td><td>Send to that console instead of the one in view</td></tr>
+    <tr><td><code>--source</code></td><td>Run the code as a file: <code>source()</code> in R, <code>%run -i</code> in Python</td></tr>
+    <tr><td><code>--name FILE</code></td><td>The file's name, shown with <code>--source</code></td></tr>
+    <tr><td><code>--clipboard</code></td><td>Read the clipboard when there is nothing else to send (from a herdr shortcut, it always does)</td></tr>
+    </tbody>
+    </table>
+
+    <h3>corral eval</h3>
+    <pre><code><span class="p">$ </span>corral eval 'summary(mtcars)'</code></pre>
+    <p>Runs code in your console and prints the output, for agents. R by default.</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--lang r|python</code></td><td>The console to use</td></tr>
+    <tr><td><code>--file FILE</code></td><td>Run a file</td></tr>
+    <tr><td><code>--timeout S</code></td><td>Seconds to wait for the result (300)</td></tr>
+    <tr><td><code>--wait-idle S</code></td><td>Seconds to wait for a busy console (20)</td></tr>
+    <tr><td><code>--max-chars N</code></td><td>Longest output before it is cut (20000)</td></tr>
+    <tr><td><code>--check</code></td><td>Only check that the console is there and print it as JSON</td></tr>
+    <tr><td><code>--replace</code></td><td>Its plots replace the ones from the previous request</td></tr>
+    </tbody>
+    </table>
+    <p><a href="agents.html">Working with agents</a> explains the output and the exit codes.</p>
+
+    <h3>corral vars</h3>
+    <p>The variables of the console in view, over the terminal (<kbd>ctrl+b</kbd> <kbd>d</kbd>).</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--json</code></td><td>Prints them as JSON, for agents; <code>--lang r|python</code> picks the console</td></tr>
+    <tr><td><code>--split</code></td><td>Adds the permanent variables pane under the R console</td></tr>
+    <tr><td><code>--pane</code></td><td>Runs as the permanent pane (what the layout's variables pane runs)</td></tr>
+    <tr><td><code>--inline</code></td><td>Shows them in the current terminal instead of a popup</td></tr>
+    </tbody>
+    </table>
+
+    <h3>corral view</h3>
+    <pre><code><span class="p">$ </span>corral view data/sales.parquet</code></pre>
+    <p>Opens a table (parquet, CSV, JSON) in the table viewer. <code>--title TITLE</code> sets its title, <code>--mirador</code> opens it in Mirador instead, <code>--inline</code> shows it in the current terminal instead of a popup, and <code>--session SESSION</code> ties it to a session in Mirador.</p>
+
+    <h3>corral plots</h3>
+    <p>The latest plot, in Mirador (<kbd>ctrl+b</kbd> <kbd>f</kbd>); on a terminal that draws images, in a herdr popup. <code>--inline</code> shows the in-terminal viewer in the current terminal.</p>
+
+    <h3>corral mirador</h3>
+    <p>Mirador, the view in the browser. Without options, it starts the server if needed and opens a window if none is open.</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>--open</code></td><td>Opens a window even if one is open</td></tr>
+    <tr><td><code>--url</code></td><td>Prints the address</td></tr>
+    <tr><td><code>--stop</code></td><td>Stops the server</td></tr>
+    <tr><td><code>--foreground</code></td><td>Runs the server in this terminal</td></tr>
+    </tbody>
+    </table>
+
+    <h3>corral open</h3>
+    <pre><code><span class="p">$ </span>corral open http://localhost:8080</code></pre>
+    <p>Opens a local URL in the browser; this is what <kbd>Ctrl</kbd>+click on a local address in herdr runs. Without a URL, it opens Mirador.</p>
+
+    <h2>Installation and settings</h2>
+
+    <h3>corral config</h3>
+    <pre><code><span class="p">$ </span>corral config r_console r</code></pre>
+    <p>Reads or changes the settings: <code>corral config</code> prints them all, <code>corral config KEY</code> one, and <code>corral config KEY VALUE</code> sets it. <a href="config.html">Configuration</a> lists every key.</p>
+
+    <h3>corral theme</h3>
+    <p>Applies herdr's theme to the editor, the viewers, VisiData and Mirador now. <code>--show</code> only prints the palette.</p>
+
+    <h3>corral ark</h3>
+    <p>Shows whether the R console uses Ark and what is installed. <code>--install [VERSION]</code> downloads Ark (0.1.252 by default, the tested version).</p>
+
+    <h3>corral doctor</h3>
+    <p>Checks the dependencies, the herdr plugin, the theme, Mirador, the browser, and which terminal it detects, one line each.</p>
+
+    <h3>corral install</h3>
+    <p>Checks the requirements and repairs the installation, without downloading Corral. <code>--check</code> only checks.</p>
+
+    <h3>corral uninstall</h3>
+    <p>Removes Corral from herdr, R, the editor and Claude Code. Your settings and sessions stay. See <a href="install.html#uninstall">Install</a>.</p>
+
+    <h3>corral --version</h3>
+    <p>Prints the version and the folder the binary comes from. <code>corral --help</code> (or <code>corral ayuda</code>) lists the commands.</p>
+
+    <h2>Internal commands</h2>
+    <p>Corral's panes and the editor run these. You don't need to call them, but they show up in process lists and on the <a href="performance.html">Performance</a> page.</p>
+    <table>
+    <thead><tr><th>Command</th><th>What it is</th></tr></thead>
+    <tbody>
+    <tr><td><code>corral _console r|python</code></td><td>What a console pane runs: Ark, plain R or IPython, according to your settings</td></tr>
+    <tr><td><code>corral _lsp r|python|ruff</code></td><td>The editor's language servers: the bridge to Ark's (or <code>languageserver</code> with plain R), ty (or pylsp), and Ruff</td></tr>
+    <tr><td><code>corral _mirador</code></td><td>Mirador's server</td></tr>
+    </tbody>
+    </table>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

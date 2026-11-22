@@ -1,69 +1,69 @@
-# Atajos sugeridos para ~/.config/herdr/config.toml (prefijo por defecto: ctrl+b).
-# Ninguno choca con los atajos por defecto de herdr 0.9.5.
-# Después de pegarlos: herdr server reload-config
+# Suggested shortcuts for ~/.config/herdr/config.toml (default prefix: ctrl+b).
+# None of them clashes with herdr 0.9.5's defaults.
+# After pasting them: herdr server reload-config
 
 [[keys.command]]
 key = "prefix+space"
 type = "plugin_action"
-command = "corral.atajos"
-description = "Corral: atajos y acciones (paleta)"
+command = "corral.keys"
+description = "Corral: shortcuts and actions (palette)"
 
 [[keys.command]]
 key = "prefix+enter"
 type = "plugin_action"
 command = "corral.send"
-description = "Corral: enviar selección o portapapeles a R"
+description = "Corral: send the selection or the clipboard to the console"
 
 [[keys.command]]
 key = "prefix+shift+c"
 type = "plugin_action"
 command = "corral.close"
-description = "Corral: cerrar y volver a herdr normal"
+description = "Corral: close and go back to plain herdr"
 
 [[keys.command]]
 key = "prefix+t"
 type = "plugin_action"
 command = "corral.toggle"
-description = "Corral: expandir script (o agente) o consola"
+description = "Corral: expand the script (or agent) or the console"
 
 [[keys.command]]
 key = "prefix+y"
 type = "plugin_action"
 command = "corral.switch"
-description = "Corral: consola de R o de Python"
+description = "Corral: R or Python console"
 
 [[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
 command = "corral.plots"
-description = "Corral: ver gráficos"
+description = "Corral: show the plots"
 
 [[keys.command]]
 key = "prefix+d"
 type = "plugin_action"
 command = "corral.vars"
-description = "Corral: ver variables de R"
+description = "Corral: show the variables"
 
 [[keys.command]]
 key = "prefix+a"
 type = "plugin_action"
 command = "corral.layout"
-description = "Corral: layout con foco en el agente"
+description = "Corral: layout, agent first"
 
 [[keys.command]]
 key = "prefix+shift+a"
 type = "plugin_action"
-command = "corral.layout-codigo"
-description = "Corral: layout con foco en el código"
+command = "corral.layout-code"
+description = "Corral: layout, code first"
 
 [[keys.command]]
 key = "prefix+m"
 type = "plugin_action"
 command = "corral.console"
-description = "Corral: marcar panel como consola de R"
+description = "Corral: use this pane as the console"
 
 [[keys.command]]
 key = "prefix+shift+m"
 type = "plugin_action"
 command = "corral.mirador"
-description = "Corral: abrir Mirador en el navegador"
+description = "Corral: open Mirador in the browser"

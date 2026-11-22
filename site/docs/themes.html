@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Themes · Corral docs</title>
+<meta name="description" content="Corral follows herdr's theme live in the editor, the console, the variables pane, Mirador and VisiData. The built-in palettes, your own colors in [theme.custom], and Corral's own Dark 2026 theme.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Themes</h1>
+    <p class="intro">herdr's theme rules. Corral reads it and dresses everything else to match: the editor, the console prompt, the variables pane, the viewers, VisiData and Mirador. When you change the theme in herdr, Corral follows within seconds.</p>
+
+    <h2>How Corral follows herdr</h2>
+    <p>Corral reads the theme from <code>~/.config/herdr/config.toml</code> (<code>[theme] name</code> and the colors in <code>[theme.custom]</code>) and applies it:</p>
+    <ul>
+    <li><strong>Fresh</strong> uses the <code>corral</code> theme (<code>~/.config/fresh/themes/corral.json</code>), with the terminal's background, so the editor looks like the other panes.</li>
+    <li><strong>The R console's prompt, the variables pane and the viewers</strong> use the theme's accent and grays.</li>
+    <li><strong>VisiData</strong> takes the same colors, approximated to the terminal's 256-color palette.</li>
+    <li><strong>Mirador</strong> gets the palette as CSS variables.</li>
+    </ul>
+    <p>Changes are followed live. If you change herdr's theme, or its colors in <code>config.toml</code>, the editor, the variables pane and Mirador recolor on their own within a few seconds, without restarting anything. VisiData takes the new colors the next time you open a table.</p>
+    <pre><code><span class="p">$ </span>corral theme
+<span class="p">$ </span>corral theme --show</code></pre>
+    <p><code>corral theme</code> forces the update. <code>--show</code> only prints the palette in use.</p>
+
+    <h2>Built-in palettes</h2>
+    <p>herdr doesn't publish the values of its colors, so Corral uses the published colors of each theme: <code>vesper</code>, <code>catppuccin</code>, <code>dracula</code>, <code>tokyo-night</code>, <code>nord</code>, <code>gruvbox</code>, <code>one-dark</code>, <code>solarized</code>, <code>kanagawa</code> and <code>rose-pine</code>, plus your settings in <code>[theme.custom]</code>.</p>
+    <p>A variant Corral doesn't know, such as a light one, uses its dark sibling's palette, or catppuccin (herdr's default) if there is none.</p>
+
+    <h2>Your own colors</h2>
+    <p>Colors you set in herdr's <code>[theme.custom]</code> override the base palette in Corral too. Corral reads these tokens, each as a <code>#rrggbb</code> color: <code>accent</code>, <code>panel_bg</code>, <code>sidebar_bg</code>, <code>surface_dim</code>, <code>active_row_bg</code>, <code>selection_bg</code>, <code>text</code>, <code>green</code>, <code>yellow</code>, <code>red</code>, <code>mauve</code> and <code>peach</code>.</p>
+    <pre><code>[theme]
+name = "tokyo-night"
+
+[theme.custom]
+accent = "#ff9e64"</code></pre>
+
+    <h2>Corral's own theme: Dark 2026</h2>
+    <p>herdr doesn't let you install themes, but Corral brings its own, with exact interface and syntax colors. For now there is one, <code>dark-2026</code>: VS Code's new dark theme, Dark 2026.</p>
+    <pre><code><span class="p">$ </span>corral config theme dark-2026
+<span class="p">$ </span>corral config theme herdr</code></pre>
+    <p>The first (<code>tema</code> means "theme") dresses the editor, the console, the variables and Mirador. The second goes back to following herdr's theme.</p>
+    <p>You can also pick it from the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>): type <code>tema</code> and choose «Tema Dark 2026» or «Volver al tema de herdr» ("back to herdr's theme"). A herdr notice confirms the change.</p>
+
+    <h3>What it does to herdr</h3>
+    <p><code>corral config theme dark-2026</code> dresses Corral and herdr at once: it adds a <code>[theme.custom]</code> with the theme's colors to <code>~/.config/herdr/config.toml</code>, marked with a Corral comment. Before writing, Corral asks herdr to check the new configuration, and leaves the file as it was if herdr wouldn't accept it.</p>
+    <p>It works like any other theme. If you later choose another one in herdr (<kbd>ctrl+b</kbd> <kbd>s</kbd>), Corral notices, removes those colors from herdr's configuration and goes back to following herdr's theme.</p>
+    <p>If you already have colors of your own in <code>[theme.custom]</code>, Corral doesn't touch them, and the theme applies to Corral only.</p>
+
+    <h2>Terminal background</h2>
+    <p>The background of the panes comes from your terminal, Warp for example. Dark 2026's backgrounds are <code>#121314</code> and <code>#191a1b</code>: set one of them as Warp's background and every pane matches.</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

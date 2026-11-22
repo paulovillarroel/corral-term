@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plots and Mirador · Corral docs</title>
+<meta name="description" content="Mirador, Corral's plot viewer in the browser: opening it, history, downloads, copying a plot as PNG, plot objects, Python figures, plots inside the terminal, window placement and local URLs.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Plots and Mirador</h1>
+    <p class="intro">Plots go to Mirador, a light page in your browser that shows each new plot about 80 ms after it is drawn. On a terminal that draws images, you can see them inside herdr too.</p>
+
+    <h2>Mirador</h2>
+    <p>Mirador shows your plots at the size of the window, with their history (<kbd>←</kbd> and <kbd>→</kbd>) and a download as SVG or PNG.</p>
+    <figure class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span>127.0.0.1 · Mirador</span></div>
+      <img src="../assets/shots/mirador-plots.webp" width="2880" height="1800" loading="lazy" alt="Mirador showing a ggplot2 scatter plot of the Palmer penguins, with the session's plot history below">
+    </figure>
+    <p>Tables open here too when you send them: <kbd>m</kbd> in the table viewer or the variables pane, or <code>View(df, mirador = TRUE)</code>. See <a href="data.html#tables-in-mirador">Tables in Mirador</a>.</p>
+    <p>The bar at the bottom shows the session (R or Python version, folder, number of objects and plots) and a dot that turns red if the page loses Mirador. With more than one session open, it has a picker to choose which one to show.</p>
+
+    <h3>Opening it</h3>
+    <p>The first plot of each session opens Mirador on its own, as a normal window, and brings it to the front. After that, Mirador updates without taking your focus.</p>
+    <ul>
+    <li><kbd>ctrl+b</kbd> <kbd>f</kbd> brings it to the front at the latest plot.</li>
+    <li><kbd>ctrl+b</kbd> <kbd>shift+m</kbd> or <code>corral mirador</code> opens it.</li>
+    </ul>
+    <pre><code><span class="p">$ </span>corral mirador --url
+<span class="p">$ </span>corral mirador --stop</code></pre>
+    <p><code>--url</code> prints its address, to open it by hand. <code>--stop</code> stops its server. Mirador stays open after you close Corral, until you close its window.</p>
+
+    <h3>Copy a plot</h3>
+    <p><strong>Copy</strong> (or the <kbd>c</kbd> key) puts the plot in your clipboard as a PNG image, at twice its size on screen so it stays sharp, ready to paste into an email or a document without saving a file. <kbd>?</kbd>, or the button with that sign, shows Mirador's shortcuts:</p>
+    <table>
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous or next plot</td></tr>
+    <tr><td><kbd>c</kbd></td><td>Copy the plot as a PNG image</td></tr>
+    <tr><td><kbd>?</kbd> in a table</td><td>Also lists the table keys; see <a href="data.html#tables-in-mirador">Tables in Mirador</a></td></tr>
+    <tr><td><kbd>?</kbd></td><td>See these shortcuts</td></tr>
+    </tbody>
+    </table>
+
+    <h3>Why it is fast</h3>
+    <p>A new plot appears about 80 ms after the command that drew it ends. R and Python mark the change in a file when the command ends, and the page waits for that mark instead of asking every so often.</p>
+    <p>Plots are shown as SVG, except the ones that would weigh more than 2 MB (a scatter plot with tens of thousands of points), which are shown as PNG, so the browser doesn't have to build every point. A download in SVG is still SVG.</p>
+
+    <h3>Only on your machine</h3>
+    <p>Mirador listens only on <code>127.0.0.1</code>, on port 7317 (or another free one if that is taken), and asks for a token on every request. The token is in <code>~/.local/state/corral/mirador.json</code>.</p>
+
+    <h2>Plot objects</h2>
+    <p>Plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>) appear in the Plots tab of the variables pane. <kbd>Enter</kbd> on one draws it and opens it in Mirador. A plot object that is already drawn opens without being drawn again.</p>
+
+    <h2 id="python-figures">Python figures</h2>
+    <p>matplotlib figures, and those of seaborn or plotnine, which draw with matplotlib, go to Mirador at the end of each run, as in Jupyter. <code>plt.show()</code> sends them at that moment. A figure saved in a variable appears in the Plots tab of the variables pane, and <kbd>Enter</kbd> shows it.</p>
+    <p>Python figures are saved when they are drawn (as PNG and SVG), and Mirador scales them. Unlike httpgd plots in R, they aren't drawn again when the window changes size.</p>
+
+    <h2>Plots inside the terminal</h2>
+    <p>On Windows, plots can't be shown sharply inside herdr. herdr only passes images with the Kitty protocol, and Windows' own terminals (Warp, WezTerm, Windows Terminal) reach WSL through ConPTY, which drops those sequences. We tested it: WezTerm on Windows drew neither Kitty nor Sixel. That is why plots go to Mirador on Windows.</p>
+    <p>On Linux, with a terminal that draws Kitty images (kitty, WezTerm, Ghostty), <kbd>ctrl+b</kbd> <kbd>f</kbd> shows the plots inside herdr. Corral detects which terminal each herdr window runs in (<code>corral doctor</code> shows it). With images on, the first plot doesn't open Mirador: a notice tells you to press <kbd>ctrl+b</kbd> <kbd>f</kbd>.</p>
+    <pre><code><span class="p">$ </span>corral config images kitty</code></pre>
+    <p><code>images</code> takes <code>auto</code> (detect, the default), <code>kitty</code> or <code>symbols</code> (block characters). The <code>CORRAL_IMAGES</code> environment variable takes the same values and wins over the setting.</p>
+    <p>The in-terminal viewer draws with <code>chafa</code> (<code>sudo apt install chafa</code>). Its keys: <kbd>←</kbd> <kbd>→</kbd> go through the history, <kbd>o</kbd> opens Mirador in the browser, <kbd>q</kbd> closes it. The repository keeps <a href="https://github.com/paulovillarroel/corral-term/blob/main/wezterm/wezterm.lua"><code>wezterm/wezterm.lua</code></a> as a reference configuration for WezTerm with WSL.</p>
+
+    <h2>Where the window goes</h2>
+    <p>On Windows with WSL, Corral opens each new Mirador window unmaximized, on the right of the screen, and brings it to the front. To change that:</p>
+    <pre><code><span class="p">$ </span>corral config mirador_size 0.4x0.7
+<span class="p">$ </span>corral config mirador_window free</code></pre>
+    <p><code>mirador_size</code> is the fraction of the screen's width and height (<code>0.5x0.85</code> by default). <code>mirador_window free</code> leaves the window's size and position alone; <code>right</code> is the default.</p>
+    <p>On WSL, Corral uses Firefox if you have it, otherwise Edge or Chrome, which open Mirador as an app window without tabs or address bar. On Linux it uses <code>xdg-open</code>. <code>CORRAL_BROWSER</code> picks another one (see <a href="config.html#environment-variables">Configuration</a>).</p>
+
+    <h2>R options for plots</h2>
+    <p>In R, a few options change what the first plot does or which device draws; you set them in your <code>.Rprofile</code>. <a href="config.html#r-options">Configuration</a> lists them: <code>corral.viewer</code>, <code>corral.open_plots</code> and <code>corral.httpgd</code>.</p>
+
+    <h2>Local URLs</h2>
+    <p><kbd>Ctrl</kbd>+click on a local address in herdr (<code>http://localhost:…</code> or <code>http://127.0.0.1:…</code>) opens it in the browser: a <code>quarto preview</code>, httpgd's own page, a Shiny app. From the command line:</p>
+    <pre><code><span class="p">$ </span>corral open http://localhost:4200</code></pre>
+    <p>Without a URL, <code>corral open</code> opens Mirador.</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

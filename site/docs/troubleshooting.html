@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting and limits · Corral docs</title>
+<meta name="description" content="Common problems with Corral and what to do about them, how to check your setup, and the known limits of this version.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Troubleshooting and limits</h1>
+    <p class="intro">What to do when something doesn't work, and the limits Corral has today.</p>
+
+    <h2>Check your setup</h2>
+    <pre><code><span class="p">$ </span>corral doctor
+<span class="p">$ </span>corral install --check</code></pre>
+    <p><code>corral doctor</code> checks the dependencies, the herdr plugin, the theme, Mirador and its browser, and which terminal it detects, one line each, with what to do about each problem. <code>corral install --check</code> prints the installer's checklist, and <code>corral install</code> repairs the installation.</p>
+
+    <h2>Common problems</h2>
+    <table>
+    <thead><tr><th>Symptom</th><th>What to do</th></tr></thead>
+    <tbody>
+    <tr><td>The <kbd>ctrl+b</kbd> shortcuts do nothing</td><td>The herdr plugin runs the compiled <code>corral</code> in Corral's folder, and there is no other version to fall back on. <code>corral doctor</code> shows whether the plugin is linked; <code>corral install</code> repairs the installation. In a clone, build the binary with <code>cargo build --release</code> in <code>rs/</code>.</td></tr>
+    <tr><td>Fresh shows a warning (⚠) about the Wayland clipboard</td><td>WSLg doesn't have the clipboard protocol Fresh looks for, so Fresh uses X11, and copy and paste work anyway. Corral starts Fresh without <code>WAYLAND_DISPLAY</code> so it doesn't try; if you open it by hand, use <code>env -u WAYLAND_DISPLAY fresh</code>.</td></tr>
+    <tr><td>The variables pane says "Waiting for the console's session (R or Python)…" or stays empty</td><td>That R doesn't have Corral active. In the console's pane, press <kbd>ctrl+b</kbd> <kbd>m</kbd>, or run <code>corral_activate()</code> in R.</td></tr>
+    <tr><td>The script's shortcuts do nothing, or the editor doesn't take the new theme</td><td>That editor was opened with an earlier version. Close it with <kbd>Ctrl</kbd>+<kbd>Q</kbd> and open the layout again with <kbd>ctrl+b</kbd> <kbd>a</kbd>.</td></tr>
+    <tr><td><code>corral script --write</code> says the editor didn't answer</td><td>The draft has to be open in the editor. An editor opened before you updated Corral needs to be closed (<kbd>Ctrl</kbd>+<kbd>Q</kbd>) and opened again.</td></tr>
+    <tr><td>No completion</td><td>The file has to be saved as <code>.R</code>, and Fresh's status bar has to say <code>LSP (on)</code>. If the folder isn't trusted, mark it as trusted from the status bar.</td></tr>
+    <tr><td>Mirador doesn't open</td><td><code>corral doctor</code> shows whether it is running and which browser it uses. <code>corral mirador --url</code> gives the address to open it by hand. If the server doesn't start, its log is in <code>~/.local/state/corral/mirador.log</code>.</td></tr>
+    <tr><td><kbd>ctrl+b</kbd> <kbd>enter</kbd> says "Nothing to send"</td><td>Select the code with the mouse (herdr copies it) or copy it with <kbd>Ctrl</kbd>+<kbd>C</kbd> first.</td></tr>
+    <tr><td>Claude opens its own R instead of using your console</td><td><code>corral eval --check</code> should answer with the console. If it fails, switch Corral on in that R with <kbd>ctrl+b</kbd> <kbd>m</kbd>.</td></tr>
+    <tr><td>The R console says Ark didn't respond</td><td>Ark's log is in <code>~/.local/state/corral/ark.log</code>. <code>corral config r_console r</code> goes back to plain R while you look into it.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="known-limits">Known limits</h2>
+    <ul>
+    <li>Corral works on Linux x86_64 and on WSL. It doesn't work on macOS yet: the Rust code talks to the terminal with Linux's values (the <code>termios</code> layout and the <code>TIOCGWINSZ</code> code are different on a Mac), Corral looks at processes in <code>/proc</code>, which macOS doesn't have, it opens the browser with <code>xdg-open</code>, and the herdr plugin declares itself for Linux only.</li>
+    <li>On Windows, plots can't be shown sharply inside herdr, so they go to Mirador (see <a href="plots.html">Plots and Mirador</a>).</li>
+    <li>From Warp, <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd> shortcuts and <kbd>Alt</kbd> shortcuts don't reach the editor. That is why the main keys are <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd>.</li>
+    <li>Tables from <code>View()</code> are saved in R's (or Python's) temporary folder and go away when you close the console.</li>
+    <li>The Python console needs IPython. <kbd>ctrl+b</kbd> <kbd>m</kbd> on a <code>python</code> without IPython marks the pane, but doesn't switch Corral on.</li>
+    <li>Python figures are saved when they are drawn (PNG and SVG), and Mirador scales them. They aren't drawn again when the window changes size, as httpgd does in R.</li>
+    <li>Objects with more than a million elements don't show their size in memory, because computing it after every command would be slow.</li>
+    <li>If the herdr server stops (a Windows restart, <code>wsl --shutdown</code>), the R and Python sessions are lost. herdr restores the panes, but not their memory.</li>
+    <li>Ark is still a 0.1 version, and Corral talks to its language server over an internal Positron channel (<code>positron.lsp</code>) that can change between versions. That is why <code>corral ark --install</code> installs the tested version. If a new version fails, <code>corral config r_console r</code> goes back to plain R.</li>
+    <li>Debugging with <code>browser()</code> hasn't been tested with Ark yet.</li>
+    <li>Ark's console counts every character as one column. With emoji or East Asian characters in a long line, the cursor can end up out of place until the line is drawn again.</li>
+    <li>If you restart the Ark console, the editor's completion reconnects when Fresh starts the language server again: close and open the file, or restart Fresh.</li>
+    </ul>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

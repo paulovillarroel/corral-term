@@ -1,0 +1,36 @@
+# Publishes site/ (the website and the documentation) on GitHub Pages, with
+# install.sh next to it so it can be fetched from the site too.
+# Needs Pages turned on with "GitHub Actions" as the source (Settings → Pages);
+# on GitHub's free plan that requires a public repository. Until then it only
+# runs by hand (Actions → Sitio → Run workflow); add a push trigger on site/**
+# once Pages is on.
+name: Sitio
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Armar el sitio
+        run: cp install.sh site/install.sh
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v5

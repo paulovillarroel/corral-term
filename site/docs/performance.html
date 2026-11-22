@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance · Corral docs</title>
+<meta name="description" content="How fast Corral opens and how little it uses, measured against Positron on the same machine, and the gains of each piece of Corral after it moved to one Rust binary.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Performance</h1>
+    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB. These are the measurements against Positron, and the gains of each piece of Corral since it became one Rust binary.</p>
+
+    <h2>Corral and Positron</h2>
+    <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="(prefers-color-scheme: dark)"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
+
+    <h3>How it was measured</h3>
+    <ul>
+    <li>November 22, 2026, on the same machine: Windows with WSL (Ubuntu 24.04), the project folder <code>test-codigo</code>, R 4.6.1, two runs each.</li>
+    <li>Positron is version 2026.11.1, on Windows, connected to WSL.</li>
+    <li>Corral is a full layout: the editor, the Ark console, the variables pane and the language server. herdr and the terminal aren't counted, because they are open anyway for the agent.</li>
+    <li>The chart sets Positron's best run against Corral's worst.</li>
+    </ul>
+
+    <h3>Results</h3>
+    <table>
+    <thead><tr><th>What</th><th>Positron</th><th>Corral</th></tr></thead>
+    <tbody>
+    <tr><td>From opening it to R ready</td><td>13.3–17.7 s</td><td>394–453 ms</td></tr>
+    <tr><td>Memory in use</td><td>3.2 GB (1.55–1.58 GB in Windows and 1.64–1.66 GB in WSL)</td><td>154–155 MB</td></tr>
+    <tr><td>CPU at rest</td><td>13.9–19.6 % of one core (10.9–16.8 % in Windows and 2.9–3.0 % in WSL)</td><td>0.36 %</td></tr>
+    <tr><td>R (Ark)</td><td>117 MB</td><td>99 MB</td></tr>
+    <tr><td>From Ctrl+R to the result on screen</td><td>not measured</td><td>3–27 ms</td></tr>
+    </tbody>
+    </table>
+    <p>In Corral, the layout is created in 31 ms, the editor is ready in 229–288 ms and the R console in 394–453 ms. From <code>corral send</code> (what <kbd>Ctrl</kbd>+<kbd>R</kbd> runs) to the result on screen takes about 5 ms; the first call takes about 25 ms.</p>
+
+    <h3>Where the memory goes</h3>
+    <table>
+    <thead><tr><th>Positron</th><th>Memory</th></tr></thead>
+    <tbody>
+    <tr><td>The window, in Windows</td><td>1.55–1.58 GB</td></tr>
+    <tr><td>Extension host (WSL)</td><td>676–678 MB</td></tr>
+    <tr><td>Server (WSL)</td><td>275–294 MB</td></tr>
+    <tr><td>Copilot (WSL)</td><td>241–242 MB</td></tr>
+    <tr><td>Data (WSL)</td><td>136–138 MB</td></tr>
+    <tr><td>Ark with R (WSL)</td><td>117 MB</td></tr>
+    <tr><td>ptyHost (WSL)</td><td>68–72 MB</td></tr>
+    <tr><td>fileWatcher (WSL)</td><td>59 MB</td></tr>
+    </tbody>
+    </table>
+    <table>
+    <thead><tr><th>Corral</th><th>Memory</th></tr></thead>
+    <tbody>
+    <tr><td>Ark with R</td><td>99 MB</td></tr>
+    <tr><td>Fresh</td><td>46 MB</td></tr>
+    <tr><td>Each <code>corral</code> process</td><td>2–3 MB</td></tr>
+    </tbody>
+    </table>
+    <p>R weighs about the same in both, because both run Ark. The difference is the interface. In Corral, <code>corral</code> runs as a few small processes: the console, the bridge to the language server, the variables pane.</p>
+    <p>In an earlier measurement, Positron also started Python with its language server (about 440 MB), because the folder has a <code>pyproject.toml</code>. Corral opens Python only when you use it. Positron's time from <kbd>Ctrl</kbd>+<kbd>R</kbd> to the result wasn't measured, because that would mean driving its interface with clicks.</p>
+    <p>An earlier measurement, before Fresh, loading R and the language servers were optimized, gave Corral 181 MB and 0.7 % CPU at rest.</p>
+
+    <h2>Corral in Rust</h2>
+    <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="(prefers-color-scheme: dark)"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
+    <p>The engines were already in Rust: herdr, Fresh, Ark, Air, Ruff and uv. Now all of Corral is one Rust binary, built from <code>rs/</code> with no dependencies. The only parts that aren't Rust run inside your own sessions: <code>r/corral.R</code> in R and <code>py/</code> in IPython.</p>
+    <p>The first pieces to move to Rust were what runs on every key press, what Claude uses and the processes that stay open. These are the gains of that stage:</p>
+    <table>
+    <thead><tr><th>Piece</th><th>Rust</th><th>Before, in Python</th></tr></thead>
+    <tbody>
+    <tr><td><code>corral send</code> (<kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>ctrl+b</kbd> <kbd>enter</kbd>)</td><td>under 10 ms, 2.5 MB</td><td>about 50 ms, 26 MB</td></tr>
+    <tr><td><code>toggle</code> and <code>switch</code> (<kbd>ctrl+b</kbd> <kbd>t</kbd>, <kbd>ctrl+b</kbd> <kbd>y</kbd>)</td><td>10–30 ms</td><td>50–60 ms</td></tr>
+    <tr><td>Variables pane (<code>corral vars --pane</code>)</td><td>3 MB, 0.1 % CPU</td><td>26 MB</td></tr>
+    <tr><td>Bridge to Ark's language server (<code>corral _lsp r</code>)</td><td>3 MB</td><td>45 MB</td></tr>
+    <tr><td>Mirador's server (<code>corral _mirador</code>)</td><td>3 MB</td><td>26 MB</td></tr>
+    <tr><td><code>corral eval</code> (Claude runs code in your console)</td><td>20–40 ms</td><td>about 210 ms</td></tr>
+    <tr><td>Ark console (<code>corral _console r</code>)</td><td>3 MB, starts in 0.33 s</td><td><code>jupyter-console</code>: 55 MB, 0.47 s</td></tr>
+    </tbody>
+    </table>
+    <p>What repeats after each command, and what keeps running in the editor, went down too:</p>
+    <table>
+    <thead><tr><th>What</th><th>Before</th><th>Now</th></tr></thead>
+    <tbody>
+    <tr><td>R variables after each command</td><td>79 ms</td><td>3 ms, or 4 ms if a variable changed</td></tr>
+    <tr><td>Python variables after each command</td><td>2.4 ms</td><td>0.4–0.6 ms</td></tr>
+    <tr><td>Fresh plugin at rest (the editor's CPU)</td><td>1.0 %</td><td>0.56 %</td></tr>
+    <tr><td>The editor follows a herdr theme change</td><td>up to 2 s</td><td>0.4 s</td></tr>
+    <tr><td>Fresh at rest, with the plugins it doesn't use turned off</td><td>60 MB, 0.57 % CPU</td><td>46 MB, 0.20 %</td></tr>
+    <tr><td>Loading Corral in R (<code>corral.R</code>)</td><td>85 ms, 23 MB</td><td>27 ms, 17 MB</td></tr>
+    <tr><td>Python language servers</td><td>340 MB (pylsp and Ruff)</td><td>159 MB (ty and Ruff)</td></tr>
+    <tr><td>Mirador shows a new plot</td><td>0 to 1.5 s (it asked every 1.5 s)</td><td>about 80 ms</td></tr>
+    <tr><td>A plot of 100 thousand points in Mirador</td><td>7.1 MB SVG</td><td>0.7 MB PNG</td></tr>
+    </tbody>
+    </table>
+    <p>While you work, each command in the R console takes about 2.5 ms from <kbd>Enter</kbd> to the next prompt (1.5 ms without Corral), also with a table of 2 million cells in memory. In Python it takes about 6 ms, with or without Corral.</p>
+
+    <h3>What changed in R and Python</h3>
+    <p><code>corral.R</code> no longer loads packages it doesn't need at startup. httpgd (with unigd, systemfonts, lifecycle and cli) loads with the first plot, and each variable's fingerprint uses the memory address base R gives, without rlang, which took 54 ms to load.</p>
+    <p>Variables are described again only if the object changed (another memory address, another length, other dimensions or, in tables, other column types), and the file the pane reads is rewritten only when something changed.</p>
+    <p>The Python language server and Ruff run straight from the environment uv keeps for them in its cache (<code>corral _lsp python</code>, <code>corral _lsp ruff</code>). Through <code>uvx</code> or <code>uv run</code>, uv stayed alive the whole time as a waiting parent process, about 45 MB each. The Python console still uses <code>uv run</code>, because IPython has to run inside the project's environment.</p>
+    <p>The Python language server moved from pylsp to ty. In the same test with pandas, ty uses 141 MB in one process (pylsp, 172 MB in two), starts in milliseconds (pylsp, in half a second), completes in half the time and shows help in 2 ms with the full documentation (pylsp took 0.3–0.4 s and only showed the signature).</p>
+
+    <h3>What changed in the editor</h3>
+    <p>Corral's Fresh plugin no longer checks anything on a timer. It copies the draft when you stop typing for 0.4 s (at least every 2 s if you keep typing), watches the theme files through the file system, and opens the folder view when a draft appears.</p>
+    <p>Fresh comes with about 50 plugins. Corral turns off the ones it doesn't use in <code>fresh/config.json</code>: agent orchestration, which herdr already does, welcome screens, Kubernetes, devcontainers, and languages such as C# or C++. With that, Fresh opens with 48 MB instead of 60, and at rest it uses 0.20 % CPU instead of 0.57 %. Checking every 2 s whether the open files changed (when Claude edits them, for example) costs so little that it doesn't show in the measurements, so it stays.</p>
+
+    <h3>One binary</h3>
+    <p>The binary talks to herdr over its socket and to Ark over the Jupyter protocol (ZeroMQ and HMAC-SHA256 signatures, implemented in <code>rs/src/zmtp.rs</code> and <code>rs/src/sha256.rs</code>). Everything else is in the binary too: it reads herdr's configuration with its own TOML reader, unpacks Ark (published as a zip), Fresh, DuckDB and Air with its own decompressor, and writes the editor's theme and the palette.</p>
+    <p>If you change something in <code>rs/</code>, build it again with <code>cargo build --release</code>. <code>corral --version</code> says which folder the binary you are using comes from.</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

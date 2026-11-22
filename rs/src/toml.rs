@@ -4,6 +4,7 @@
 //! same Value as the JSON module. Writing goes through herdr's own validator
 //! (`herdr config check`), so Corral never has to judge a file it changed.
 
+use crate::i18n::tr;
 use crate::json::Value;
 
 struct P<'a> {
@@ -39,7 +40,7 @@ pub fn parse(text: &str) -> Result<Value, String> {
                 let mut items = match target.get(&last) {
                     Value::Arr(a) => a.clone(),
                     Value::Null => Vec::new(),
-                    _ => return Err(format!("{last} no es una lista de tablas")),
+                    _ => return Err(trf!("{last} isn't an array of tables", "{last} no es una lista de tablas")),
                 };
                 items.push(Value::obj());
                 target.set(&last, Value::Arr(items));
@@ -83,12 +84,12 @@ fn table_at<'v>(root: &'v mut Value, path: &[String]) -> Result<&'v mut Value, S
 }
 
 fn descend<'v>(node: &'v mut Value, key: &str) -> Result<&'v mut Value, String> {
-    let Value::Obj(items) = node else { return Err(format!("{key}: no es una tabla")) };
-    let slot = items.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v).ok_or_else(|| format!("falta la tabla {key}"))?;
+    let Value::Obj(items) = node else { return Err(trf!("{key}: not a table", "{key}: no es una tabla")) };
+    let slot = items.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v).ok_or_else(|| trf!("missing table {key}", "falta la tabla {key}"))?;
     match slot {
-        Value::Arr(a) => a.last_mut().ok_or_else(|| format!("{key}: lista vacía")),
+        Value::Arr(a) => a.last_mut().ok_or_else(|| trf!("{key}: empty array", "{key}: lista vacía")),
         Value::Obj(_) => Ok(slot),
-        _ => Err(format!("{key}: no es una tabla")),
+        _ => Err(trf!("{key}: not a table", "{key}: no es una tabla")),
     }
 }
 
@@ -103,7 +104,7 @@ impl P<'_> {
 
     fn err(&self, what: &str) -> String {
         let line = self.s[..self.i.min(self.s.len())].iter().filter(|&&b| b == b'\n').count() + 1;
-        format!("TOML, línea {line}: {what}")
+        trf!("TOML, line {line}: {what}", "TOML, línea {line}: {what}")
     }
 
     fn expect(&mut self, b: u8) -> Result<(), String> {
@@ -111,7 +112,7 @@ impl P<'_> {
             self.i += 1;
             Ok(())
         } else {
-            Err(self.err(&format!("se esperaba '{}'", b as char)))
+            Err(self.err(&trf!("expected '{}'", "se esperaba '{}'", b as char)))
         }
     }
 
@@ -145,7 +146,7 @@ impl P<'_> {
         self.skip_comment();
         match self.peek() {
             b'\n' | b'\r' | 0 => Ok(()),
-            _ => Err(self.err("sobra texto al final de la línea")),
+            _ => Err(self.err(tr("extra text at the end of the line", "sobra texto al final de la línea"))),
         }
     }
 
@@ -172,7 +173,7 @@ impl P<'_> {
                     self.i += 1;
                 }
                 if start == self.i {
-                    return Err(self.err("se esperaba un nombre"));
+                    return Err(self.err(tr("expected a name", "se esperaba un nombre")));
                 }
                 Ok(String::from_utf8_lossy(&self.s[start..self.i]).into_owned())
             }
@@ -197,7 +198,7 @@ impl P<'_> {
                     match self.peek() {
                         b',' => self.i += 1,
                         b']' => {}
-                        _ => return Err(self.err("se esperaba ',' o ']'")),
+                        _ => return Err(self.err(tr("expected ',' or ']'", "se esperaba ',' o ']'"))),
                     }
                 }
             }
@@ -221,7 +222,7 @@ impl P<'_> {
                     match self.peek() {
                         b',' => self.i += 1,
                         b'}' => {}
-                        _ => return Err(self.err("se esperaba ',' o '}'")),
+                        _ => return Err(self.err(tr("expected ',' or '}'", "se esperaba ',' o '}'"))),
                     }
                 }
             }
@@ -237,7 +238,7 @@ impl P<'_> {
                     "false" => Ok(Value::Bool(false)),
                     w => w.replace('_', "").parse::<f64>().map(Value::Num)
                         // Dates and times stay as text: Corral never needs them.
-                        .or_else(|_| if w.is_empty() { Err(self.err("falta el valor")) } else { Ok(Value::Str(w.to_string())) }),
+                        .or_else(|_| if w.is_empty() { Err(self.err(tr("missing value", "falta el valor"))) } else { Ok(Value::Str(w.to_string())) }),
                 }
             }
         }
@@ -252,7 +253,7 @@ impl P<'_> {
         let mut out: Vec<u8> = Vec::new();
         loop {
             if self.eof() {
-                return Err(self.err("texto sin cerrar"));
+                return Err(self.err(tr("unclosed string", "texto sin cerrar")));
             }
             if multi && self.s[self.i..].starts_with(b"\"\"\"") {
                 self.i += 3;
@@ -262,7 +263,7 @@ impl P<'_> {
             self.i += 1;
             match b {
                 b'"' if !multi => break,
-                b'\n' if !multi => return Err(self.err("texto sin cerrar")),
+                b'\n' if !multi => return Err(self.err(tr("unclosed string", "texto sin cerrar"))),
                 b'\\' => {
                     let e = self.peek();
                     self.i += 1;
@@ -302,7 +303,7 @@ impl P<'_> {
         let start = self.i;
         loop {
             if self.eof() || (!multi && self.peek() == b'\n') {
-                return Err(self.err("texto sin cerrar"));
+                return Err(self.err(tr("unclosed string", "texto sin cerrar")));
             }
             if multi && self.s[self.i..].starts_with(b"'''") {
                 let text = String::from_utf8_lossy(&self.s[start..self.i]).into_owned();

@@ -2,13 +2,14 @@
 //! `corral theme` / `corral config`.
 //!
 //! herdr is the source of truth: its `[theme] name` picks a base palette and its
-//! `[theme.custom]` colours override it. Corral's own themes (`corral config tema
+//! `[theme.custom]` colours override it. Corral's own themes (`corral config theme
 //! dark-2026`) take over until another theme is chosen in herdr. From the palette
 //! Corral writes ~/.config/corral/palette.json (the terminal viewers, VisiData
 //! and Mirador read it) and ~/.config/fresh/themes/corral.json (the editor; its
 //! background is left to the terminal). herdr does not publish its theme colours,
 //! so the base palettes below follow each theme's published colours.
 
+use crate::i18n::tr;
 use crate::env;
 use crate::json::{self, obj, Value};
 use crate::toml;
@@ -131,12 +132,25 @@ fn write_config(cfg: &Value) {
     let _ = std::fs::write(&path, cfg.to_json_pretty(1).trim_end());
 }
 
-/// The Corral theme chosen with `corral config tema`, while it is still on:
+/// The theme stored in config.json ("tema" and "tema_herdr" are the names from before).
+fn stored(cfg: &Value) -> (Option<&str>, Option<&str>) {
+    (cfg.get("theme").str().or_else(|| cfg.get("tema").str()),
+     cfg.get("theme_herdr").str().or_else(|| cfg.get("tema_herdr").str()))
+}
+
+fn forget_theme(cfg: &mut Value) {
+    for k in ["theme", "theme_herdr", "tema", "tema_herdr"] {
+        cfg.remove(k);
+    }
+}
+
+/// The Corral theme chosen with `corral config theme`, while it is still on:
 /// choosing another theme in herdr afterwards turns it off (see follow_herdr).
 pub fn own_theme() -> Option<&'static str> {
     let cfg = env::config();
-    let chosen = own(cfg.get("tema").str()?)?;
-    match cfg.get("tema_herdr").str() {
+    let (name, base) = stored(&cfg);
+    let chosen = own(name?)?;
+    match base {
         Some(base) if base != herdr_theme().0 => None,
         _ => Some(chosen.name),
     }
@@ -166,7 +180,7 @@ pub fn write_herdr(text: &str) -> Result<(), String> {
     };
     if !ok {
         let _ = std::fs::remove_file(&tmp);
-        return Err("herdr no aceptaría la configuración; la dejé como estaba".into());
+        return Err(tr("herdr would not accept the configuration; I left it as it was", "herdr no aceptaría la configuración; la dejé como estaba").into());
     }
     std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
     if let Some(bin) = herdr_bin() {
@@ -236,21 +250,21 @@ fn undress_herdr() -> Result<(), String> {
     Ok(())
 }
 
-/// `corral config tema`: an own theme for Corral and herdr, or None to follow
+/// `corral config theme`: an own theme for Corral and herdr, or None to follow
 /// herdr. Returns whether herdr took the colours too.
 fn choose(theme: Option<&'static Own>) -> Result<bool, String> {
     let mut cfg = env::config();
     let dressed = match theme {
         None => {
             undress_herdr()?;
-            cfg.remove("tema");
-            cfg.remove("tema_herdr");
+            forget_theme(&mut cfg);
             false
         }
         Some(t) => {
             let dressed = dress_herdr(t)?;
-            cfg.set("tema", t.name.into());
-            cfg.set("tema_herdr", herdr_theme().0.into());
+            forget_theme(&mut cfg);
+            cfg.set("theme", t.name.into());
+            cfg.set("theme_herdr", herdr_theme().0.into());
             dressed
         }
     };
@@ -262,11 +276,11 @@ fn choose(theme: Option<&'static Own>) -> Result<bool, String> {
 /// Another theme was chosen in herdr since the own theme went on: drop it.
 fn follow_herdr() {
     let mut cfg = env::config();
-    let on = cfg.get("tema").str().and_then(own).is_some();
-    if on && cfg.get("tema_herdr").str().is_some_and(|base| base != herdr_theme().0) {
+    let (name, base) = stored(&cfg);
+    let on = name.and_then(own).is_some();
+    if on && base.is_some_and(|base| base != herdr_theme().0) {
         let _ = undress_herdr();
-        cfg.remove("tema");
-        cfg.remove("tema_herdr");
+        forget_theme(&mut cfg);
         write_config(&cfg);
     }
 }
@@ -454,25 +468,25 @@ pub fn sources_mtime() -> f64 {
     [herdr_config(), corral_config_file()].iter().filter_map(|f| mtime(f)).fold(0.0, f64::max)
 }
 
-/// `corral theme [--mostrar]`.
+/// `corral theme [--show]`.
 pub fn cmd_theme(args: &[String]) -> Result<(), String> {
-    let show = args.iter().any(|a| a == "--mostrar");
+    let show = args.iter().any(|a| a == "--show");
     let p = if show { palette() } else { apply() };
     let name = p.get("name").str().unwrap_or("").to_string();
     let base = p.get("base").str().unwrap_or("").to_string();
     if own_theme().is_some() {
-        println!("tema de Corral: {name} (corral config tema herdr vuelve al de herdr)");
+        println!("{}", trf!("Corral theme: {name} (corral config theme herdr goes back to herdr's)", "tema de Corral: {name} (corral config theme herdr vuelve al de herdr)"));
     } else {
         let custom = match herdr_theme().1 {
             Value::Obj(i) => i.len(),
             _ => 0,
         };
-        let mut line = format!("tema de herdr: {name}");
+        let mut line = trf!("herdr theme: {name}", "tema de herdr: {name}");
         if base != name {
             line += &format!(" (base {base})");
         }
         if custom > 0 {
-            line += &format!(", con {custom} colores propios");
+            line += &trf!(", with {custom} colors of your own", ", con {custom} colores propios");
         }
         println!("{line}");
     }
@@ -482,14 +496,18 @@ pub fn cmd_theme(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
-    println!("paleta: {}", palette_file().display());
-    println!("tema de Fresh: {} (se ve al reiniciar el editor)", fresh_theme_file().display());
+    println!("{}: {}", tr("palette", "paleta"), palette_file().display());
+    println!("{}", trf!("Fresh theme: {} (shows when the editor restarts)", "tema de Fresh: {} (se ve al reiniciar el editor)", fresh_theme_file().display()));
     Ok(())
 }
 
-/// `corral config [CLAVE [VALOR]]`: read or change Corral's settings.
+/// `corral config [KEY [VALUE]]`: read or change Corral's settings.
 pub fn cmd_config(args: &[String]) -> Result<(), String> {
     let mut cfg = env::config();
+    if args.len() == 1 && args[0] == "language" {
+        println!("{}", crate::i18n::resolve());
+        return Ok(());
+    }
     let (Some(key), Some(value)) = (args.first(), args.get(1)) else {
         let shown = match args.first() {
             Some(k) => cfg.get(k).clone(),
@@ -498,40 +516,52 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         println!("{}", shown.to_json());
         return Ok(());
     };
-    if key == "tema" {
+    // From the palette (a plugin action) there is no terminal to print to.
+    let say = |title: &str, body: &str| {
+        if std::env::var_os("HERDR_PLUGIN_ID").is_some() {
+            env::notify(title, body);
+        } else {
+            println!("{title}: {body}");
+        }
+    };
+    if key == "language" {
+        let lang = crate::i18n::normalize(value).ok_or_else(|| trf!("language takes: {}", "language acepta: {}", crate::i18n::LANGUAGES.join(", ")))?;
+        cfg.set("language", lang.into());
+        write_config(&cfg);
+        if lang == "es" {
+            say("Corral en español", "Todo cambia ahora; el editor de scripts, al volver a abrirlo. Los comandos siguen en inglés.");
+        } else {
+            say("Corral in English", "Everything switches now; the script editor when you open it again.");
+        }
+        return Ok(());
+    }
+    if key == "theme" {
         // A theme for Corral and herdr together; choosing another theme in herdr drops it.
         let names = own_names();
         if value != "herdr" && !names.contains(&value.as_str()) {
             let mut all: Vec<&str> = names.clone();
             all.push("herdr");
             all.sort();
-            return Err(format!("tema acepta: {}", all.join(", ")));
+            return Err(trf!("theme takes: {}", "theme acepta: {}", all.join(", ")));
         }
-        // From the palette (a plugin action) there is no terminal to print to.
-        let say = |title: &str, body: &str| {
-            if std::env::var_os("HERDR_PLUGIN_ID").is_some() {
-                env::notify(title, body);
-            } else {
-                println!("{title}: {body}");
-            }
-        };
         if value == "herdr" {
             choose(None)?;
-            say("Tema de herdr", &format!("Corral sigue {}", herdr_theme().0));
+            say(tr("herdr theme", "Tema de herdr"), &trf!("Corral follows {}", "Corral sigue {}", herdr_theme().0));
         } else if choose(own(value))? {
-            say(&format!("Tema {value}"), "en Corral y en herdr; al elegir otro tema en herdr (ctrl+b s), Corral lo sigue");
+            say(&trf!("{value} theme", "Tema {value}"), tr("in Corral and herdr; choose another theme in herdr (ctrl+b s) and Corral follows it",
+                                                          "en Corral y en herdr; al elegir otro tema en herdr (ctrl+b s), Corral lo sigue"));
         } else {
-            say(&format!("Tema {value}"), "en Corral; herdr mantiene tus colores de [theme.custom]");
+            say(&trf!("{value} theme", "Tema {value}"), tr("in Corral; herdr keeps your [theme.custom] colors", "en Corral; herdr mantiene tus colores de [theme.custom]"));
         }
         return Ok(());
     }
-    let allowed: &[(&str, &[&str])] = &[("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["derecha", "libre"]),
+    let allowed: &[(&str, &[&str])] = &[("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"])];
     if let Some((_, values)) = allowed.iter().find(|(k, _)| k == key) {
         if !values.contains(&value.as_str()) {
             let mut v = values.to_vec();
             v.sort();
-            return Err(format!("{key} acepta: {}", v.join(", ")));
+            return Err(trf!("{key} takes: {}", "{key} acepta: {}", v.join(", ")));
         }
     }
     cfg.set(key, value.as_str().into());

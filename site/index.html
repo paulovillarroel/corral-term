@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corral: the agentic Data Science IDE for R and Python</title>
+<meta name="description" content="Corral is an IDE that lives in your terminal, built with modern technology around the data science workflow: script editor, live console, variables, tables and plots for R and Python, next to your AI agents. Written in Rust, with DuckDB for your data, and ready in milliseconds.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="./">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">agentic Data Science IDE</span>
+  </a>
+  <nav class="nav">
+    <a href="docs/">Docs</a>
+    <a class="hide-sm" href="docs/performance.html">Performance</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="docs/install.html">Install</a>
+  </nav>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <div class="eyebrow">R and Python · in your terminal</div>
+      <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
+      <p class="lead">Corral is an IDE that lives in your terminal, built with modern technology around the data science workflow: write, run, explore your data, plot. For R and Python, blazing fast with massive data, ready for professional work and ready to run with your agents.</p>
+      <div class="os-tabs" role="tablist" aria-label="Your system">
+        <button type="button" role="tab" data-os="linux" aria-selected="true">Linux</button>
+        <button type="button" role="tab" data-os="wsl" aria-selected="false">Windows (WSL)</button>
+      </div>
+      <div class="install">
+        <code>curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh</code>
+        <button class="copy" type="button">Copy</button>
+      </div>
+      <div class="os-notes">
+        <p class="os-note" data-for="linux">Checks everything first, changes nothing until it's all there, never uses sudo.</p>
+        <p class="os-note" data-for="wsl" aria-hidden="true">Run it in your WSL terminal (Ubuntu). macOS isn't supported yet.</p>
+      </div>
+      <div class="meta"><a href="docs/install.html#before-you-install">What you need</a><a href="docs/quickstart.html">Quick start</a><a href="docs/">Read the docs</a></div>
+    </div>
+    <div class="hero-shot">
+      <div class="mock" role="img" aria-label="A Corral layout: Claude Code on the left; on the right, the script editor, the R console and the variables pane">
+    <div class="tabs"><span>1</span><span class="on">corral</span><span>+</span></div>
+    <div class="grid">
+      <div class="pane focus"><span class="title">claude</span><svg class="critter" viewBox="0 0 18 6" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="1" height="1"/><rect x="3" y="1" width="1" height="1"/><rect x="4" y="0" width="1" height="1"/><rect x="5" y="0" width="1" height="1"/><rect x="4" y="1" width="1" height="1"/><rect x="6" y="0" width="1" height="1"/><rect x="7" y="0" width="1" height="1"/><rect x="6" y="1" width="1" height="1"/><rect x="7" y="1" width="1" height="1"/><rect x="8" y="0" width="1" height="1"/><rect x="9" y="0" width="1" height="1"/><rect x="8" y="1" width="1" height="1"/><rect x="9" y="1" width="1" height="1"/><rect x="10" y="0" width="1" height="1"/><rect x="11" y="0" width="1" height="1"/><rect x="10" y="1" width="1" height="1"/><rect x="11" y="1" width="1" height="1"/><rect x="12" y="0" width="1" height="1"/><rect x="13" y="0" width="1" height="1"/><rect x="13" y="1" width="1" height="1"/><rect x="14" y="0" width="1" height="1"/><rect x="14" y="1" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/><rect x="3" y="2" width="1" height="1"/><rect x="3" y="3" width="1" height="1"/><rect x="4" y="2" width="1" height="1"/><rect x="5" y="2" width="1" height="1"/><rect x="4" y="3" width="1" height="1"/><rect x="5" y="3" width="1" height="1"/><rect x="6" y="2" width="1" height="1"/><rect x="7" y="2" width="1" height="1"/><rect x="6" y="3" width="1" height="1"/><rect x="7" y="3" width="1" height="1"/><rect x="8" y="2" width="1" height="1"/><rect x="9" y="2" width="1" height="1"/><rect x="8" y="3" width="1" height="1"/><rect x="9" y="3" width="1" height="1"/><rect x="10" y="2" width="1" height="1"/><rect x="11" y="2" width="1" height="1"/><rect x="10" y="3" width="1" height="1"/><rect x="11" y="3" width="1" height="1"/><rect x="12" y="2" width="1" height="1"/><rect x="13" y="2" width="1" height="1"/><rect x="12" y="3" width="1" height="1"/><rect x="13" y="3" width="1" height="1"/><rect x="14" y="2" width="1" height="1"/><rect x="15" y="2" width="1" height="1"/><rect x="14" y="3" width="1" height="1"/><rect x="16" y="2" width="1" height="1"/><rect x="4" y="4" width="1" height="1"/><rect x="6" y="4" width="1" height="1"/><rect x="11" y="4" width="1" height="1"/><rect x="13" y="4" width="1" height="1"/></svg>           <b class="c-fg">Claude Code</b> <span class="c-mut">v2.1.330</span>
+           <span class="c-mut">Opus 5.5 · Claude Max</span>
+           <span class="c-mut">~/projects/sales</span>
+
+<span class="c-acc">›</span> <span class="c-fg">fit revenue by region and plot it</span>
+
+<span class="c-fg">●</span> I'll run it in your R console, so the
+  objects stay in your session.
+
+<span class="c-2">●</span> <b class="c-fg">Bash</b>(corral eval 'fit &lt;- lm(revenue ~ region,
+     data = sales); summary(fit)$r.squared')
+  <span class="c-dim">⎿</span>  [1] 0.83
+
+<span class="c-fg">●</span> Done. <span class="c-4">fit</span> is in your session (R² 0.83)
+  and the plot is open in Mirador.
+
+<span class="c-acc">›</span> <span class="c-fg">█</span>
+
+<span class="c-mut">  ⏵⏵ auto mode on (shift+tab to cycle)</span></div>
+      <div class="col">
+        <div class="pane"><span class="title">corral:script</span><span class="c-mut"> File  Edit  View  Go  LSP  Help</span>
+ <b class="c-fg">sales.R</b> <span class="c-dim">×</span>
+<span class="c-dim">  1</span>  <span class="c-5">library</span>(dplyr)
+<span class="c-dim">  2</span>  sales <span class="c-mut">&lt;-</span> <span class="c-5">read.csv</span>(<span class="c-2">"sales.csv"</span>)
+<span class="c-dim">  3</span>
+<span class="c-dim">  4</span>  sales <span class="c-mut">|&gt;</span>
+<span class="c-dim">  5</span>    <span class="c-4">group_by</span>(region) <span class="c-mut">|&gt;</span>
+<span class="c-dim">  6</span>    <span class="c-4">summarise</span>(revenue <span class="c-mut">=</span> <span class="c-4">sum</span>(amount))
+<span class="c-dim">  7</span>  <span class="c-fg">█</span>
+<span class="c-mut"> Ln 7, Col 1    R    LSP (on)</span></div>
+        <div class="pane"><span class="title">corral:r</span><span class="c-mut">In [</span><span class="c-acc">3</span><span class="c-mut">]:</span> sales |&gt; group_by(region) |&gt; summarise(...)
+<span class="c-dim"># A tibble: 4 × 2</span>
+  region revenue
+<span class="c-dim">  &lt;chr&gt;    &lt;dbl&gt;</span>
+<span class="c-dim">1</span> North    1234.
+<span class="c-dim">2</span> South     980.
+<span class="c-mut">In [</span><span class="c-acc">4</span><span class="c-mut">]:</span> </div>
+        <div class="pane"><span class="title">corral:vars</span><span class="c-acc">▸▸</span> <b class="c-fg">Variables</b>  <span class="c-mut">R 4.6.1 · ~/projects/sales</span>
+ <span class="c-acc">Data 1</span>  <span class="c-mut">Plots 1   Values 1   Functions 0</span>
+<span class="c-4"> sales</span>   data.frame  1,204 × 6   <span class="c-mut">72 KB</span>
+<span class="c-4"> fit  </span>   lm                      <span class="c-mut">38 KB</span>
+<span class="c-4"> p    </span>   ggplot                  <span class="c-mut">12 KB</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="shot-caption">Your agent on the left; the script, a live R console and your objects on the right, all in one session.</p>
+    </div>
+  </div>
+</section>
+
+<section class="stats-band" aria-label="Measured against Positron on the same machine">
+  <div class="wrap stats">
+    <div><b>0.45 s</b><span>From launch to R ready</span><small>Positron: 13.3 s</small></div>
+    <div><b>155 MB</b><span>Memory in use</span><small>Positron: 3.2 GB</small></div>
+    <div><b>0.36 %</b><span>Idle CPU</span><small>Positron: 13.9 %</small></div>
+    <div><b>~5 ms</b><span>Ctrl+R to result</span><small>in your live console</small></div>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="section-label"><span>The data science workflow, in your terminal</span><span>ctrl+b a</span></div>
+
+  <article class="feature">
+    <div class="n">01</div>
+    <div><h3><a href="docs/performance.html">Rust, end to end.</a></h3>
+      <p>Corral is one small Rust binary with no dependencies: the layout, the consoles, the variables pane, the table viewer, the shortcut palette, Mirador's server and the installer. The engines it drives are Rust too: herdr, Fresh, Ark, Air, Ruff, ty and uv. That's why a whole workspace, editor and language server included, is ready in about 400 milliseconds.</p></div>
+    <div class="card">
+      <div class="row"><span>layout created</span><span>31 ms</span></div>
+      <div class="row"><span>R console ready</span><span>0.39–0.45 s</span></div>
+      <div class="row"><span>each corral process</span><span>2–3 MB</span></div>
+      <div class="row"><span>whole workspace</span><span>155 MB</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">02</div>
+    <div><h3><a href="docs/editor.html">Write and run, like an IDE.</a></h3>
+      <p><kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line or the selection, <kbd>F5</kbd> the whole file. Completion knows the objects in your live session, Air formats R on save, and every draft is thrown away unless you save it.</p></div>
+    <div class="card">
+      <div class="row"><span>Ctrl+R</span><span>run line or selection</span></div>
+      <div class="row"><span>F5</span><span>run the file</span></div>
+      <div class="row"><span>Ctrl+L / Ctrl+U</span><span>insert &lt;- / |&gt;</span></div>
+      <div class="row"><span>ctrl+b t</span><span>expand script or console</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">03</div>
+    <div><h3><a href="docs/data.html">Big tables, instantly. DuckDB under the hood.</a></h3>
+      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. Ten million rows show up in about 34 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
+    <div class="card">
+      <div class="row"><span>10,000,000 rows</span><span>first screen in 34 ms</span></div>
+      <div class="row"><span>memory</span><span>~3 MB</span></div>
+      <div class="row"><span>f</span><span>mpg &gt; 20 &amp; cyl == 6, or SQL</span></div>
+      <div class="row"><span>i</span><span>SUMMARIZE every column</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">04</div>
+    <div><h3><a href="docs/plots.html">Plots that keep up.</a></h3>
+      <p>Mirador shows each new plot about 80 ms after the command that drew it, sized to the window, with its history, SVG or PNG download and a copy button for emails and documents.</p></div>
+    <div class="card">
+      <div class="row"><span><span class="dot" style="background:var(--ok)"></span>new plot</span><span>~80 ms</span></div>
+      <div class="row"><span>← →</span><span>history</span></div>
+      <div class="row"><span>c</span><span>copy as PNG</span></div>
+      <div class="row"><span>100k points</span><span>7.1 MB SVG → 0.7 MB PNG</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">05</div>
+    <div><h3><a href="docs/agents.html">Built for working with agents.</a></h3>
+      <p>Any agent (Claude Code, Codex, Gemini, opencode…) runs R and Python in your console with <code>corral eval</code> and gets back what it printed, plots included. Corral's skill follows the open Agent Skills standard, so agents know how to use it. Objects stay in your session, where you can see them, instead of in a throwaway script.</p></div>
+    <div class="card">
+      <div class="row"><span>$ corral eval 'nrow(sales)'</span><span></span></div>
+      <div class="row"><span>[1] 1204</span><span>20–40 ms</span></div>
+      <div class="row"><span><span class="dot" style="background:var(--busy)"></span>one request at a time</span><span>agents queue</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">06</div>
+    <div><h3><a href="docs/layouts.html">Close the terminal, lose nothing.</a></h3>
+      <p>Corral lives in <a href="https://herdr.dev/tui/">herdr</a>: your consoles keep running when the window closes, and the workspace is exactly where you left it. Two layouts, focused on the agent or on the code, one key apart.</p></div>
+    <div class="card">
+      <div class="row"><span>ctrl+b a</span><span>layout, agent first</span></div>
+      <div class="row"><span>ctrl+b shift+a</span><span>layout, code first</span></div>
+      <div class="row"><span>ctrl+b space</span><span>every shortcut</span></div>
+    </div>
+  </article>
+
+  <section class="showcase split" id="tables">
+    <div class="show-text">
+      <div class="section-label"><span>Table viewer</span><span>View(df)</span></div>
+      <h2>Ten million rows, on screen in 34 ms.</h2>
+      <p><code>View(df)</code> opens the table in a pane right next to your console. Corral never loads it whole: DuckDB reads the Parquet file and returns only the rows you're looking at, so scrolling, sorting, searching and filtering stay instant at any size.</p>
+      <p>Want more room? Press <kbd>m</kbd> and the same table opens in Mirador, in your browser. Only when you ask: the terminal stays the default.</p>
+      <div class="card">
+        <div class="row"><span>10,000,000 rows</span><span>first screen in 34 ms</span></div>
+        <div class="row"><span>a page from the middle</span><span>30 ms</span></div>
+        <div class="row"><span>sort every row by a column</span><span>60 ms</span></div>
+        <div class="row"><span>the viewer itself</span><span>~3 MB of memory</span></div>
+      </div>
+    </div>
+    <figure class="tui-shot" role="img" aria-label="Corral's table viewer showing a 10,000,000-row sales table with its column types and the keys at the bottom">
+      <div class="tui-bar"><span>table: sales</span><span>sales.parquet · 176 MB</span></div>
+      <pre> <span style="color:#ffc799;">▸▸</span> <span style="color:#ffffff;font-weight:700;">sales</span>                                                                           <span style="color:#a0a0a0;">10,000,000 rows · 7 columns</span>
+
+          <span style="color:#ffc799;background:#343434;font-weight:700;"> order_id</span>  <span style="color:#ffffff;font-weight:700;">date      </span>  <span style="color:#ffffff;font-weight:700;">region </span>  <span style="color:#ffffff;font-weight:700;">product </span>  <span style="color:#ffffff;font-weight:700;"> units</span>  <span style="color:#ffffff;font-weight:700;">  price</span>  <span style="color:#ffffff;font-weight:700;"> revenue</span>
+          <span style="color:#5c5c5c;">  integer  date        varchar  varchar   integ…   double    double  </span>
+
+<span style="color:#5c5c5c;background:#343434;">        1</span> <span style="color:#ffc799;">        1</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">2025-12-09</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">East   </span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">Headset </span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;">     7</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;"> 241.42</span><span style="background:#343434;">  </span><span style="color:#ffffff;background:#343434;"> 1689.94</span><span style="background:#343434;">                                   </span>
+<span style="color:#5c5c5c;">        2</span> <span style="color:#ffffff;">        2</span>  <span style="color:#ffffff;">2024-09-14</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 848.36</span>  <span style="color:#ffffff;"> 2545.08</span>
+<span style="color:#5c5c5c;">        3</span> <span style="color:#ffffff;">        3</span>  <span style="color:#ffffff;">2024-08-17</span>  <span style="color:#ffffff;">East   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">    11</span>  <span style="color:#ffffff;">1335.13</span>  <span style="color:#ffffff;">14686.43</span>
+<span style="color:#5c5c5c;">        4</span> <span style="color:#ffffff;">        4</span>  <span style="color:#ffffff;">2024-10-07</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Headset </span>  <span style="color:#ffffff;">     1</span>  <span style="color:#ffffff;">1231.24</span>  <span style="color:#ffffff;"> 1231.24</span>
+<span style="color:#5c5c5c;">        5</span> <span style="color:#ffffff;">        5</span>  <span style="color:#ffffff;">2025-12-03</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Laptop  </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 650.69</span>  <span style="color:#ffffff;"> 1952.07</span>
+<span style="color:#5c5c5c;">        6</span> <span style="color:#ffffff;">        6</span>  <span style="color:#ffffff;">2025-07-07</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Webcam  </span>  <span style="color:#ffffff;">     2</span>  <span style="color:#ffffff;"> 716.53</span>  <span style="color:#ffffff;"> 1433.06</span>
+<span style="color:#5c5c5c;">        7</span> <span style="color:#ffffff;">        7</span>  <span style="color:#ffffff;">2025-03-28</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     5</span>  <span style="color:#ffffff;">  532.7</span>  <span style="color:#ffffff;">  2663.5</span>
+<span style="color:#5c5c5c;">        8</span> <span style="color:#ffffff;">        8</span>  <span style="color:#ffffff;">2024-09-05</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">     1</span>  <span style="color:#ffffff;"> 657.58</span>  <span style="color:#ffffff;">  657.58</span>
+<span style="color:#5c5c5c;">        9</span> <span style="color:#ffffff;">        9</span>  <span style="color:#ffffff;">2025-09-22</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">    11</span>  <span style="color:#ffffff;"> 559.68</span>  <span style="color:#ffffff;"> 6156.48</span>
+<span style="color:#5c5c5c;">       10</span> <span style="color:#ffffff;">       10</span>  <span style="color:#ffffff;">2025-12-29</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">    10</span>  <span style="color:#ffffff;"> 690.15</span>  <span style="color:#ffffff;">  6901.5</span>
+<span style="color:#5c5c5c;">       11</span> <span style="color:#ffffff;">       11</span>  <span style="color:#ffffff;">2025-03-30</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Dock    </span>  <span style="color:#ffffff;">     9</span>  <span style="color:#ffffff;"> 791.22</span>  <span style="color:#ffffff;"> 7120.98</span>
+<span style="color:#5c5c5c;">       12</span> <span style="color:#ffffff;">       12</span>  <span style="color:#ffffff;">2025-04-26</span>  <span style="color:#ffffff;">Central</span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     2</span>  <span style="color:#ffffff;"> 534.37</span>  <span style="color:#ffffff;"> 1068.74</span>
+<span style="color:#5c5c5c;">       13</span> <span style="color:#ffffff;">       13</span>  <span style="color:#ffffff;">2025-10-22</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     4</span>  <span style="color:#ffffff;">1092.59</span>  <span style="color:#ffffff;"> 4370.36</span>
+<span style="color:#5c5c5c;">       14</span> <span style="color:#ffffff;">       14</span>  <span style="color:#ffffff;">2025-07-17</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     8</span>  <span style="color:#ffffff;"> 106.77</span>  <span style="color:#ffffff;">  854.16</span>
+<span style="color:#5c5c5c;">       15</span> <span style="color:#ffffff;">       15</span>  <span style="color:#ffffff;">2024-06-04</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Webcam  </span>  <span style="color:#ffffff;">    12</span>  <span style="color:#ffffff;">1068.48</span>  <span style="color:#ffffff;">12821.76</span>
+<span style="color:#5c5c5c;">       16</span> <span style="color:#ffffff;">       16</span>  <span style="color:#ffffff;">2024-06-30</span>  <span style="color:#ffffff;">East   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     7</span>  <span style="color:#ffffff;">1485.02</span>  <span style="color:#ffffff;">10395.14</span>
+<span style="color:#5c5c5c;">       17</span> <span style="color:#ffffff;">       17</span>  <span style="color:#ffffff;">2024-06-13</span>  <span style="color:#ffffff;">North  </span>  <span style="color:#ffffff;">Headset </span>  <span style="color:#ffffff;">     8</span>  <span style="color:#ffffff;">1421.45</span>  <span style="color:#ffffff;"> 11371.6</span>
+<span style="color:#5c5c5c;">       18</span> <span style="color:#ffffff;">       18</span>  <span style="color:#ffffff;">2025-04-22</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Keyboard</span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;">  688.5</span>  <span style="color:#ffffff;">  2065.5</span>
+<span style="color:#5c5c5c;">       19</span> <span style="color:#ffffff;">       19</span>  <span style="color:#ffffff;">2024-01-11</span>  <span style="color:#ffffff;">South  </span>  <span style="color:#ffffff;">Mouse   </span>  <span style="color:#ffffff;">     5</span>  <span style="color:#ffffff;">1734.62</span>  <span style="color:#ffffff;">  8673.1</span>
+<span style="color:#5c5c5c;">       20</span> <span style="color:#ffffff;">       20</span>  <span style="color:#ffffff;">2024-08-25</span>  <span style="color:#ffffff;">West   </span>  <span style="color:#ffffff;">Monitor </span>  <span style="color:#ffffff;">     3</span>  <span style="color:#ffffff;"> 1070.4</span>  <span style="color:#ffffff;">  3211.2</span>
+ <span style="color:#5c5c5c;">/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Sh…</span></pre>
+    </figure>
+  </section>
+
+  <section class="showcase" id="mirador">
+    <div class="mirador-grid">
+      <div class="show-text">
+        <div class="section-label"><span>Mirador</span><span>ctrl+b f</span></div>
+        <h2>Mirador: every plot, a glance away.</h2>
+        <p>Corral's viewer in the browser, served by the <code>corral</code> binary itself. Every plot from R or Python lands here about 80 ms after the command that drew it, sized to the window, with the session's history underneath.</p>
+        <ul class="points">
+          <li><b>~80 ms</b><span>from the command to the plot on screen</span></li>
+          <li><b>History</b><span>every plot of the session, <kbd>←</kbd> <kbd>→</kbd></span></li>
+          <li><b>SVG, PNG, copy</b><span>straight into emails and documents</span></li>
+          <li><b>Tables too</b><span>when you send them (<kbd>m</kbd>, or <code>View(df, mirador = TRUE)</code>), with the same search, filters and keys as the terminal</span></li>
+        </ul>
+      </div>
+      <figure class="browser">
+        <div class="browser-bar"><i></i><i></i><i></i><span>127.0.0.1 · Mirador</span></div>
+        <img src="assets/shots/mirador-plots.webp" width="2880" height="1800" loading="lazy" alt="Mirador showing a ggplot2 scatter plot of the Palmer penguins, flipper length against body mass by species, with the session's plot history below">
+      </figure>
+    </div>
+  </section>
+
+  <section class="showcase split" id="palette">
+    <div class="show-text">
+      <div class="section-label"><span>Command palette</span><span>ctrl+b space</span></div>
+      <h2>Every shortcut and action, one key away.</h2>
+      <p><kbd>ctrl+b</kbd> <kbd>space</kbd> opens Corral's palette from any pane: every shortcut and action in one searchable list, from the layouts to the editor, the consoles, the tables and Mirador. Type a few letters, press <kbd>Enter</kbd>, and it runs.</p>
+      <p>It reads your actual configuration, so it shows your keys after you change them. Themes and the language are in it too.</p>
+      <div class="card">
+        <div class="row"><span>ctrl+b space</span><span>open it from any pane</span></div>
+        <div class="row"><span>type</span><span>search names and keys</span></div>
+        <div class="row"><span>Enter</span><span>run the action</span></div>
+        <div class="row"><span>corral keys --change</span><span>rebind a shortcut</span></div>
+      </div>
+    </div>
+    <figure class="tui-shot" role="img" aria-label="Corral's palette: 66 shortcuts grouped as Layouts, In any pane and Script editor, each with its keys">
+      <div class="tui-bar"><span>Corral: shortcuts</span><span>66 shortcuts</span></div>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#5c5c5c;">Search for a shortcut or an action…</span>                                                <span style="color:#5c5c5c;">66 shortcuts</span>
+<span style="color:#5c5c5c;">────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+  <span style="color:#a0a0a0;font-weight:700;">LAYOUTS</span>
+<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Layout, agent first </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                                                  </span><span style="color:#ffc799;background:#343434;">ctrl+b a</span><span style="background:#343434;">  </span>
+   <span style="color:#ffffff;">Layout, code first</span>                                                               <span style="color:#ffc799;">ctrl+b shift+a</span>
+
+  <span style="color:#a0a0a0;font-weight:700;">IN ANY PANE (HERDR)</span>
+   <span style="color:#ffffff;">Send the selection to the console (R or Python)</span>                                    <span style="color:#ffc799;">ctrl+b enter</span>
+   <span style="color:#ffffff;">Use this pane as the console</span>                                                           <span style="color:#ffc799;">ctrl+b m</span>
+   <span style="color:#ffffff;">Close (keeps the agent and the rest of the tab)</span>                                  <span style="color:#ffc799;">ctrl+b shift+c</span>
+   <span style="color:#ffffff;">Expand the script (or agent) or the console</span>                                            <span style="color:#ffc799;">ctrl+b t</span>
+   <span style="color:#ffffff;">R or Python console</span>                                                                    <span style="color:#ffc799;">ctrl+b y</span>
+   <span style="color:#ffffff;">Show the plots</span>                                                                         <span style="color:#ffc799;">ctrl+b f</span>
+   <span style="color:#ffffff;">Show the variables</span>                                                                     <span style="color:#ffc799;">ctrl+b d</span>
+   <span style="color:#ffffff;">Open Mirador (plots and tables in the browser)</span>                                   <span style="color:#ffc799;">ctrl+b shift+m</span>
+   <span style="color:#ffffff;">Shortcuts and actions (palette)</span>                                                    <span style="color:#ffc799;">ctrl+b space</span>
+   <span style="color:#ffffff;">Add the script editor above the console</span>
+   <span style="color:#ffffff;">Dark 2026 theme (VS Code&#x27;s and Positron&#x27;s)</span>
+   <span style="color:#ffffff;">Back to herdr&#x27;s theme</span>
+   <span style="color:#ffffff;">Language: English</span>
+   <span style="color:#ffffff;">Idioma: español</span>
+   <span style="color:#ffffff;">All of herdr&#x27;s shortcuts (panes, tabs, workspaces)</span>                                     <span style="color:#ffc799;">ctrl+b ?</span>
+
+  <span style="color:#a0a0a0;font-weight:700;">SCRIPT EDITOR</span>
+   <span style="color:#ffffff;">Save (a draft asks where)</span>                                                                <span style="color:#ffc799;">ctrl+s</span>
+   <span style="color:#ffffff;">Run the line or the selection</span>                                     <span style="color:#ffc799;">ctrl+r  ctrl+enter  alt+enter</span>
+   <span style="color:#ffffff;">Run the whole file</span>                                                         <span style="color:#ffc799;">F5  ctrl+shift+enter</span>
+   <span style="color:#ffffff;">Insert &lt;-</span>                                                                         <span style="color:#ffc799;">ctrl+l  alt+-</span>
+   <span style="color:#ffffff;">Insert |&gt;</span>                                                                  <span style="color:#ffc799;">ctrl+u  ctrl+shift+m</span>
+   <span style="color:#ffffff;">Comment or uncomment</span>                                                       <span style="color:#ffc799;">ctrl+/  ctrl+shift+c</span>
+   <span style="color:#ffffff;">Autocomplete</span>                                                                         <span style="color:#ffc799;">ctrl+space</span>
+   <span style="color:#ffffff;">Editor&#x27;s command palette (all its actions)</span>                                               <span style="color:#ffc799;">ctrl+p</span>
+
+ <span style="color:#5c5c5c;">↑↓ select · Enter run · Esc close · type to search</span></pre>
+    </figure>
+  </section>
+
+  <section class="compare">
+    <h2>Measured, not promised.</h2>
+    <p>Same machine, same project, R in WSL, two runs each. Positron is a capable IDE; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. <a href="docs/performance.html">How it was measured →</a></p>
+    <picture data-themed>
+      <source srcset="assets/charts/vs-positron-dark.svg" media="(prefers-color-scheme: dark)">
+      <img src="assets/charts/vs-positron-light.svg" width="760" alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB; 0.36 % idle CPU vs 13.9 %">
+    </picture>
+  </section>
+
+  <section class="cta">
+    <h2>One line to install. It checks everything first.</h2>
+    <p>The installer tells you what's missing and what to run, and changes nothing until everything is there. No sudo; every file it touches is backed up, and <code>corral uninstall</code> takes it all out again.</p>
+    <div class="install">
+      <code>curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh</code>
+      <button class="copy" type="button">Copy</button>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <div class="section-label"><span>FAQ</span><span>questions</span></div>
+    <h2>Questions people ask.</h2>
+    <details>
+      <summary>Which agents does it work with?</summary>
+      <p>Any agent that can run shell commands: Claude Code, Codex, Gemini CLI, opencode and others. They run code in your console with <code>corral eval</code>, and Corral's skill follows the open Agent Skills standard, so the installer puts it where they look for it (<code>~/.agents/skills</code>, and <code>~/.claude/skills</code> for Claude Code).</p>
+    </details>
+    <details>
+      <summary>Does it replace Positron, RStudio or VS Code?</summary>
+      <p>No. Positron, RStudio, VS Code and its forks (Cursor, Windsurf…) are still the right tools for heavier work, and Corral doesn't touch them. Corral is for working with agents on your data without losing control of the data or the code: the agent runs its code in your console, where you watch every line, and what it creates stays in your session, in plain sight.</p>
+      <p>None of them has to be installed: Corral runs R on Ark, the kernel Positron uses, on its own, and the installer downloads it.</p>
+    </details>
+    <details>
+      <summary>Is Python as complete as R?</summary>
+      <p>Both get the whole workbench: the editor, the console, the variables pane, <code>View()</code>, plots in Mirador and agents. R is the default console, and its language server knows your live objects. Python runs in IPython inside your project's uv environment, with ty and Ruff in the editor.</p>
+    </details>
+    <details>
+      <summary>How big can my data be?</summary>
+      <p>Looking at it scales: <code>View()</code> hands the table to DuckDB, which reads only what's on screen, so ten million rows show up in about 34 ms. Computing is up to your code, as in any IDE: data frames live in memory, while arrow, duckdb, polars or data.table let you go further.</p>
+    </details>
+    <details>
+      <summary>Does it run on macOS or Windows?</summary>
+      <p>On Linux, and on Windows through WSL. macOS isn't supported yet.</p>
+    </details>
+    <details>
+      <summary>Does my data leave my machine?</summary>
+      <p>Corral runs everything locally. Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does; Corral sends nothing anywhere.</p>
+    </details>
+    <details>
+      <summary>Can I use it in Spanish?</summary>
+      <p>Yes. Corral speaks English by default; <code>corral config language es</code>, or "Corral: idioma: español" in the palette, switches its windows, messages and Mirador to Spanish. Commands stay in English.</p>
+    </details>
+    <details>
+      <summary>How do I remove it?</summary>
+      <p><code>corral uninstall</code> takes out everything the installer added, from herdr, R, the editor and your agents. The copies of the files it changed stay, in case you want them.</p>
+    </details>
+  </section>
+</div>
+</main>
+
+<footer class="foot">
+  <span>Corral · R and Python, in Rust, with DuckDB</span>
+  <span><a href="docs/">Docs</a><a href="docs/install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a><a href="https://herdr.dev/tui/">herdr</a></span>
+</footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@
 use crate::console;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
 use crate::mirador::{plots_json, plots_raw};
 use std::fs::File;
@@ -32,7 +33,10 @@ struct Opts {
     replace: bool,
 }
 
-const USAGE: &str = "uso: corral eval [--lang r|python] [--file ARCHIVO] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--reemplazar] [CÓDIGO…]";
+fn usage() -> &'static str {
+    tr("usage: corral eval [--lang r|python] [--file FILE] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CODE…]",
+       "uso: corral eval [--lang r|python] [--file ARCHIVO] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CÓDIGO…]")
+}
 
 fn parse(args: &[String]) -> Opts {
     let mut o = Opts { code: Vec::new(), lang: "r".into(), file: None, timeout: 300.0, wait_idle: 20.0,
@@ -46,7 +50,7 @@ fn parse(args: &[String]) -> Opts {
         }
         let mut value = |name: &str| -> String {
             it.next().cloned().unwrap_or_else(|| {
-                eprintln!("corral eval: falta el valor de {name}");
+                eprintln!("corral eval: {}", trf!("{name} needs a value", "falta el valor de {name}"));
                 std::process::exit(2)
             })
         };
@@ -58,17 +62,20 @@ fn parse(args: &[String]) -> Opts {
             "--wait-idle" => o.wait_idle = value("--wait-idle").parse().unwrap_or(20.0),
             "--max-chars" => o.max_chars = value("--max-chars").parse().unwrap_or(20000),
             "--check" => o.check = true,
-            "--reemplazar" => o.replace = true,
+            "--replace" => o.replace = true,
             "-h" | "--help" => {
-                println!("{USAGE}");
+                println!("{}", usage());
                 std::process::exit(0)
             }
-            s if s.starts_with("--") => fail(2, &format!("opción desconocida {s}\n{USAGE}")),
+            s if s.starts_with("--") => {
+                let usage = usage();
+                fail(2, &trf!("unknown option {s}\n{usage}", "opción desconocida {s}\n{usage}"))
+            }
             _ => o.code.push(a.clone()),
         }
     }
     if o.lang != "r" && o.lang != "python" {
-        fail(2, USAGE);
+        fail(2, usage());
     }
     o
 }
@@ -84,7 +91,9 @@ fn clip_output(text: &str, limit: usize, full: &Path) -> String {
     }
     let head: String = text.chars().take(limit / 2).collect();
     let tail: String = text.chars().skip(n - limit / 2).collect();
-    format!("{head}\n\n[corral] … salida recortada ({n} caracteres); completa en {} …\n\n{tail}", full.display())
+    let full = full.display();
+    trf!("{head}\n\n[corral] … output cut ({n} characters); full output in {full} …\n\n{tail}",
+         "{head}\n\n[corral] … salida recortada ({n} caracteres); completa en {full} …\n\n{tail}")
 }
 
 fn plot_ids(sid: &str) -> Vec<String> {
@@ -122,10 +131,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let _ = std::io::stdin().read_to_string(&mut s);
         s
     } else {
-        fail(1, "pasa el código como argumento, con --file o por stdin")
+        fail(1, tr("pass the code as an argument, with --file or on stdin", "pasa el código como argumento, con --file o por stdin"))
     };
     if code.trim().is_empty() {
-        fail(1, "no hay código que ejecutar");
+        fail(1, tr("no code to run", "no hay código que ejecutar"));
     }
 
     // The console has to be there, running, and in view: the usual case needs nothing;
@@ -138,7 +147,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         _ => console::ready(&o.lang).unwrap_or_else(|e| fail(1, &e)),
     };
     let session = env::session_for(&pane).unwrap_or_else(|| {
-        fail(1, &console::session(&o.lang, ws.as_deref()).err().unwrap_or_else(|| "la consola no tiene Corral activo".into()))
+        fail(1, &console::session(&o.lang, ws.as_deref()).err()
+            .unwrap_or_else(|| tr("the console does not have Corral active", "la consola no tiene Corral activo").into()))
     });
     let sdir = PathBuf::from(session.get("dir").str().unwrap_or(""));
     let sid = session.get("id").str().unwrap_or("").to_string();
@@ -151,7 +161,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // SAFETY: flock on a file we keep open; released when the process ends.
     while unsafe { flock(lock.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
         if Instant::now() > give_up {
-            fail(2, "otra petición sigue corriendo en esta consola");
+            fail(2, tr("another request is still running in this console", "otra petición sigue corriendo en esta consola"));
         }
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -182,18 +192,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let output = std::fs::read(&out_file).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
     if !result_file.exists() {
         println!("{}", clip_output(&output, o.max_chars, &out_file));
-        println!("\n[corral] sigue corriendo después de {:.0} s; la salida completa quedará en {}", o.timeout, out_file.display());
+        let (secs, file) = (o.timeout, out_file.display());
+        println!("\n{}", trf!("[corral] still running after {secs:.0} s; the full output will be in {file}",
+                                "[corral] sigue corriendo después de {secs:.0} s; la salida completa quedará en {file}"));
         std::process::exit(2);
     }
     let result = std::fs::read_to_string(&result_file).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::obj());
     println!("{}", clip_output(output.trim_end(), o.max_chars, &out_file));
     for w in result.get("warnings").arr() {
         if let Some(w) = w.str() {
-            println!("[corral] advertencia: {w}");
+            println!("{}", trf!("[corral] warning: {w}", "[corral] advertencia: {w}"));
         }
     }
     if result.get("status").str() == Some("expired") {
-        println!("[corral] la petición venció antes de ejecutarse");
+        println!("{}", tr("[corral] the request expired before it ran", "[corral] la petición venció antes de ejecutarse"));
         std::process::exit(2);
     }
 
@@ -229,12 +241,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let params = [("id", id.clone()), ("width", "900".into()), ("height", "600".into()), ("renderer", "png".into())];
             if let Some((bytes, _)) = plots_raw(&sid, "plot", &params) {
                 if std::fs::write(&png, bytes).is_ok() {
-                    println!("[corral] gráfico {number} guardado en {} (ctrl+b f para verlo en herdr)", png.display());
+                    let shown = png.display();
+                    println!("{}", trf!("[corral] plot {number} saved to {shown} (ctrl+b f to see it in herdr)",
+                                        "[corral] gráfico {number} guardado en {shown} (ctrl+b f para verlo en herdr)"));
                 }
             }
         }
         if removed > 0 {
-            println!("[corral] reemplazó {removed} gráfico(s) de la petición anterior; el usuario ve solo la versión nueva");
+            println!("{}", trf!("[corral] replaced {removed} plot(s) from the previous request; the user sees only the new version",
+                                "[corral] reemplazó {removed} gráfico(s) de la petición anterior; el usuario ve solo la versión nueva"));
         }
     }
     std::process::exit(if result.get("status").str() == Some("error") { 1 } else { 0 })

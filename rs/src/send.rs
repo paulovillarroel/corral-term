@@ -4,10 +4,14 @@
 use crate::console;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::Value;
 use std::io::{IsTerminal, Read};
 
-const USAGE: &str = "uso: corral send [--lang r|python] [--source] [--name ARCHIVO] [--clipboard] [CÓDIGO…]";
+fn usage() -> &'static str {
+    tr("usage: corral send [--lang r|python] [--source] [--name FILE] [--clipboard] [CODE…]",
+       "uso: corral send [--lang r|python] [--source] [--name ARCHIVO] [--clipboard] [CÓDIGO…]")
+}
 
 pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
     let mut parts: Vec<String> = Vec::new();
@@ -26,22 +30,25 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
             "--name" => name = it.next().cloned(),
             "--clipboard" => clipboard = true,
             "-h" | "--help" => {
-                println!("{USAGE}");
+                println!("{}", usage());
                 return Ok(());
             }
-            s if s.starts_with("--") => return Err(format!("opción desconocida {s}\n{USAGE}")),
+            s if s.starts_with("--") => {
+                let usage = usage();
+                return Err(trf!("unknown option {s}\n{usage}", "opción desconocida {s}\n{usage}"));
+            }
             _ => parts.push(a.clone()),
         }
     }
     if lang.as_deref().is_some_and(|l| l != "r" && l != "python") {
-        return Err(USAGE.into());
+        return Err(usage().into());
     }
 
     // Sources, in order: arguments, stdin, the herdr selection, the clipboard. herdr
     // copies a selection to the clipboard and clears it on mouse release, so from a
     // keybinding the clipboard is the usual source.
     let from_plugin = std::env::var_os("HERDR_PLUGIN_ID").is_some();
-    let (mut text, mut origin) = (parts.join(" "), "argumentos");
+    let (mut text, mut origin) = (parts.join(" "), tr("the arguments", "argumentos"));
     if text.trim().is_empty() && !from_plugin && !std::io::stdin().is_terminal() {
         text.clear();
         let _ = std::io::stdin().read_to_string(&mut text);
@@ -49,14 +56,15 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
     }
     if text.trim().is_empty() {
         text = env::plugin_context().get("selected_text").str().unwrap_or("").to_string();
-        origin = "selección";
+        origin = tr("the selection", "selección");
     }
     if text.trim().is_empty() && (from_plugin || clipboard) {
         text = env::read_clipboard();
-        origin = "portapapeles";
+        origin = tr("the clipboard", "portapapeles");
     }
     if text.trim().is_empty() {
-        env::notify("Nada que enviar", "Selecciona código (se copia solo) y vuelve a intentar");
+        env::notify(tr("Nothing to send", "Nada que enviar"),
+                    tr("Select some code (it is copied on its own) and try again", "Selecciona código (se copia solo) y vuelve a intentar"));
         return Ok(());
     }
     let text = text.trim_end().to_string();
@@ -85,7 +93,7 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
         }
         // Otherwise bring it into view, and start it if it isn't there or was quit.
         _ => console::ready(&lang).map_err(|e| {
-            env::notify("Sin consola", &e);
+            env::notify(tr("No console", "Sin consola"), &e);
             e
         })?,
     };
@@ -120,7 +128,8 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
         herdr::send_text(&pane, &format!("{text}\r"))?;
     }
     let lines = if source { 1 } else { text.lines().count().max(1) };
-    eprintln!("corral: enviado a {pane} desde {origin} ({lines} línea{})", if lines == 1 { "" } else { "s" });
+    let s = if lines == 1 { "" } else { "s" };
+    eprintln!("corral: {}", trf!("sent to {pane} from {origin} ({lines} line{s})", "enviado a {pane} desde {origin} ({lines} línea{s})"));
     Ok(())
 }
 

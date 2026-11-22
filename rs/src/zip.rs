@@ -2,6 +2,7 @@
 //! stored and deflated entries, CRC-32 checked. Inflate follows the classic
 //! "puff" decoder (zlib's reference): fixed and dynamic Huffman blocks.
 
+use crate::i18n::tr;
 use std::path::{Component, Path};
 
 struct Bits<'a> {
@@ -27,7 +28,7 @@ impl Bits<'_> {
     fn bits(&mut self, need: u32) -> Result<u32, String> {
         let mut val = self.buf;
         while self.cnt < need {
-            let byte = *self.data.get(self.pos).ok_or("zip: datos comprimidos incompletos")?;
+            let byte = *self.data.get(self.pos).ok_or_else(|| tr("zip: the compressed data is incomplete", "zip: datos comprimidos incompletos"))?;
             self.pos += 1;
             val |= u32::from(byte) << self.cnt;
             self.cnt += 8;
@@ -49,7 +50,7 @@ impl Bits<'_> {
             first = (first + count) << 1;
             code <<= 1;
         }
-        Err("zip: código de Huffman inválido".into())
+        Err(tr("zip: invalid Huffman code", "zip: código de Huffman inválido").into())
     }
 }
 
@@ -81,16 +82,16 @@ fn codes(s: &mut Bits, out: &mut Vec<u8>, lencode: &Huffman, distcode: &Huffman)
         } else {
             let i = sym - 257;
             if i >= 29 {
-                return Err("zip: largo inválido".into());
+                return Err(tr("zip: invalid length", "zip: largo inválido").into());
             }
             let len = usize::from(LBASE[i]) + s.bits(u32::from(LEXT[i]))? as usize;
             let d = s.decode(distcode)?;
             if d >= 30 {
-                return Err("zip: distancia inválida".into());
+                return Err(tr("zip: invalid distance", "zip: distancia inválida").into());
             }
             let dist = usize::from(DBASE[d]) + s.bits(u32::from(DEXT[d]))? as usize;
             if dist > out.len() {
-                return Err("zip: distancia fuera de rango".into());
+                return Err(tr("zip: distance out of range", "zip: distancia fuera de rango").into());
             }
             let start = out.len() - dist;
             for k in 0..len {
@@ -111,13 +112,13 @@ pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, String> {
                 // Stored: realign to a byte, then LEN and its complement.
                 s.buf = 0;
                 s.cnt = 0;
-                let hdr = data.get(s.pos..s.pos + 4).ok_or("zip: bloque sin cabecera")?;
+                let hdr = data.get(s.pos..s.pos + 4).ok_or_else(|| tr("zip: block without a header", "zip: bloque sin cabecera"))?;
                 let len = usize::from(u16::from_le_bytes([hdr[0], hdr[1]]));
                 if u16::from_le_bytes([hdr[2], hdr[3]]) != !(len as u16) {
-                    return Err("zip: bloque guardado inválido".into());
+                    return Err(tr("zip: invalid stored block", "zip: bloque guardado inválido").into());
                 }
                 s.pos += 4;
-                out.extend_from_slice(data.get(s.pos..s.pos + len).ok_or("zip: bloque incompleto")?);
+                out.extend_from_slice(data.get(s.pos..s.pos + len).ok_or_else(|| tr("zip: incomplete block", "zip: bloque incompleto"))?);
                 s.pos += len;
             }
             1 => {
@@ -148,7 +149,7 @@ pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, String> {
                         let (value, repeat) = match sym {
                             16 => {
                                 if index == 0 {
-                                    return Err("zip: repetición sin largo previo".into());
+                                    return Err(tr("zip: repeat with no previous length", "zip: repetición sin largo previo").into());
                                 }
                                 (lengths[index - 1], 3 + s.bits(2)? as usize)
                             }
@@ -156,7 +157,7 @@ pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, String> {
                             _ => (0, 11 + s.bits(7)? as usize),
                         };
                         if index + repeat > nlen + ndist {
-                            return Err("zip: demasiados largos".into());
+                            return Err(tr("zip: too many lengths", "zip: demasiados largos").into());
                         }
                         lengths[index..index + repeat].fill(value);
                         index += repeat;
@@ -166,7 +167,7 @@ pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, String> {
                 let distcode = huffman(&lengths[nlen..nlen + ndist]);
                 codes(&mut s, &mut out, &lencode, &distcode)?;
             }
-            _ => return Err("zip: tipo de bloque inválido".into()),
+            _ => return Err(tr("zip: invalid block type", "zip: tipo de bloque inválido").into()),
         }
         if last == 1 {
             return Ok(out);
@@ -197,20 +198,20 @@ fn u32_at(d: &[u8], i: usize) -> usize {
 /// Extract every file of the zip into `target` (never outside it). Returns the names.
 pub fn extract(zip: &[u8], target: &Path) -> Result<Vec<String>, String> {
     let eocd = (0..zip.len().saturating_sub(21)).rev().take(70_000)
-        .find(|&i| zip[i..i + 4] == [0x50, 0x4b, 0x05, 0x06]).ok_or("zip: no encontré el índice")?;
+        .find(|&i| zip[i..i + 4] == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(|| tr("zip: couldn't find the index", "zip: no encontré el índice"))?;
     let entries = u16_at(zip, eocd + 10);
     let mut p = u32_at(zip, eocd + 16);
     let mut names = Vec::new();
     for _ in 0..entries {
         if zip.get(p..p + 4) != Some(&[0x50, 0x4b, 0x01, 0x02]) {
-            return Err("zip: índice dañado".into());
+            return Err(tr("zip: damaged index", "zip: índice dañado").into());
         }
         let method = u16_at(zip, p + 10);
         let crc = u32_at(zip, p + 16) as u32;
         let (csize, usize_) = (u32_at(zip, p + 20), u32_at(zip, p + 24));
         let (nlen, elen, clen) = (u16_at(zip, p + 28), u16_at(zip, p + 30), u16_at(zip, p + 32));
         let local = u32_at(zip, p + 42);
-        let name = String::from_utf8_lossy(zip.get(p + 46..p + 46 + nlen).ok_or("zip: nombre dañado")?).into_owned();
+        let name = String::from_utf8_lossy(zip.get(p + 46..p + 46 + nlen).ok_or_else(|| tr("zip: damaged name", "zip: nombre dañado"))?).into_owned();
         p += 46 + nlen + elen + clen;
         let rel = Path::new(&name);
         if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
@@ -222,14 +223,14 @@ pub fn extract(zip: &[u8], target: &Path) -> Result<Vec<String>, String> {
             continue;
         }
         let data_at = local + 30 + u16_at(zip, local + 26) + u16_at(zip, local + 28);
-        let raw = zip.get(data_at..data_at + csize).ok_or("zip: archivo incompleto")?;
+        let raw = zip.get(data_at..data_at + csize).ok_or_else(|| tr("zip: incomplete file", "zip: archivo incompleto"))?;
         let bytes = match method {
             0 => raw.to_vec(),
             8 => inflate(raw, usize_)?,
-            m => return Err(format!("zip: método de compresión {m} no soportado")),
+            m => return Err(trf!("zip: compression method {m} isn't supported", "zip: método de compresión {m} no soportado")),
         };
         if bytes.len() != usize_ || crc32(&bytes) != crc {
-            return Err(format!("zip: {name} llegó dañado (CRC)"));
+            return Err(trf!("zip: {name} arrived damaged (CRC)", "zip: {name} llegó dañado (CRC)"));
         }
         if let Some(d) = out_path.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
@@ -243,7 +244,7 @@ pub fn extract(zip: &[u8], target: &Path) -> Result<Vec<String>, String> {
 /// Decompress a .gz file (one member, as release downloads are).
 pub fn gunzip(data: &[u8]) -> Result<Vec<u8>, String> {
     if data.len() < 18 || data[0] != 0x1f || data[1] != 0x8b || data[2] != 8 {
-        return Err("no es un archivo gzip".into());
+        return Err(tr("not a gzip file", "no es un archivo gzip").into());
     }
     let flags = data[3];
     let mut p = 10;
@@ -253,16 +254,16 @@ pub fn gunzip(data: &[u8]) -> Result<Vec<u8>, String> {
     for bit in [8u8, 16] {
         if flags & bit != 0 {
             // FNAME, FCOMMENT: zero-terminated
-            p += data.get(p..).and_then(|d| d.iter().position(|&b| b == 0)).ok_or("gzip dañado")? + 1;
+            p += data.get(p..).and_then(|d| d.iter().position(|&b| b == 0)).ok_or_else(|| tr("damaged gzip", "gzip dañado"))? + 1;
         }
     }
     if flags & 2 != 0 {
         p += 2; // FHCRC
     }
     let size = u32_at(data, data.len() - 4);
-    let out = inflate(data.get(p..data.len() - 8).ok_or("gzip dañado")?, size)?;
+    let out = inflate(data.get(p..data.len() - 8).ok_or_else(|| tr("damaged gzip", "gzip dañado"))?, size)?;
     if crc32(&out) != u32_at(data, data.len() - 8) as u32 {
-        return Err("gzip: llegó dañado (CRC)".into());
+        return Err(tr("gzip: arrived damaged (CRC)", "gzip: llegó dañado (CRC)").into());
     }
     Ok(out)
 }

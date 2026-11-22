@@ -29,7 +29,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "ruff" => tool("ruff", "ruff", &["server"], false),
         "python" if env::config().get("python_lsp").str() == Some("pylsp") => tool("python-lsp-server", "pylsp", &[], true),
         "python" => tool("ty", "ty", &["server"], true),
-        other => return Err(format!("no hay servidor de lenguaje para {other}; uso: corral _lsp r|python|ruff")),
+        other => return Err(trf!("no language server for {other}; usage: corral _lsp r|python|ruff",
+                                 "no hay servidor de lenguaje para {other}; uso: corral _lsp r|python|ruff")),
     }
     let mut conn = ark_connection();
     if conn.is_none() && console::r_flavor(&env::config()) == "ark" {
@@ -53,7 +54,7 @@ fn languageserver() -> ! {
         code = format!("options(lintr.linter_file = \"{file}\"); {code}");
     }
     let err = Command::new("R").args(["--no-echo", "--no-restore", "-e", &code]).exec();
-    eprintln!("corral: no pude iniciar el servidor de lenguaje de R: {err}");
+    eprintln!("corral: {}", trf!("could not start R's language server: {err}", "no pude iniciar el servidor de lenguaje de R: {err}"));
     std::process::exit(1)
 }
 
@@ -90,7 +91,7 @@ fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
         }
     }
     let err = cmd.exec();
-    eprintln!("corral: no pude iniciar {program}: {err}");
+    eprintln!("corral: {}", trf!("could not start {program}: {err}", "no pude iniciar {program}: {err}"));
     std::process::exit(1)
 }
 
@@ -184,7 +185,8 @@ fn bridge(connection_file: &str) -> Result<(), String> {
         ("data", obj(vec![("ip_address", "127.0.0.1".into())])),
     ]);
     zmtp::send_message(&mut shell, &conn.key, &session, "comm_open", &open).map_err(io_err)?;
-    let port = rx.recv_timeout(Duration::from_secs(30)).map_err(|_| "Ark no inició su servidor de lenguaje".to_string())?;
+    let port = rx.recv_timeout(Duration::from_secs(30))
+        .map_err(|_| crate::i18n::tr("Ark did not start its language server", "Ark no inició su servidor de lenguaje").to_string())?;
 
     // Copy bytes: editor -> Ark on a thread, Ark -> editor here.
     let lsp = TcpStream::connect(("127.0.0.1", port)).map_err(io_err)?;

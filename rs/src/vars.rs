@@ -5,18 +5,24 @@
 use crate::console;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{obj, Value};
 use crate::term::{clip, out, width, Screen};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-const TABS: [(&str, &str); 5] = [
-    ("data", "Datos"),
-    ("plotobj", "Gráficos"),
-    ("value", "Valores"),
-    ("function", "Funciones"),
-    ("other", "Otros"),
+/// The tabs: kind, English name, Spanish name.
+const TABS: [(&str, &str, &str); 5] = [
+    ("data", "Data", "Datos"),
+    ("plotobj", "Plots", "Gráficos"),
+    ("value", "Values", "Valores"),
+    ("function", "Functions", "Funciones"),
+    ("other", "Other", "Otros"),
 ];
+
+fn tab_name(i: usize) -> &'static str {
+    tr(TABS[i].1, TABS[i].2)
+}
 const LIST_TOP: usize = 5;
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
@@ -229,7 +235,8 @@ impl Viewer {
             .into_iter().filter(|x| !x.is_empty()).collect();
         let where_ = parts.join(" · ");
         let n_vars = self.items.iter().filter(|v| self.matches(v)).count();
-        let count = format!("{n_vars} objeto{}", if n_vars == 1 { "" } else { "s" });
+        let plural = if n_vars == 1 { "" } else { "s" };
+        let count = trf!("{n_vars} object{plural}", "{n_vars} objeto{plural}");
         f += &format!("\x1b[1;2H{}▸▸{RESET} {}{BOLD}Variables{RESET}  {}{}{RESET}", c.accent, c.text, c.dim,
                       clip(&where_, cols.saturating_sub(width(&count) + 19)));
         f += &format!("\x1b[1;{}H{}{count}{RESET}", cols.saturating_sub(width(&count)).max(1), c.muted);
@@ -238,9 +245,9 @@ impl Viewer {
         let mut x = 2;
         self.tab_spans.clear();
         let mut bar = String::new();
-        for (i, (_, label)) in TABS.iter().enumerate() {
+        for i in 0..TABS.len() {
             let n = self.in_tab(i).len();
-            let text = format!(" {label} {n} ");
+            let text = format!(" {} {n} ", tab_name(i));
             let piece = if i == self.tab {
                 format!("{}{}{BOLD}{text}{RESET}", c.sel_bg, c.accent)
             } else if n == 0 {
@@ -259,7 +266,11 @@ impl Viewer {
         f += &format!("\x1b[4;{a}H{}{}{RESET}", c.accent, "━".repeat(b - a + 1));
 
         if self.rev.is_none() {
-            let msg = if self.follow { "Esperando la sesión de la consola (R o Python)…" } else { "Esta sesión no publica variables." };
+            let msg = if self.follow {
+                tr("Waiting for the console's session (R or Python)…", "Esperando la sesión de la consola (R o Python)…")
+            } else {
+                tr("This session doesn't publish variables.", "Esta sesión no publica variables.")
+            };
             f += &format!("\x1b[6;3H{}{}{RESET}", c.muted, clip(msg, cols.saturating_sub(4)));
         }
 
@@ -294,52 +305,68 @@ impl Viewer {
         }
         if self.rev.is_some() && vs.is_empty() {
             let empty = if self.query.is_empty() {
-                format!("No hay {} en la sesión.", TABS[self.tab].1.to_lowercase())
+                let name = tab_name(self.tab).to_lowercase();
+                if self.tab == TABS.len() - 1 {
+                    trf!("No other objects in the session.", "No hay {name} en la sesión.")
+                } else {
+                    trf!("No {name} in the session.", "No hay {name} en la sesión.")
+                }
             } else {
-                "Ningún objeto coincide.".to_string()
+                tr("No object matches.", "Ningún objeto coincide.").to_string()
             };
             f += &format!("\x1b[{};4H{}{empty}{RESET}", LIST_TOP + 2, c.muted);
         }
 
         let kind = vs.get(self.sel).and_then(|v| v.get("kind").str()).unwrap_or("");
         let action = match kind {
-            "data" => "Enter tabla",
-            "plotobj" => "Enter dibujar",
-            _ => "Enter ver",
+            "data" => tr("Enter table · m Mirador", "Enter tabla · m Mirador"),
+            "plotobj" => tr("Enter draw", "Enter dibujar"),
+            _ => tr("Enter show", "Enter ver"),
         };
         let hint = if self.typing {
-            format!("/{}▏  ↑↓ elegir · Enter abrir · Esc terminar", self.query)
+            trf!("/{}▏  ↑↓ select · Enter open · Esc done", "/{}▏  ↑↓ elegir · Enter abrir · Esc terminar", self.query)
         } else if !self.status.is_empty() {
             self.status.clone()
         } else {
-            format!("←/→ pestañas · ↑↓ mover · {action} · / buscar{} · ctrl+b space atajos", if self.keep_open { "" } else { " · q salir" })
+            let quit = if self.keep_open { "" } else { tr(" · q quit", " · q salir") };
+            trf!("←/→ tabs · ↑↓ move · {action} · / search{quit} · ctrl+b space shortcuts",
+                 "←/→ pestañas · ↑↓ mover · {action} · / buscar{quit} · ctrl+b space atajos")
         };
         f += &format!("\x1b[{rows};1H\x1b[2K {}{}{RESET}", c.dim, clip(&hint, cols.saturating_sub(2)));
         out(&f);
     }
 
     /// Enter on an object: a table opens, a plot is drawn, anything else is shown in the console.
-    fn act(&self, v: &Value) -> String {
+    /// `m` (mirador) opens a table in Mirador instead of the terminal viewer.
+    fn act(&self, v: &Value, mirador: bool) -> String {
         let name = v.get("name").str().unwrap_or("").to_string();
         let kind = v.get("kind").str().unwrap_or("");
         let Some(dir) = &self.session else { return String::new() };
         if kind == "plotobj" {
             return format!("{name}: {}", crate::plots::show_plot_object(dir, &name));
         }
+        if mirador && kind != "data" {
+            return tr("only tables open in Mirador", "solo las tablas se abren en Mirador").into();
+        }
         let Some(pane) = self.meta.get("pane_id").str() else { return String::new() };
         let code = if self.meta.get("lang").str() == Some("python") {
             match kind {
+                "data" if mirador => format!("View({name}, mirador=True)"),
                 "data" => format!("View({name})"),
                 "function" => format!("{name}?"),
                 _ => name.clone(),
             }
         } else {
             let quoted = format!("`{}`", name.replace('`', "\\`"));
-            if kind == "data" { format!("View({quoted})") } else { format!("str({quoted})") }
+            match kind {
+                "data" if mirador => format!("View({quoted}, mirador = TRUE)"),
+                "data" => format!("View({quoted})"),
+                _ => format!("str({quoted})"),
+            }
         };
         match herdr::send_text(pane, &format!("{code}\r")) {
-            Ok(_) => format!("{code} enviado a la consola"),
-            Err(_) => "no pude enviar a la consola".into(),
+            Ok(_) => trf!("{code} sent to the console", "{code} enviado a la consola"),
+            Err(_) => tr("couldn't send it to the console", "no pude enviar a la consola").into(),
         }
     }
 }
@@ -354,7 +381,7 @@ pub fn message_screen(title: &str, body: &str) {
             last = size;
             let lines: Vec<String> = std::iter::once(format!("{}{BOLD}{title}{RESET}", c.text)).chain(std::iter::once(String::new()))
                 .chain(body.lines().map(|l| format!("{}{l}{RESET}", c.muted)))
-                .chain([String::new(), format!("{}q para cerrar{RESET}", c.dim)]).collect();
+                .chain([String::new(), format!("{}{}{RESET}", c.dim, tr("q to close", "q para cerrar"))]).collect();
             let top = size.1.saturating_sub(lines.len()) / 2;
             let mut f = String::from("\x1b[2J");
             for (i, l) in lines.iter().enumerate() {
@@ -370,7 +397,9 @@ pub fn message_screen(title: &str, body: &str) {
     }
 }
 
-const USAGE: &str = "uso: corral vars [--json [--lang r|python]] [--split] [--pane] [--inline]";
+fn usage() -> String {
+    format!("{}: corral vars [--json [--lang r|python]] [--split] [--pane] [--inline]", tr("usage", "uso"))
+}
 
 /// `corral vars`: the variables as a popup over the terminal (or here with
 /// --inline), as JSON for agents (--json), or as the layout's permanent pane
@@ -386,10 +415,10 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
             "--inline" => inline = true,
             "--lang" => lang = it.next().cloned().filter(|l| l == "r" || l == "python"),
             "-h" | "--help" => {
-                println!("{USAGE}");
+                println!("{}", usage());
                 return Ok(());
             }
-            other => return Err(format!("opción desconocida {other}\n{USAGE}")),
+            other => return Err(trf!("unknown option {other}\n{}", "opción desconocida {other}\n{}", usage())),
         }
     }
     if json {
@@ -409,7 +438,8 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
     }
     let session = if popup { std::env::var_os("CORRAL_SESSION_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) } else { None };
     if popup && session.is_none() {
-        message_screen("No hay una sesión de Corral", "Abre R o Python con ctrl+b a.");
+        message_screen(tr("There is no Corral session", "No hay una sesión de Corral"),
+                       tr("Open R or Python with ctrl+b a.", "Abre R o Python con ctrl+b a."));
         return Ok(());
     }
     let mut v = Viewer {
@@ -419,10 +449,11 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
     };
     v.load();
     v.tab = v.first_useful_tab();
-    let Some(scr) = Screen::enter(true) else { return Err("no hay una terminal".into()) };
+    let Some(scr) = Screen::enter(true) else { return Err(tr("not a terminal", "no hay una terminal").into()) };
     let mut size = scr.size();
     v.render(&scr);
     let mut last_check = Instant::now();
+    let mut spanish = crate::i18n::es();
     let mut dirty = false;
     loop {
         // Draw once the input that already arrived is handled: a burst of wheel
@@ -441,6 +472,11 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                 last_check = Instant::now();
                 let mut changed = v.load();
                 changed |= v.palette_changed();
+                // The language switched (corral config language): draw in the new one.
+                if crate::i18n::es() != spanish {
+                    spanish = !spanish;
+                    changed = true;
+                }
                 if changed {
                     if !v.tab_chosen && v.in_tab(v.tab).is_empty() {
                         v.tab = v.first_useful_tab();
@@ -465,7 +501,7 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                         let item = v.in_tab(v.tab)[v.sel].clone();
                         v.status = "…".into();
                         v.render(&scr);
-                        v.status = v.act(&item);
+                        v.status = v.act(&item, false);
                         if !v.keep_open {
                             return Ok(());
                         }
@@ -517,7 +553,7 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                             let item = v.in_tab(v.tab)[v.sel].clone();
                             v.status = "…".into();
                             v.render(&scr);
-                            v.status = v.act(&item);
+                            v.status = v.act(&item, false);
                             if !v.keep_open {
                                 return Ok(());
                             }
@@ -545,10 +581,14 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                 let item = v.in_tab(v.tab)[v.sel].clone();
                 v.status = "…".into();
                 v.render(&scr);
-                v.status = v.act(&item);
+                v.status = v.act(&item, false);
                 if !v.keep_open {
                     return Ok(());
                 }
+            }
+            "m" if v.sel < n => {
+                let item = v.in_tab(v.tab)[v.sel].clone();
+                v.status = v.act(&item, true);
             }
             _ => {}
         }
@@ -565,11 +605,12 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
         Err(_) => None,
     };
     let Some(session) = session else {
-        return Err(format!("no hay una sesión de {} con Corral", console::lang_name(lang.unwrap_or("r"))));
+        let name = console::lang_name(lang.unwrap_or("r"));
+        return Err(trf!("there is no {name} session with Corral", "no hay una sesión de {name} con Corral"));
     };
     let dir = PathBuf::from(session.get("dir").str().unwrap_or(""));
     let data = std::fs::read_to_string(dir.join("vars.json")).ok().and_then(|t| crate::json::parse(&t).ok())
-        .ok_or("esta sesión no publica variables (¿falta jsonlite?)")?;
+        .ok_or(tr("this session doesn't publish variables (is jsonlite missing?)", "esta sesión no publica variables (¿falta jsonlite?)"))?;
     let out = obj(vec![("session", session.get("id").clone()),
                        ("lang", session.get("lang").str().unwrap_or("r").into()),
                        ("console", session.get("pane_id").clone()),
@@ -581,10 +622,11 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
 /// The permanent variables pane under the R console, like Positron's Variables view.
 pub fn split_pane() -> Result<String, String> {
     let ws = env::current_workspace();
-    let console = console::find("r", ws.as_deref()).ok_or("no hay consola corral:r en este workspace")?;
+    let console = console::find("r", ws.as_deref())
+        .ok_or(tr("there is no corral:r console in this workspace", "no hay consola corral:r en este workspace"))?;
     if let Some(p) = herdr::labeled(&herdr::panes(ws.as_deref())?, "corral:vars") {
         let id = herdr::pane_id(p).to_string();
-        env::notify("Variables", &format!("ya está abierto en {id}"));
+        env::notify("Variables", &trf!("already open in {id}", "ya está abierto en {id}"));
         return Ok(id);
     }
     split_under(&console, 0.62)

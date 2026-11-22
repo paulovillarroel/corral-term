@@ -5,7 +5,9 @@
 
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
+use crate::table;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -30,6 +32,8 @@ struct App {
     last_client: f64,
     tables: Vec<Value>,
     schema: HashMap<String, Value>,
+    /// Each table's number of rows, without filters.
+    all: HashMap<String, usize>,
     show_plot: Value,
     theme_asked: Option<Instant>,
     /// Plots (session:id) whose SVG was too heavy: shown as PNG from then on.
@@ -52,7 +56,7 @@ fn tables_file() -> PathBuf {
 
 fn session_dir(sid: &str) -> Result<PathBuf, String> {
     if sid.is_empty() || !sid.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
-        return Err("sesión inválida".into());
+        return Err(tr("invalid session", "sesión inválida").into());
     }
     Ok(sessions_dir().join(sid))
 }
@@ -140,10 +144,10 @@ pub(crate) fn sql_ident(s: &str) -> String {
 
 pub(crate) fn duck(sql: &str) -> Result<Value, String> {
     let out = Command::new("duckdb").args(["-json", "-c", sql]).output()
-        .map_err(|_| "DuckDB no está en el PATH".to_string())?;
+        .map_err(|_| tr("DuckDB isn't on the PATH", "DuckDB no está en el PATH").to_string())?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return Err(if err.is_empty() { "DuckDB falló".into() } else { err });
+        return Err(if err.is_empty() { tr("DuckDB failed", "DuckDB falló").into() } else { err });
     }
     let text = String::from_utf8_lossy(&out.stdout);
     if text.trim().is_empty() { Ok(Value::Arr(Vec::new())) } else { json::parse(text.trim()) }
@@ -166,9 +170,9 @@ impl App {
     }
 
     fn table(&self, tid: &str) -> Result<Value, String> {
-        let t = self.tables.iter().find(|t| t.get("id").str() == Some(tid)).ok_or("tabla desconocida")?;
+        let t = self.tables.iter().find(|t| t.get("id").str() == Some(tid)).ok_or(tr("unknown table", "tabla desconocida"))?;
         if !Path::new(t.get("path").str().unwrap_or("")).is_file() {
-            return Err("el archivo ya no existe (¿se cerró la sesión?)".into());
+            return Err(tr("the file is gone (did the session end?)", "el archivo ya no existe (¿se cerró la sesión?)").into());
         }
         Ok(t.clone())
     }
@@ -189,31 +193,76 @@ fn schema(app: &Shared, tid: &str) -> Result<Value, String> {
     Ok(s)
 }
 
-fn rows(app: &Shared, q: &HashMap<String, String>) -> Result<Value, String> {
+/// The filters a page sends, `filters=[{"text": "mpg > 20"}, {"eq": "region", "value": "North"}]`,
+/// made the way the terminal viewer makes them: (what it shows, its SQL).
+fn conditions(q: &HashMap<String, String>, names: &[String]) -> Result<Vec<(String, String)>, String> {
+    let Some(raw) = q.get("filters").filter(|s| !s.trim().is_empty()) else { return Ok(Vec::new()) };
+    let list = json::parse(raw).map_err(|_| tr("unreadable filters", "filtros ilegibles").to_string())?;
+    Ok(list.arr().iter().map(|f| match f.get("eq").str() {
+        Some(name) => table::equal_condition(name, f.get("value")),
+        None => {
+            let text = f.get("text").str().unwrap_or("").trim().to_string();
+            let sql = if text.is_empty() { "true".to_string() } else { table::translate(&text, names) };
+            (text, sql)
+        }
+    }).collect())
+}
+
+/// A page of a table's rows, with the filters, the search and the sort of the
+/// terminal viewer (the same SQL). `count=0` skips counting (more rows of the
+/// same query). The error is the JSON reply: for a filter DuckDB rejects,
+/// "invalid filter: …" and `bad`, which one.
+fn rows(app: &Shared, q: &HashMap<String, String>) -> Result<Value, Value> {
+    let fail = |e: String| obj(vec![("error", e.into())]);
     let tid = q.get("id").map(String::as_str).unwrap_or("");
-    let table = app.lock().unwrap().table(tid)?;
-    let cols = schema(app, tid)?;
+    let table = app.lock().unwrap().table(tid).map_err(fail)?;
+    let cols = schema(app, tid).map_err(fail)?;
+    let names: Vec<String> = cols.arr().iter().map(|c| c.get("name").str().unwrap_or("").to_string()).collect();
     let src = table_source(table.get("path").str().unwrap_or(""));
-    let search = q.get("q").map(|s| s.trim().to_string()).unwrap_or_default();
-    let where_ = if search.is_empty() {
-        String::new()
-    } else {
-        let pattern = format!("%{}%", search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
-        let parts: Vec<String> = cols.arr().iter().map(|c| format!("CAST({} AS VARCHAR) ILIKE {} ESCAPE '\\'",
-            sql_ident(c.get("name").str().unwrap_or("")), sql_lit(&pattern))).collect();
-        if parts.is_empty() { String::new() } else { format!(" WHERE {}", parts.join(" OR ")) }
-    };
+    let conds = conditions(q, &names).map_err(fail)?;
+    let where_ = table::where_sql(&conds, q.get("q").map(String::as_str).unwrap_or(""), &names);
     let sort = q.get("sort").cloned().unwrap_or_default();
-    let order = if !sort.is_empty() && cols.arr().iter().any(|c| c.get("name").str() == Some(&sort)) {
-        format!(" ORDER BY {} {} NULLS LAST", sql_ident(&sort), if q.get("desc").map(String::as_str) == Some("1") { "DESC" } else { "ASC" })
-    } else {
-        String::new()
-    };
+    let order = if names.contains(&sort) { table::order_sql(&sort, q.get("desc").map(String::as_str) == Some("1")) } else { String::new() };
+    let mut reply = vec![];
+    if q.get("count").map(String::as_str) != Some("0") {
+        match table::count(&format!("SELECT count(*) AS n FROM {src}{where_}")) {
+            Ok(n) => reply.push(("total", (n as f64).into())),
+            Err(e) => {
+                // Which filter: DuckDB's reason for the one it rejects (the newest is the usual suspect).
+                let bad = (0..conds.len()).rev().find_map(|i| {
+                    let alone = table::where_sql(&conds[i..=i], "", &names);
+                    table::count(&format!("SELECT count(*) AS n FROM {src}{alone}")).err().map(|e| (i, e))
+                });
+                return Err(match bad {
+                    Some((i, e)) => obj(vec![("error", table::invalid_filter(&e).into()), ("bad", (i as f64).into())]),
+                    None => fail(e),
+                });
+            }
+        }
+        // All the rows, without filters: counted once per table.
+        let cached = app.lock().unwrap().all.get(tid).copied();
+        let all = match cached {
+            Some(n) => n,
+            None => {
+                let n = table::count(&format!("SELECT count(*) AS n FROM {src}")).map_err(fail)?;
+                app.lock().unwrap().all.insert(tid.to_string(), n);
+                n
+            }
+        };
+        reply.push(("all", (all as f64).into()));
+    }
     let limit = q.get("limit").and_then(|l| l.parse::<i64>().ok()).unwrap_or(200).clamp(1, MAX_PAGE);
     let offset = q.get("offset").and_then(|l| l.parse::<i64>().ok()).unwrap_or(0).max(0);
-    let rows = duck(&format!("SELECT * FROM {src}{where_}{order} LIMIT {limit} OFFSET {offset}"))?;
-    let total = duck(&format!("SELECT count(*) AS n FROM {src}{where_}"))?.arr().first().map(|r| r.get("n").clone()).unwrap_or(Value::Num(0.0));
-    Ok(obj(vec![("columns", cols), ("rows", rows), ("total", total), ("offset", (offset as f64).into())]))
+    let rows = duck(&format!("SELECT * FROM {src}{where_}{order} LIMIT {limit} OFFSET {offset}")).map_err(fail)?;
+    // Each column with the name a filter starts with (`f`): as is or in `backticks`.
+    let columns = Value::Arr(cols.arr().iter().map(|c| {
+        let mut c = c.clone();
+        c.set("ref", table::filter_name(c.get("name").str().unwrap_or("")).into());
+        c
+    }).collect());
+    reply.extend([("columns", columns), ("rows", rows), ("offset", (offset as f64).into()),
+                  ("conditions", Value::Arr(conds.into_iter().map(|(label, _)| label.into()).collect()))]);
+    Ok(obj(reply))
 }
 
 // --------------------------------------------------------------------------- page and palette
@@ -224,7 +273,7 @@ fn palette_file() -> PathBuf {
 
 fn palette(app: &Shared) -> Value {
     let mut p = env::read_json(&palette_file());
-    // The palette follows herdr's config and Corral's own theme choice (corral config tema).
+    // The palette follows herdr's config and Corral's own theme choice (corral config theme).
     let changed = crate::theme::sources_mtime();
     let stale = changed > 0.0 && (changed - p.get("source_mtime").num().unwrap_or(0.0)).abs() > 1e-3;
     if stale {
@@ -240,6 +289,8 @@ fn palette(app: &Shared) -> Value {
 
 fn themed_page() -> Vec<u8> {
     let page = std::fs::read_to_string(env::repo().join("mirador/index.html")).unwrap_or_default();
+    // The page is written in English and translates itself; it starts in this language.
+    let page = page.replacen("<html lang=\"en\">", &format!("<html lang=\"{}\">", crate::i18n::lang()), 1);
     let p = env::read_json(&palette_file());
     if p.get("bg").is_null() {
         return page.into_bytes();
@@ -319,7 +370,8 @@ fn fingerprint(app: &Shared) -> String {
     for t in &a.tables {
         out.push_str(t.get("id").str().unwrap_or(""));
     }
-    out.push_str(&format!("|{}|{}", a.show_plot.to_json(), mtime(&palette_file()).unwrap_or(0.0)));
+    // The language too, so a page waiting for a change switches language at once.
+    out.push_str(&format!("|{}|{}|{}", a.show_plot.to_json(), mtime(&palette_file()).unwrap_or(0.0), crate::i18n::lang()));
     format!("{:016x}", fnv(out.as_bytes()))
 }
 
@@ -347,8 +399,6 @@ fn state(app: &Shared) -> Value {
     obj(vec![
         ("version", VERSION.into()),
         ("now", now().into()),
-        ("available", true.into()),
-        ("agents", Value::Arr(Vec::new())),
         ("workspaces", workspaces),
         ("sessions", Value::Arr(sessions())),
         ("tables", Value::Arr(tables.iter().map(|t| obj(vec![
@@ -356,6 +406,7 @@ fn state(app: &Shared) -> Value {
             ("session", t.get("session").clone()), ("added", t.get("added").clone())])).collect())),
         ("show_plot", show_plot),
         ("palette", palette(app)),
+        ("lang", crate::i18n::lang().into()),
     ])
 }
 
@@ -457,7 +508,7 @@ fn handle(mut stream: TcpStream, app: Shared) {
         let host = headers.get("host").map(|h| h.to_lowercase()).unwrap_or_default();
         let given = headers.get("x-corral-token").cloned().or_else(|| q.get("token").cloned()).unwrap_or_default();
         if host != format!("127.0.0.1:{port}") && host != format!("localhost:{port}") || !same(&given, &token) {
-            error(403, "token inválido; abre Mirador con `corral mirador`")
+            error(403, tr("invalid token; open Mirador with `corral mirador`", "token inválido; abre Mirador con `corral mirador`"))
         } else {
             let result = if method == "POST" {
                 let body = json::parse(String::from_utf8_lossy(&body).trim()).unwrap_or_else(|_| Value::obj());
@@ -539,7 +590,7 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
                 plots_raw(&arg("session", ""), "plot", &params)
             };
             let Some((mut body, mut ctype)) = fetch(&renderer) else {
-                return Ok(error(404, "gráfico no disponible"));
+                return Ok(error(404, tr("plot not available", "gráfico no disponible")));
             };
             if asked == "auto" && renderer == "svg" && body.len() > HEAVY_SVG {
                 if let Some(k) = &key {
@@ -556,17 +607,21 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
             let mut extra = Vec::new();
             if q.get("download").map(|s| !s.is_empty()).unwrap_or(false) {
                 let ext = if ctype.contains("png") { "png" } else { "svg" };
-                extra.push(("Content-Disposition".into(), format!("attachment; filename=\"grafico.{ext}\"")));
+                let name = tr("plot", "grafico");
+                extra.push(("Content-Disposition".into(), format!("attachment; filename=\"{name}.{ext}\"")));
             }
             Reply { code: 200, ctype, body, extra }
         }
-        "/api/table/rows" => json_reply(200, &rows(app, q)?),
+        "/api/table/rows" => match rows(app, q) {
+            Ok(v) => json_reply(200, &v),
+            Err(e) => json_reply(400, &e),
+        },
         "/api/table/summary" => {
             let t = app.lock().unwrap().table(&arg("id", ""))?;
             let s = duck(&format!("SUMMARIZE SELECT * FROM {}", table_source(t.get("path").str().unwrap_or(""))))?;
             json_reply(200, &obj(vec![("columns", s)]))
         }
-        _ => error(404, "no encontrado"),
+        _ => error(404, tr("not found", "no encontrado")),
     })
 }
 
@@ -574,9 +629,9 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
     let field = |k: &str| body.get(k).str().unwrap_or("").to_string();
     Ok(match path {
         "/api/tables" => {
-            let p = std::fs::canonicalize(field("path")).map_err(|_| format!("no existe {}", field("path")))?;
+            let p = std::fs::canonicalize(field("path")).map_err(|_| trf!("{} doesn't exist", "no existe {}", field("path")))?;
             if !p.is_file() {
-                return Err(format!("no existe {}", p.display()));
+                return Err(trf!("{} doesn't exist", "no existe {}", p.display()));
             }
             let (title, session) = (field("title"), body.get("session").clone());
             let path_s = p.to_string_lossy().to_string();
@@ -587,6 +642,7 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
             let old: Vec<String> = a.tables.iter().filter(|t| same_table(t)).filter_map(|t| t.get("id").str().map(String::from)).collect();
             for id in old {
                 a.schema.remove(&id);
+                a.all.remove(&id);
             }
             a.tables.retain(|t| !same_table(t));
             let entry = obj(vec![
@@ -617,29 +673,9 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
             let mut a = app.lock().unwrap();
             a.tables.retain(|t| t.get("id").str() != Some(&id));
             a.schema.remove(&id);
+            a.all.remove(&id);
             a.save_tables();
             json_reply(200, &obj(vec![("ok", true.into())]))
-        }
-        "/api/agents/focus" => {
-            let pane = field("pane_id");
-            if pane.is_empty() || !pane.chars().all(|c| c.is_ascii_alphanumeric() || ":_-".contains(c)) {
-                return Err("panel inválido".into());
-            }
-            let ok = Command::new("herdr").args(["agent", "focus", &pane]).output().map(|o| o.status.success()).unwrap_or(false);
-            json_reply(200, &obj(vec![("ok", ok.into())]))
-        }
-        "/api/view-var" => {
-            let (sid, name) = (field("session"), field("name"));
-            let dir = session_dir(&sid)?;
-            let known = env::read_json(&dir.join("vars.json")).get("vars").arr().iter().any(|v| v.get("name").str() == Some(&name));
-            if !known {
-                return Err("objeto desconocido".into());
-            }
-            let meta = env::read_json(&dir.join("meta.json"));
-            let pane = meta.get("pane_id").str().ok_or("la sesión no está en un panel de herdr")?.to_string();
-            let code = if meta.get("lang").str() == Some("python") { format!("View({name})") } else { format!("View(`{}`)", name.replace('`', "\\`")) };
-            let ok = herdr::send_text(&pane, &format!("{code}\r")).is_ok();
-            json_reply(200, &obj(vec![("ok", ok.into()), ("code", code.into())]))
         }
         "/api/plots/remove" | "/api/plots/clear" => {
             let sid = field("session");
@@ -652,12 +688,12 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
             if ok {
                 // R isn't running a command, so mark the change here: open pages update at once.
                 if let Ok(dir) = session_dir(&sid) {
-                    let _ = std::fs::write(dir.join("plots-rev"), format!("quitado {}", now()));
+                    let _ = std::fs::write(dir.join("plots-rev"), format!("removed {}", now()));
                 }
             }
             json_reply(200, &obj(vec![("ok", ok.into())]))
         }
-        _ => error(404, "no encontrado"),
+        _ => error(404, tr("not found", "no encontrado")),
     })
 }
 
@@ -668,12 +704,12 @@ pub fn serve() -> Result<(), String> {
     let token = env::read_json(&info_file).get("token").str().map(String::from).unwrap_or_else(|| env::random_hex(12));
     let wanted: u16 = std::env::var("CORRAL_MIRADOR_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7317);
     let listener = TcpListener::bind(("127.0.0.1", wanted)).or_else(|_| TcpListener::bind(("127.0.0.1", 0)))
-        .map_err(|e| format!("Mirador no pudo abrir un puerto: {e}"))?;
+        .map_err(|e| trf!("Mirador couldn't open a port: {e}", "Mirador no pudo abrir un puerto: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let tables: Vec<Value> = env::read_json(&tables_file()).arr().iter()
         .filter(|t| Path::new(t.get("path").str().unwrap_or("")).is_file()).cloned().collect();
     let app: Shared = Arc::new(Mutex::new(App {
-        token: token.clone(), port, last_client: 0.0, tables, schema: HashMap::new(), show_plot: Value::Null, theme_asked: None, heavy: Default::default(),
+        token: token.clone(), port, last_client: 0.0, tables, schema: HashMap::new(), all: HashMap::new(), show_plot: Value::Null, theme_asked: None, heavy: Default::default(),
     }));
 
     let url = format!("http://127.0.0.1:{port}/?token={token}");
@@ -683,7 +719,7 @@ pub fn serve() -> Result<(), String> {
     std::fs::write(&tmp, info.to_json()).map_err(|e| e.to_string())?;
     let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
     std::fs::rename(&tmp, &info_file).map_err(|e| e.to_string())?;
-    println!("Mirador en {url}");
+    println!("{}", trf!("Mirador at {url}", "Mirador en {url}"));
 
     for stream in listener.incoming().flatten() {
         let app = app.clone();

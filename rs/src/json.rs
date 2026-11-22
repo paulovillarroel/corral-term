@@ -202,12 +202,16 @@ fn write_str(s: &str, out: &mut String) {
     out.push('"');
 }
 
+// Parse errors are in English only: the language setting is read from
+// config.json through this parser, so asking for the language here (tr/trf!)
+// would re-enter i18n::es() while it reads the setting, and hang on its lock
+// when config.json is broken.
 pub fn parse(text: &str) -> Result<Value, String> {
     let mut p = Parser { s: text.as_bytes(), i: 0 };
     let v = p.value()?;
     p.ws();
     if p.i != p.s.len() {
-        return Err(format!("JSON: sobra texto en la posición {}", p.i));
+        return Err(format!("JSON: extra text at position {}", p.i));
     }
     Ok(v)
 }
@@ -225,13 +229,13 @@ impl Parser<'_> {
     }
 
     fn err<T>(&self, what: &str) -> Result<T, String> {
-        Err(format!("JSON: {what} en la posición {}", self.i))
+        Err(format!("JSON: {what} at position {}", self.i))
     }
 
     fn value(&mut self) -> Result<Value, String> {
         self.ws();
         match self.s.get(self.i) {
-            None => self.err("fin inesperado"),
+            None => self.err("unexpected end"),
             Some(b'{') => self.object(),
             Some(b'[') => self.array(),
             Some(b'"') => Ok(Value::Str(self.string()?)),
@@ -247,7 +251,7 @@ impl Parser<'_> {
             self.i += word.len();
             Ok(v)
         } else {
-            self.err("palabra desconocida")
+            self.err("unknown word")
         }
     }
 
@@ -257,14 +261,14 @@ impl Parser<'_> {
             self.i += 1;
         }
         let text = std::str::from_utf8(&self.s[start..self.i]).unwrap_or("");
-        text.parse::<f64>().map(Value::Num).or_else(|_| self.err("número inválido"))
+        text.parse::<f64>().map(Value::Num).or_else(|_| self.err("invalid number"))
     }
 
     fn hex4(&mut self) -> Result<u32, String> {
-        let digits = self.s.get(self.i..self.i + 4).ok_or_else(|| "JSON: \\u incompleto".to_string())?;
+        let digits = self.s.get(self.i..self.i + 4).ok_or_else(|| "JSON: incomplete \\u".to_string())?;
         let text = std::str::from_utf8(digits).map_err(|e| e.to_string())?;
         self.i += 4;
-        u32::from_str_radix(text, 16).map_err(|_| "JSON: \\u inválido".to_string())
+        u32::from_str_radix(text, 16).map_err(|_| "JSON: invalid \\u".to_string())
     }
 
     fn string(&mut self) -> Result<String, String> {
@@ -277,14 +281,14 @@ impl Parser<'_> {
             }
             out.push_str(std::str::from_utf8(&self.s[start..self.i]).map_err(|e| e.to_string())?);
             match self.s.get(self.i) {
-                None => return self.err("texto sin cerrar"),
+                None => return self.err("unclosed string"),
                 Some(b'"') => {
                     self.i += 1;
                     return Ok(out);
                 }
                 Some(_) => {
                     self.i += 1;
-                    let c = *self.s.get(self.i).ok_or_else(|| "JSON: escape incompleto".to_string())?;
+                    let c = *self.s.get(self.i).ok_or_else(|| "JSON: incomplete escape".to_string())?;
                     self.i += 1;
                     match c {
                         b'"' => out.push('"'),
@@ -304,7 +308,7 @@ impl Parser<'_> {
                             }
                             out.push(char::from_u32(code).unwrap_or('\u{FFFD}'));
                         }
-                        _ => return self.err("escape desconocido"),
+                        _ => return self.err("unknown escape"),
                     }
                 }
             }
@@ -328,7 +332,7 @@ impl Parser<'_> {
                     self.i += 1;
                     return Ok(Value::Arr(items));
                 }
-                _ => return self.err("falta , o ]"),
+                _ => return self.err("missing , or ]"),
             }
         }
     }
@@ -344,12 +348,12 @@ impl Parser<'_> {
         loop {
             self.ws();
             if self.s.get(self.i) != Some(&b'"') {
-                return self.err("se esperaba una clave");
+                return self.err("expected a key");
             }
             let key = self.string()?;
             self.ws();
             if self.s.get(self.i) != Some(&b':') {
-                return self.err("falta :");
+                return self.err("missing :");
             }
             self.i += 1;
             let v = self.value()?;
@@ -361,7 +365,7 @@ impl Parser<'_> {
                     self.i += 1;
                     return Ok(Value::Obj(items));
                 }
-                _ => return self.err("falta , o }"),
+                _ => return self.err("missing , or }"),
             }
         }
     }

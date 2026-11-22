@@ -6,6 +6,7 @@
 
 use crate::console;
 use crate::env;
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
 use crate::term::{self, Raw};
 use crate::vars::Colors;
@@ -113,12 +114,12 @@ fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
         .args(["--vanilla", "--no-echo", "-e", "cat(R.home(), Sys.getenv(\"LD_LIBRARY_PATH\"), sep = \"\\n\")"])
         .stderr(Stdio::null())
         .output()
-        .map_err(|e| format!("no pude ejecutar R: {e}"))?;
+        .map_err(|e| trf!("could not run R: {e}", "no pude ejecutar R: {e}"))?;
     let text = String::from_utf8_lossy(&probe.stdout).to_string();
     let mut lines = text.trim().splitn(2, '\n');
     let home = lines.next().unwrap_or("").trim().to_string();
     if home.is_empty() {
-        return Err("R no dijo dónde está instalado".into());
+        return Err(tr("R did not say where it is installed", "R no dijo dónde está instalado").into());
     }
     let lib = lines.next().map(str::trim).filter(|l| !l.is_empty()).map(String::from).unwrap_or_else(|| format!("{home}/lib"));
     let argv: Vec<Value> = [ark.display().to_string(), "--connection_file".into(), "{connection_file}".into(),
@@ -149,10 +150,12 @@ fn connect(child: &mut Child, addr: &str, kind: &str, identity: Option<&[u8]>, e
             Ok(s) => return Ok(s),
             Err(e) => {
                 if let Ok(Some(status)) = child.try_wait() {
-                    return Err(format!("Ark terminó al iniciar ({status}); revisa {}", log_file().display()));
+                    let log = log_file();
+                    let log = log.display();
+                    return Err(trf!("Ark ended while starting ({status}); see {log}", "Ark terminó al iniciar ({status}); revisa {log}"));
                 }
                 if Instant::now() > end {
-                    return Err(format!("Ark no abrió sus puertos: {e}"));
+                    return Err(trf!("Ark did not open its ports: {e}", "Ark no abrió sus puertos: {e}"));
                 }
                 std::thread::sleep(Duration::from_millis(20));
             }
@@ -188,7 +191,7 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
         .env("CORRAL_ARK_CONNECTION", conn_path) // corral.R announces it, for the editor's language server
         .stdin(Stdio::null())
         .spawn()
-        .map_err(|e| format!("no pude iniciar Ark: {e}"))?;
+        .map_err(|e| trf!("could not start Ark: {e}", "no pude iniciar Ark: {e}"))?;
 
     let c = Connection::read(&conn_path.to_string_lossy())?;
     let session = zmtp::uuid();
@@ -987,7 +990,8 @@ impl Console {
                 }
             }
             if matches.len() > shown.len() {
-                s += &format!("… y {} más\n", matches.len() - shown.len());
+                let more = matches.len() - shown.len();
+                s += &trf!("… and {more} more\n", "… y {more} más\n");
             }
             out(&s);
         }
@@ -1146,7 +1150,7 @@ impl Console {
 
 pub fn run() -> Result<(), String> {
     let cfg = env::config();
-    let ark = console::ark_binary(&cfg).ok_or("Ark no está instalado (corral ark --instalar)")?;
+    let ark = console::ark_binary(&cfg).ok_or(tr("Ark is not installed (corral ark --install)", "Ark no está instalado (corral ark --install)"))?;
     let folder = env::state_dir().join("ark");
     let _ = std::fs::create_dir_all(&folder);
     env::remove_old(&folder, "json", 2 * 86400);
@@ -1171,7 +1175,9 @@ pub fn run() -> Result<(), String> {
     if c.wait_reply(&id, Duration::from_secs(60)).is_none() {
         c.k.shutdown();
         drop(raw);
-        return Err(format!("Ark no respondió; revisa {}", log_file().display()));
+        let log = log_file();
+        let log = log.display();
+        return Err(trf!("Ark did not answer; see {log}", "Ark no respondió; revisa {log}"));
     }
     c.ed.render();
     let code = c.run();

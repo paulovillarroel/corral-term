@@ -7,14 +7,43 @@
 use crate::console;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{obj, Value};
 
-pub const PARKING_TAB: &str = "corral (oculto)";
+/// The hidden tab's name in each language; a new one gets the user's.
+const PARKING_TABS: [&str; 2] = ["corral (hidden)", "corral (oculto)"];
+/// Hidden tabs left by older versions: `corral close` closes their panes too.
+const OLD_PARKING_TABS: [&str; 2] = ["consola (oculta)", "script (oculto)"];
 const SCRIPT_SHARE: f64 = 0.57;
+
+/// The hidden tab's name for a new one, in the user's language.
+pub fn parking_tab() -> &'static str {
+    tr(PARKING_TABS[0], PARKING_TABS[1])
+}
+
+/// Is this the hidden tab, whatever language it was created in?
+pub fn is_parking_tab(label: &str) -> bool {
+    PARKING_TABS.contains(&label)
+}
+
+/// The hidden tab, or one an older version left.
+pub fn is_any_parking_tab(label: &str) -> bool {
+    is_parking_tab(label) || OLD_PARKING_TABS.contains(&label)
+}
+
+/// The layout focused on code (`corral layout --focus code`)? Also reads the state older versions saved.
+pub fn code_focus(state: &Value) -> bool {
+    state.get("focus").str() == Some("code") || state.get("foco").str() == Some("codigo")
+}
+
+/// The agent's pane in the layout focused on code (also as older versions saved it).
+pub fn agent_pane(state: &Value) -> Option<&str> {
+    state.get("agent").str().or_else(|| state.get("agente").str())
+}
 
 pub fn hidden_tab(ws: Option<&str>) -> Result<(Option<String>, Option<String>), String> {
     let Some(ws) = ws else { return Ok((None, None)) };
-    let tab = herdr::tabs(ws)?.into_iter().find(|t| t.get("label").str() == Some(PARKING_TAB))
+    let tab = herdr::tabs(ws)?.into_iter().find(|t| t.get("label").str().is_some_and(is_parking_tab))
         .and_then(|t| t.get("tab_id").str().map(String::from));
     let pane = match &tab {
         Some(tab) => herdr::panes(Some(ws))?.into_iter().find(|p| herdr::tab_id(p) == tab)
@@ -30,7 +59,7 @@ pub fn park(pane: &str, ws: Option<&str>) -> Result<(), String> {
         (Some(tab), Some(other)) => obj(vec![("type", "tab".into()), ("tab_id", tab.into()),
                                              ("split", "right".into()), ("target_pane_id", other.into())]),
         _ => {
-            let mut d = obj(vec![("type", "new_tab".into()), ("label", PARKING_TAB.into())]);
+            let mut d = obj(vec![("type", "new_tab".into()), ("label", parking_tab().into())]);
             if let Some(ws) = ws {
                 d.set("workspace_id", ws.into());
             }
@@ -95,18 +124,18 @@ fn set_ratio(tab: &str, path: &[bool], ratio: f64) -> Result<(), String> {
 fn label_of(mode: &str, code: bool) -> &'static str {
     match mode {
         "script" => "Script",
-        "agente" => "Agente",
-        "consola" => "Consola",
-        _ if code => "Agente y consola",
-        _ => "Script y consola",
+        "agent" => tr("Agent", "Agente"),
+        "console" => tr("Console", "Consola"),
+        _ if code => tr("Agent and console", "Agente y consola"),
+        _ => tr("Script and console", "Script y consola"),
     }
 }
 
 pub fn toggle(args: &[String]) -> Result<(), String> {
     let wanted = match args.first().map(String::as_str) {
         None => None,
-        Some(m @ ("ambos" | "script" | "agente" | "consola")) => Some(m.to_string()),
-        Some(_) => return Err("uso: corral toggle [ambos|script|agente|consola]".into()),
+        Some(m @ ("both" | "script" | "agent" | "console")) => Some(m.to_string()),
+        Some(_) => return Err(tr("usage: corral toggle [both|script|agent|console]", "uso: corral toggle [both|script|agent|console]").into()),
     };
     let ws = env::current_workspace();
     let panes = herdr::panes(ws.as_deref())?;
@@ -118,23 +147,26 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
     let mut state = saved.get(&key).clone();
 
     // The pane above the console: the script, or the agent in the layout focused on code
-    // (`corral layout --foco codigo`). Below, `script` is that pane, whichever it is.
-    let code = state.get("foco").str() == Some("codigo");
-    let upper_mode = if code { "agente" } else { "script" };
-    if let Some(w) = wanted.as_deref().filter(|w| matches!(*w, "script" | "agente") && *w != upper_mode) {
-        env::notify("Corral", &format!("{}: ya está a la izquierda", label_of(w, code)));
+    // (`corral layout --focus code`). Below, `script` is that pane, whichever it is.
+    let code = code_focus(&state);
+    let upper_mode = if code { "agent" } else { "script" };
+    if let Some(w) = wanted.as_deref().filter(|w| matches!(*w, "script" | "agent") && *w != upper_mode) {
+        let label = label_of(w, code);
+        env::notify("Corral", &trf!("{label}: already on the left", "{label}: ya está a la izquierda"));
         return Ok(());
     }
     let upper = if code {
-        state.get("agente").str().and_then(|id| panes.iter().find(|p| herdr::pane_id(p) == id))
+        agent_pane(&state).and_then(|id| panes.iter().find(|p| herdr::pane_id(p) == id))
     } else {
         herdr::labeled(&panes, "corral:script")
     };
     let (Some(script), Some(console)) = (upper, herdr::labeled(&panes, &format!("corral:{lang}"))) else {
         if code {
-            env::notify("Sin agente", "No encontré el panel del agente; abre el espacio de nuevo desde la paleta (ctrl+b space)");
+            env::notify(tr("No agent", "Sin agente"), tr("The agent's pane was not found; open the workspace again from the palette (ctrl+b space)",
+                                                       "No encontré el panel del agente; abre el espacio de nuevo desde la paleta (ctrl+b space)"));
         } else {
-            env::notify("Sin script", "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'");
+            env::notify(tr("No script", "Sin script"), tr("This workspace has no script pane; use ctrl+b a or 'corral script'",
+                                                         "Este workspace no tiene panel de script; usa ctrl+b a o 'corral script'"));
         }
         return Ok(());
     };
@@ -142,7 +174,7 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
     let (script, console) = (herdr::pane_id(script).to_string(), herdr::pane_id(console).to_string());
 
     let (current, parked) = if script_tab == console_tab {
-        ("ambos", None)
+        ("both", None)
     } else {
         let recorded = state.get("parked").str().filter(|p| *p == script || *p == console).map(String::from);
         let parked = recorded.unwrap_or_else(|| {
@@ -150,14 +182,14 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
             let home = herdr::labeled(&panes, "corral:vars").map(|p| herdr::tab_id(p).to_string());
             if Some(&console_tab) == home.as_ref() { script.clone() } else { console.clone() }
         });
-        (if parked == console { upper_mode } else { "consola" }, Some(parked))
+        (if parked == console { upper_mode } else { "console" }, Some(parked))
     };
     let focused = env::current_pane();
     let mode = wanted.unwrap_or_else(|| {
-        if current != "ambos" {
-            "ambos".into()
+        if current != "both" {
+            "both".into()
         } else if focused.as_deref() == Some(console.as_str()) {
-            "consola".into()
+            "console".into()
         } else {
             upper_mode.into()
         }
@@ -189,7 +221,7 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
         state.remove("share");
     }
 
-    if mode != "ambos" {
+    if mode != "both" {
         let (keep, hide) = if mode == upper_mode { (&script, &console) } else { (&console, &script) };
         let mut share = script_split(&script, &console).map(|s| s.3).unwrap_or(SCRIPT_SHARE);
         if !(0.15..=0.85).contains(&share) {
@@ -203,7 +235,7 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
 
     saved.set(&key, state);
     env::write_json(&path, &saved);
-    let suffix = if mode != "ambos" { " (ctrl+b t para volver)" } else { "" };
+    let suffix = if mode != "both" { tr(" (ctrl+b t to go back)", " (ctrl+b t para volver)") } else { "" };
     env::notify("Corral", &format!("{}{suffix}", label_of(&mode, code)));
     Ok(())
 }
@@ -217,11 +249,11 @@ pub fn switch(args: &[String]) -> Result<(), String> {
     let lang = match args.first().map(String::as_str) {
         None => if current == "r" { "python" } else { "r" },
         Some(l @ ("r" | "python")) => l,
-        Some(_) => return Err("uso: corral switch [r|python]".into()),
+        Some(_) => return Err(tr("usage: corral switch [r|python]", "uso: corral switch [r|python]").into()),
     };
     let (pane, started) = console::show(lang, true)?;
     let started = started || pane.as_deref().is_some_and(|p| console::ensure_running(p, lang));
-    let note = if started { ": iniciando (la primera vez uv prepara el entorno)" } else { "" };
-    env::notify("Consola", &format!("{}{note}", console::lang_name(lang)));
+    let note = if started { tr(": starting (the first time, uv prepares the environment)", ": iniciando (la primera vez uv prepara el entorno)") } else { "" };
+    env::notify(tr("Console", "Consola"), &format!("{}{note}", console::lang_name(lang)));
     Ok(())
 }

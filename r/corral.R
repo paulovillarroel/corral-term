@@ -5,13 +5,17 @@
 #
 # Corral only acts in R sessions that ask for it: the console that `corral layout`
 # (ctrl+b a) starts, which sets CORRAL=1, or any session where you run
-# corral_activar() (ctrl+b m does it for you). Every other R behaves as usual.
+# corral_activate() (ctrl+b m does it for you). Every other R behaves as usual.
 # options(corral.always = TRUE) in .Rprofile turns it on everywhere.
+#
+# Messages follow Corral's language: CORRAL_LANG (en or es), else `language` in
+# ~/.config/corral/config.json (what `corral config language` writes), else English.
 #
 # What it does in an active session (never in RStudio or Positron):
 #   * Registers this session for Mirador and, after every top-level command,
 #     writes a light description of the global environment (needs jsonlite).
 #   * View(x) writes x to a temporary parquet file and opens it with `corral view`
+#     (View(x, mirador = TRUE): in Mirador, in the browser)
 #     (a popup inside herdr; a tab in Mirador outside herdr).
 #   * Plots go to httpgd. Inside herdr, ctrl+b f (or corral_plots()) shows them in
 #     a popup; outside herdr the first plot opens Mirador. Plot history lives in
@@ -31,6 +35,37 @@ local({
     file.path(d, "r", "corral.R")
   })
 
+  # Corral's language, looked up again every couple of seconds so a switch made
+  # with `corral config language` shows up without restarting R.
+  lang_cache <- list(at = -Inf, value = "en")
+  corral_lang <- function() {
+    now <- as.numeric(Sys.time())
+    if (now - lang_cache$at < 2) return(lang_cache$value)
+    normalize <- function(x) {
+      x <- tolower(trimws(x))
+      if (length(x) != 1L || is.na(x)) NA_character_
+      else if (x %in% c("en", "english", "ingl\u00e9s", "ingles")) "en"
+      else if (x %in% c("es", "spanish", "espa\u00f1ol", "espanol")) "es"
+      else NA_character_
+    }
+    value <- normalize(Sys.getenv("CORRAL_LANG"))
+    if (is.na(value)) {
+      config <- Sys.getenv("XDG_CONFIG_HOME")
+      if (!nzchar(config)) config <- file.path(path.expand("~"), ".config")
+      f <- file.path(config, "corral", "config.json")
+      text <- if (file.exists(f)) {
+        tryCatch(paste(readLines(f, warn = FALSE, encoding = "UTF-8"), collapse = "\n"), error = function(e) "")
+      } else ""
+      m <- regmatches(text, regexec('"language"[[:space:]]*:[[:space:]]*"([^"]*)"', text))[[1]]
+      value <- if (length(m) == 2L) normalize(m[2]) else NA_character_
+    }
+    if (is.na(value)) value <- "en"
+    lang_cache <<- list(at = now, value = value)
+    value
+  }
+  # The text in the user's language.
+  tr <- function(en, es) if (identical(corral_lang(), "es")) es else en
+
   # Attach right above utils so our functions mask utils ones (View). During
   # .Rprofile only base is attached, so wait for utils when needed.
   attach_env <- function(e) {
@@ -45,11 +80,14 @@ local({
   enabled <- nzchar(Sys.getenv("CORRAL")) || isTRUE(getOption("corral.always"))
   if (!enabled) {
     stub <- new.env()
-    stub$corral_activar <- function() {
-      if (is.na(this_file) || !file.exists(this_file)) stop("no encuentro corral.R (¿`corral` está en el PATH?)", call. = FALSE)
+    stub$corral_activate <- function() {
+      if (is.na(this_file) || !file.exists(this_file)) {
+        stop(tr("corral.R not found (is `corral` on the PATH?)",
+                "no encuentro corral.R (\u00bf`corral` est\u00e1 en el PATH?)"), call. = FALSE)
+      }
       Sys.setenv(CORRAL = "1")
       source(this_file)
-      message("Corral activado en esta sesión de R.")
+      message(tr("Corral is now active in this R session.", "Corral activado en esta sesi\u00f3n de R."))
       invisible(TRUE)
     }
     attach_env(stub)
@@ -57,8 +95,8 @@ local({
   }
 
   env <- new.env()
-  env$corral_activar <- function() {
-    message("Corral ya está activo en esta sesión.")
+  env$corral_activate <- function() {
+    message(tr("Corral is already active in this session.", "Corral ya est\u00e1 activo en esta sesi\u00f3n."))
     invisible(TRUE)
   }
 
@@ -78,7 +116,8 @@ local({
     bin <- getOption("corral.bin", Sys.getenv("CORRAL_BIN"))
     if (!nzchar(bin)) bin <- Sys.which("corral")
     if (!nzchar(bin)) {
-      stop("`corral` is not on PATH; set options(corral.bin = '/path/to/corral-term/rs/target/release/corral')",
+      stop(tr("`corral` is not on the PATH; set options(corral.bin = '/path/to/corral-term/rs/target/release/corral')",
+              "`corral` no est\u00e1 en el PATH; define options(corral.bin = '/ruta/a/corral-term/rs/target/release/corral')"),
            call. = FALSE)
     }
     unname(bin)
@@ -95,7 +134,7 @@ local({
   # ---- session registry and variables (read by Mirador)
 
   value_preview <- function(x) {
-    if (is.factor(x)) return(sprintf("fct [%d] %d niveles", length(x), nlevels(x)))
+    if (is.factor(x)) return(sprintf(tr("fct [%d] %d levels", "fct [%d] %d niveles"), length(x), nlevels(x)))
     abbr <- c(double = "num", integer = "int", character = "chr", logical = "lgl",
               complex = "cplx", raw = "raw")[[typeof(x)]]
     if (length(x) == 1L) {
@@ -110,7 +149,7 @@ local({
     what <- if (inherits(x, "patchwork")) "patchwork"
       else if (inherits(x, c("ggplot", "gg"))) "ggplot"
       else if (inherits(x, "trellis")) "lattice"
-      else if (inherits(x, "recordedplot")) "gráfico base"
+      else if (inherits(x, "recordedplot")) tr("base plot", "gr\u00e1fico base")
       else class(x)[1]
     title <- tryCatch(x$labels$title, error = function(e) NULL)
     if (is.character(title) && length(title) == 1L && nzchar(title)) paste(what, "\u00b7", title) else what
@@ -283,7 +322,8 @@ local({
     }
     deadline <- suppressWarnings(as.numeric(readLines(path(".deadline"), warn = FALSE)))
     if (length(deadline) == 1L && !is.na(deadline) && as.numeric(Sys.time()) > deadline) {
-      cat("# corral eval: la petición venció antes de empezar; no se ejecutó\n")
+      cat(tr("# corral eval: the request expired before it started; it did not run\n",
+             "# corral eval: la petici\u00f3n venci\u00f3 antes de empezar; no se ejecut\u00f3\n"))
       status$status <- "expired"
       return(invisible(done()))
     }
@@ -340,20 +380,22 @@ local({
     f
   }
 
-  env$corral_view <- function(x, title = NULL) {
+  # The terminal viewer by default; mirador = TRUE opens the table in Mirador, in the browser.
+  env$corral_view <- function(x, title = NULL, mirador = FALSE) {
     if (is.null(title)) title <- paste(deparse(substitute(x)), collapse = " ")
     f <- write_table(x)
     # Mirador and herdr popups are separate from this terminal, so R stays free.
     # Elsewhere the viewer takes over this terminal until you quit it.
     system2(env$corral_bin(),
-            c("view", shQuote(f), "--title", shQuote(title), "--session", session_id),
-            wait = !in_herdr())
+            c("view", shQuote(f), "--title", shQuote(title), "--session", session_id,
+              if (isTRUE(mirador)) "--mirador"),
+            wait = !in_herdr() && !isTRUE(mirador))
     invisible(f)
   }
 
-  env$View <- function(x, title) {
+  env$View <- function(x, title, mirador = FALSE) {
     if (missing(title)) title <- paste(deparse(substitute(x)), collapse = " ")
-    env$corral_view(x, title)
+    env$corral_view(x, title, mirador = mirador)
   }
 
   # ---- plots
@@ -381,7 +423,7 @@ local({
   }
 
   env$corral_plots <- function() {
-    if (!requireNamespace("httpgd", quietly = TRUE)) stop("install httpgd first", call. = FALSE)
+    if (!requireNamespace("httpgd", quietly = TRUE)) stop(tr("install httpgd first", "instala httpgd primero"), call. = FALSE)
     if (is.na(plot_device())) return(start_httpgd())
     url <- httpgd::hgd_url()
     open_viewer(url, force = TRUE)

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick start · Corral docs</title>
+<meta name="description" content="A two-minute tour of Corral: open the layout, run code, look at your variables, a table and a plot, switch to Python, let the agent run code, and close.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Quick start</h1>
+    <p class="intro">A short tour, from opening the layout to closing it. It takes about two minutes. You need Corral <a href="install.html">installed</a>.</p>
+
+    <h2>Open the layout</h2>
+    <p>Open herdr and go to a project folder. Corral's shortcuts start with <kbd>ctrl+b</kbd>: press it, let go, then press the next key.</p>
+    <p>Press <kbd>ctrl+b</kbd> <kbd>a</kbd>. A new tab opens with Claude Code on the left and, on the right, the script editor over the R console, with the variables pane below them.</p>
+    <div class="note"><p>Prefer the code in the big pane? <kbd>ctrl+b</kbd> <kbd>shift+a</kbd> opens the same panes with the script on the left and Claude over the console. <a href="layouts.html">Layouts and panes</a> has both.</p></div>
+
+    <h2>Write and run code</h2>
+    <p>The editor opens a temporary draft. Type a couple of lines:</p>
+    <pre><code>autos &lt;- mtcars
+summary(autos$mpg)</code></pre>
+    <p>Put the cursor on the first line and press <kbd>Ctrl</kbd>+<kbd>R</kbd>. Corral runs the whole statement under the cursor, even when it spans several lines, and moves to the next one. Press it again for <code>summary()</code>. <kbd>F5</kbd> runs the whole file.</p>
+    <p>Two more keys you will use often: <kbd>Ctrl</kbd>+<kbd>L</kbd> inserts <code>&lt;-</code> and <kbd>Ctrl</kbd>+<kbd>U</kbd> inserts <code>|&gt;</code>. Completion appears while you type. Write <code>autos$</code> and it offers the columns of your <code>autos</code>, because the language server is the same R as your console.</p>
+
+    <h2>See your variables</h2>
+    <p>The variables pane under the console now lists <code>autos</code>. It updates after every command, yours or the agent's. Its tabs sort your objects into data, plots, values, functions and other; <kbd>←</kbd> <kbd>→</kbd> or the keys <kbd>1</kbd> to <kbd>5</kbd> move between them.</p>
+
+    <h2>Open a table</h2>
+    <p>Run this in the editor or type it in the console:</p>
+    <pre><code>View(autos)</code></pre>
+    <p>The table opens over the terminal. <kbd>s</kbd> sorts by the current column, <kbd>f</kbd> filters with a condition such as <code>mpg &gt; 20 &amp; cyl == 6</code>, and <kbd>i</kbd> shows a summary of each column. <kbd>q</kbd> closes it. <kbd>Enter</kbd> on a data frame in the variables pane opens it the same way.</p>
+
+    <h2>Draw a plot</h2>
+    <pre><code>plot(autos$wt, autos$mpg)</code></pre>
+    <p>The first plot of a session opens Mirador, a light page in your browser. Later plots appear there about 80 ms after they are drawn, without taking your focus. <kbd>←</kbd> <kbd>→</kbd> go through the history, and <kbd>c</kbd> copies the plot as an image. Back in herdr, <kbd>ctrl+b</kbd> <kbd>f</kbd> brings Mirador to the front at the latest plot.</p>
+
+    <h2>Switch to Python</h2>
+    <p>Press <kbd>ctrl+b</kbd> <kbd>y</kbd>. The console spot now shows Python: IPython inside your project's uv environment. The first time, uv prepares the environment, which can take a few seconds. Your R console keeps running in a hidden tab, with all its objects, and <kbd>ctrl+b</kbd> <kbd>y</kbd> again brings it back.</p>
+    <p>You rarely need to switch by hand: <kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.py</code> file brings the Python console, and in a <code>.R</code> file, the R one. Python needs <a href="https://docs.astral.sh/uv/">uv</a>.</p>
+
+    <h2>Ask the agent</h2>
+    <p>Go to the Claude Code pane and ask for something that needs your data, for example: "fit a linear model of mpg on wt with autos and plot the residuals". With Corral's skill, Claude runs its code in your console with <code>corral eval</code>. You see each command appear there, and the model and the plot stay in your session, where you can keep working with them.</p>
+
+    <h2>Close</h2>
+    <p><kbd>ctrl+b</kbd> <kbd>shift+c</kbd> closes the script, the console and the variables, and leaves Claude as a normal herdr pane. Closing the console ends that R session. The draft is discarded, so press <kbd>Ctrl</kbd>+<kbd>S</kbd> first if you want to keep it: in the draft, it asks for a name and saves the file in your project.</p>
+    <p>Mirador stays open until you close its window.</p>
+
+    <h2>Where to go next</h2>
+    <ul>
+    <li><kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut, searchable. <a href="keys.html">Keyboard shortcuts</a> has them all.</li>
+    <li><a href="editor.html">The script editor</a>: the draft, saving, completion and formatting.</li>
+    <li><a href="agents.html">Working with agents</a>: what <code>corral eval</code> does and what the skill asks before acting.</li>
+    </ul>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@
 use crate::console;
 use crate::env;
 use crate::herdr;
+use crate::i18n::tr;
 use crate::json::{self, obj, Value};
 use crate::mirador::{plots_json, plots_raw};
 use crate::term::{self, clip, out, Screen};
@@ -49,7 +50,7 @@ fn herdr_client_terminals() -> Vec<String> {
         } else if get("KITTY_WINDOW_ID").is_some() {
             "kitty".into()
         } else {
-            get("TERM_PROGRAM").or_else(|| get("TERM")).unwrap_or_else(|| "desconocida".into())
+            get("TERM_PROGRAM").or_else(|| get("TERM")).unwrap_or_else(|| tr("unknown", "desconocida").into())
         });
     }
     found
@@ -60,12 +61,12 @@ pub fn image_mode() -> (String, String) {
     let configured = std::env::var("CORRAL_IMAGES").ok().filter(|v| !v.is_empty())
         .or_else(|| env::config().get("images").str().map(String::from)).unwrap_or_else(|| "auto".into());
     if configured != "auto" {
-        return (configured, "configurado".into());
+        return (configured, tr("configured", "configurado").into());
     }
     let terms = herdr_client_terminals();
     let kitty = terms.iter().any(|t| KITTY_TERMINALS.iter().any(|k| t.to_lowercase().contains(k)));
-    let shown = if terms.is_empty() { "ninguna".to_string() } else { terms.join(", ") };
-    ((if kitty { "kitty" } else { "symbols" }).into(), format!("ventanas de herdr: {shown}"))
+    let shown = if terms.is_empty() { tr("none", "ninguna").to_string() } else { terms.join(", ") };
+    ((if kitty { "kitty" } else { "symbols" }).into(), trf!("herdr windows: {shown}", "ventanas de herdr: {shown}"))
 }
 
 fn sid(dir: &Path) -> String {
@@ -92,19 +93,19 @@ pub fn mirador_info() -> Value {
 
 /// A request to Mirador (GET without a body, POST with one). Its JSON reply.
 fn mirador_call(info: &Value, path: &str, body: Option<&Value>, timeout: Duration) -> Result<Value, String> {
-    let port = info.get("port").num().ok_or("Mirador no está corriendo")? as u16;
+    let port = info.get("port").num().ok_or(tr("Mirador isn't running", "Mirador no está corriendo"))? as u16;
     let token = info.get("token").str().unwrap_or("");
     let host = format!("127.0.0.1:{port}");
     let mut s = TcpStream::connect_timeout(&host.parse().map_err(|e| format!("{e}"))?, timeout)
-        .map_err(|e| format!("Mirador no responde ({e})"))?;
+        .map_err(|e| trf!("Mirador isn't responding ({e})", "Mirador no responde ({e})"))?;
     s.set_read_timeout(Some(timeout)).ok();
     let data = body.map(|b| b.to_json()).unwrap_or_default();
     let method = if body.is_some() { "POST" } else { "GET" };
     write!(s, "{method} {path} HTTP/1.1\r\nHost: {host}\r\nX-Corral-Token: {token}\r\nContent-Type: application/json\r\n\
                Content-Length: {}\r\nConnection: close\r\n\r\n{data}", data.len()).map_err(|e| e.to_string())?;
     let mut raw = Vec::new();
-    s.read_to_end(&mut raw).map_err(|e| format!("Mirador no responde ({e})"))?;
-    let split = raw.windows(4).position(|w| w == b"\r\n\r\n").ok_or("respuesta de Mirador incompleta")?;
+    s.read_to_end(&mut raw).map_err(|e| trf!("Mirador isn't responding ({e})", "Mirador no responde ({e})"))?;
+    let split = raw.windows(4).position(|w| w == b"\r\n\r\n").ok_or(tr("incomplete reply from Mirador", "respuesta de Mirador incompleta"))?;
     let text = String::from_utf8_lossy(&raw[split + 4..]).into_owned();
     Ok(json::parse(text.trim()).unwrap_or_else(|_| Value::obj()))
 }
@@ -130,7 +131,7 @@ pub fn ensure_mirador() -> Result<Value, String> {
     let log = env::state_dir().join("mirador.log");
     let _ = std::fs::create_dir_all(env::state_dir());
     env::spawn_detached(Command::new(me).arg("_mirador").current_dir(env::repo()), Some(&log))
-        .map_err(|e| format!("no pude iniciar Mirador: {e}"))?;
+        .map_err(|e| trf!("couldn't start Mirador: {e}", "no pude iniciar Mirador: {e}"))?;
     let old = info.get("pid").num();
     let end = Instant::now() + Duration::from_secs(6);
     while Instant::now() < end {
@@ -140,7 +141,7 @@ pub fn ensure_mirador() -> Result<Value, String> {
             return Ok(info);
         }
     }
-    Err(format!("Mirador no arrancó; revisa {}", log.display()))
+    Err(trf!("Mirador didn't start; see {}", "Mirador no arrancó; revisa {}", log.display()))
 }
 
 pub fn open_mirador_window(info: &Value) {
@@ -153,15 +154,16 @@ pub fn open_mirador_window(info: &Value) {
 pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
     let has = |f: &str| args.iter().any(|a| a == f);
     if let Some(bad) = args.iter().find(|a| !["--open", "--url", "--stop", "--foreground"].contains(&a.as_str())) {
-        return Err(format!("opción desconocida {bad}\nuso: corral mirador [--open] [--url] [--stop] [--foreground]"));
+        return Err(trf!("unknown option {bad}\nusage: corral mirador [--open] [--url] [--stop] [--foreground]",
+                        "opción desconocida {bad}\nuso: corral mirador [--open] [--url] [--stop] [--foreground]"));
     }
     if has("--stop") {
         let info = mirador_info();
         if mirador_alive(&info, false) {
             env::kill(info.get("pid").num().unwrap_or(0.0) as i32, 15);
-            println!("Mirador detenido");
+            println!("{}", tr("Mirador stopped", "Mirador detenido"));
         } else {
-            println!("Mirador no estaba corriendo");
+            println!("{}", tr("Mirador wasn't running", "Mirador no estaba corriendo"));
         }
         return Ok(());
     }
@@ -236,10 +238,11 @@ pub fn open_app_window(url: &str) {
     let _ = env::spawn_detached(&mut cmd, None);
 }
 
-/// Where a new Mirador window goes: corral config mirador_window derecha|libre, mirador_size 0.5x0.85.
+/// Where a new Mirador window goes: corral config mirador_window right|free, mirador_size 0.5x0.85.
 pub fn window_place() -> (&'static str, f64, f64) {
     let cfg = env::config();
-    let place = if cfg.get("mirador_window").str().unwrap_or("derecha") == "derecha" { "right" } else { "" };
+    // "derecha" is the value from before.
+    let place = if matches!(cfg.get("mirador_window").str().unwrap_or("right"), "right" | "derecha") { "right" } else { "" };
     let size = cfg.get("mirador_size").str().unwrap_or("0.5x0.85").to_lowercase();
     let (w, h) = size.split_once('x').and_then(|(w, h)| Some((w.parse::<f64>().ok()?, h.parse::<f64>().ok()?))).unwrap_or((0.5, 0.85));
     (place, w.clamp(0.2, 1.0), h.clamp(0.2, 1.0))
@@ -322,7 +325,7 @@ fn show_latest_plot(dir: &Path, wait: f64) -> Result<(), String> {
             }
         }
         if Instant::now() >= end {
-            env::notify("Sin gráficos", "Todavía no hay gráficos en esta sesión de R");
+            env::notify(tr("No plots", "Sin gráficos"), tr("No plots in this R session yet", "Todavía no hay gráficos en esta sesión de R"));
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -333,7 +336,7 @@ fn show_latest_plot(dir: &Path, wait: f64) -> Result<(), String> {
 pub fn show_plot_object(dir: &Path, name: &str) -> String {
     let meta = env::read_json(&dir.join("meta.json"));
     let vars = env::read_json(&dir.join("vars.json"));
-    let Some(pane) = meta.get("pane_id").str().map(String::from) else { return "la sesión no está en un panel de herdr".into() };
+    let Some(pane) = meta.get("pane_id").str().map(String::from) else { return tr("the session isn't in a herdr pane", "la sesión no está en un panel de herdr").into() };
     let fingerprint = vars.get("vars").arr().iter().find(|v| v.get("name").str() == Some(name))
         .and_then(|v| v.get("hash").str().map(String::from));
     let map_file = dir.join("plotobj-map.json");
@@ -342,7 +345,7 @@ pub fn show_plot_object(dir: &Path, name: &str) -> String {
         if let Some(id) = drawn.get(f).str().map(String::from) {
             if httpgd_ids(dir).contains(&id) {
                 return match open_plot(dir, &id) {
-                    Ok(_) => "ya estaba dibujado; abierto en Mirador".into(),
+                    Ok(_) => tr("already drawn; opened in Mirador", "ya estaba dibujado; abierto en Mirador").into(),
                     Err(e) => e,
                 };
             }
@@ -356,7 +359,7 @@ pub fn show_plot_object(dir: &Path, name: &str) -> String {
         format!("print(`{}`)", name.replace('`', "\\`"))
     };
     if herdr::run(&pane, &code).is_err() {
-        return "no pude enviar a la consola".into();
+        return tr("couldn't send it to the console", "no pude enviar a la consola").into();
     }
     let end = Instant::now() + Duration::from_secs(10);
     while Instant::now() < end {
@@ -369,12 +372,12 @@ pub fn show_plot_object(dir: &Path, name: &str) -> String {
                 env::write_json(&map_file, &drawn);
             }
             return match show_latest_plot(dir, 0.0) {
-                Ok(()) => "dibujado y abierto en Mirador".into(),
+                Ok(()) => tr("drawn and opened in Mirador", "dibujado y abierto en Mirador").into(),
                 Err(e) => e,
             };
         }
     }
-    "R no dibujó nada (¿sigue ocupado?)".into()
+    tr("R didn't draw anything (still busy?)", "R no dibujó nada (¿sigue ocupado?)").into()
 }
 
 fn session_dir() -> Option<PathBuf> {
@@ -386,7 +389,7 @@ fn session_dir() -> Option<PathBuf> {
 pub fn cmd_plots(args: &[String]) -> Result<(), String> {
     let inline = args.iter().any(|a| a == "--inline");
     if let Some(bad) = args.iter().find(|a| *a != "--inline") {
-        return Err(format!("opción desconocida {bad}\nuso: corral plots [--inline]"));
+        return Err(trf!("unknown option {bad}\nusage: corral plots [--inline]", "opción desconocida {bad}\nuso: corral plots [--inline]"));
     }
     if inline || image_mode().0 == "kitty" {
         let dir = session_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
@@ -396,14 +399,14 @@ pub fn cmd_plots(args: &[String]) -> Result<(), String> {
         std::env::set_var("CORRAL_SESSION_DIR", &dir);
         return cmd_plots_tui(&[]);
     }
-    let dir = session_dir().ok_or("no hay una sesión de R con Corral")?;
+    let dir = session_dir().ok_or(tr("no R session with Corral", "no hay una sesión de R con Corral"))?;
     show_latest_plot(&dir, 0.0)
 }
 
 /// `corral _plot-ready`: the first plot of a session (called by corral.R and Python).
 pub fn cmd_plot_ready(_args: &[String]) -> Result<(), String> {
     if image_mode().0 == "kitty" {
-        env::notify("Gráfico listo", "ctrl+b f para verlo");
+        env::notify(tr("Plot ready", "Gráfico listo"), tr("ctrl+b f to see it", "ctrl+b f para verlo"));
         return Ok(());
     }
     match session_dir() {
@@ -412,59 +415,62 @@ pub fn cmd_plot_ready(_args: &[String]) -> Result<(), String> {
     }
 }
 
-/// `corral _show-object SESIÓN NOMBRE`.
+/// `corral _show-object SESSION NAME`.
 pub fn cmd_show_object(args: &[String]) -> Result<(), String> {
-    let (Some(dir), Some(name)) = (args.first(), args.get(1)) else { return Err("uso: corral _show-object SESIÓN NOMBRE".into()) };
+    let (Some(dir), Some(name)) = (args.first(), args.get(1)) else { return Err(tr("usage: corral _show-object SESSION NAME", "uso: corral _show-object SESIÓN NOMBRE").into()) };
     println!("{}", show_plot_object(Path::new(dir), name));
     Ok(())
 }
 
 // ----------------------------------------------------------------------- tables and links
 
-const VIEW_USAGE: &str = "uso: corral view ARCHIVO [--title TÍTULO] [--inline] [--session SESIÓN]";
+fn view_usage() -> &'static str {
+    tr("usage: corral view FILE [--title TITLE] [--mirador] [--inline] [--session SESSION]",
+       "uso: corral view ARCHIVO [--title TÍTULO] [--mirador] [--inline] [--session SESIÓN]")
+}
 
-/// `corral view ARCHIVO`: a table (parquet, csv, …) in a herdr popup, in Mirador, or here.
+/// `corral view FILE`: a table (parquet, csv, …) in a herdr popup, in Mirador, or here.
+/// The terminal viewer is the default; Mirador only when asked (`--mirador`, the
+/// `m` key in the viewer or the variables pane, `View(x, mirador = TRUE)`).
 pub fn cmd_view(args: &[String]) -> Result<(), String> {
-    let (mut file, mut title, mut inline, mut session) = (None::<String>, None::<String>, false, None::<String>);
+    let (mut file, mut title, mut inline, mut session, mut mirador) = (None::<String>, None::<String>, false, None::<String>, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--title" => title = it.next().cloned(),
             "--session" => session = it.next().cloned(),
             "--inline" => inline = true,
+            "--mirador" => mirador = true,
             "-h" | "--help" => {
-                println!("{VIEW_USAGE}");
+                println!("{}", view_usage());
                 return Ok(());
             }
-            s if s.starts_with("--") => return Err(format!("opción desconocida {s}\n{VIEW_USAGE}")),
+            s if s.starts_with("--") => return Err(trf!("unknown option {s}\n{}", "opción desconocida {s}\n{}", view_usage())),
             _ => file = Some(a.clone()),
         }
     }
-    let file = file.ok_or(VIEW_USAGE)?;
-    let path = std::fs::canonicalize(&file).map_err(|_| format!("no existe {file}"))?;
+    let file = file.ok_or(view_usage())?;
+    let path = std::fs::canonicalize(&file).map_err(|_| trf!("{file} doesn't exist", "no existe {file}"))?;
     if !path.is_file() {
-        return Err(format!("no existe {}", path.display()));
+        return Err(trf!("{} doesn't exist", "no existe {}", path.display()));
     }
     let title = title.unwrap_or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
     let shown = path.to_string_lossy().into_owned();
 
     // auto: inside herdr everything opens in herdr; elsewhere Mirador if it is running.
     let target = std::env::var("CORRAL_VIEW").unwrap_or_else(|_| "auto".into());
-    let use_mirador = target == "mirador" || (target == "auto" && !env::in_herdr() && mirador_alive(&mirador_info(), false));
+    let use_mirador = mirador || target == "mirador" || (target == "auto" && !env::in_herdr() && mirador_alive(&mirador_info(), false));
     if !inline && use_mirador {
-        let info = ensure_mirador()?;
-        let body = obj(vec![("path", shown.as_str().into()), ("title", title.as_str().into()),
-                            ("session", session.map(Value::from).unwrap_or(Value::Null))]);
-        mirador_call(&info, "/api/tables", Some(&body), Duration::from_secs(10))?;
-        if !mirador_alive(&info, true) {
-            open_mirador_window(&info);
-        }
-        return Ok(());
+        return table_to_mirador(&shown, &title, session.as_deref());
     }
     if env::in_herdr() && !inline {
-        match open_popup("table", &[("CORRAL_FILE", &shown), ("CORRAL_TITLE", &title)]) {
+        let mut vars = vec![("CORRAL_FILE", shown.as_str()), ("CORRAL_TITLE", title.as_str())];
+        if let Some(s) = &session {
+            vars.push(("CORRAL_SESSION", s.as_str()));
+        }
+        match open_popup("table", &vars) {
             Ok(()) => return Ok(()),
-            Err(e) => eprintln!("corral: popup no disponible ({e}); abro un panel"),
+            Err(e) => eprintln!("corral: {}", trf!("popup unavailable ({e}); opening a pane", "popup no disponible ({e}); abro un panel")),
         }
         // Plugin not linked or popup unavailable: a split pane.
         let here = env::current_pane();
@@ -472,14 +478,32 @@ pub fn cmd_view(args: &[String]) -> Result<(), String> {
         split.push(here.clone().unwrap_or_else(|| "--current".into()));
         split.extend(["--direction", "right", "--ratio", "0.4", "--focus"].map(String::from));
         let args: Vec<&str> = split.iter().map(String::as_str).collect();
-        let new = herdr::cli(&args)?.get("pane").get("pane_id").str().ok_or("herdr no creó el panel")?.to_string();
-        herdr::rename(&new, &format!("tabla: {title}"))?;
-        let viewer = format!("CORRAL_TITLE={} {} _table {}; exit", env::sh_quote(&title), console::program(), env::sh_quote(&shown));
+        let new = herdr::cli(&args)?.get("pane").get("pane_id").str().ok_or(tr("herdr didn't create the pane", "herdr no creó el panel"))?.to_string();
+        herdr::rename(&new, &trf!("table: {title}", "tabla: {title}"))?;
+        let viewer = format!("CORRAL_TITLE={} CORRAL_SESSION={} {} _table {}; exit", env::sh_quote(&title),
+                             env::sh_quote(session.as_deref().unwrap_or("")), console::program(), env::sh_quote(&shown));
         return herdr::run(&new, &viewer);
     }
     std::env::set_var("CORRAL_TITLE", &title);
+    if let Some(s) = &session {
+        std::env::set_var("CORRAL_SESSION", s);
+    }
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     Err(Command::new(me).arg("_table").arg(&path).exec().to_string())
+}
+
+/// A table file in Mirador: it opens in its own tab, and the browser window
+/// opens too when no Mirador page is showing. The same file the terminal viewer
+/// reads, so nothing is copied.
+pub fn table_to_mirador(path: &str, title: &str, session: Option<&str>) -> Result<(), String> {
+    let info = ensure_mirador()?;
+    let body = obj(vec![("path", path.into()), ("title", title.into()),
+                        ("session", session.filter(|s| !s.is_empty()).map(Value::from).unwrap_or(Value::Null))]);
+    mirador_call(&info, "/api/tables", Some(&body), Duration::from_secs(10))?;
+    if !mirador_alive(&info, true) {
+        open_mirador_window(&info);
+    }
+    Ok(())
 }
 
 /// `corral open [URL]`: a local URL (quarto preview, httpgd, a clicked link) in
@@ -510,16 +534,19 @@ fn fg(p: &Value, key: &str, fallback: &str) -> String {
 /// o opens Mirador, q quits.
 pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
     let Some(dir) = std::env::var_os("CORRAL_SESSION_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) else {
-        message_screen("No hay una sesión de R con Corral",
-                       "Abre R en un panel de herdr (con corral.R en tu .Rprofile)\no usa ctrl+b a para armar el espacio de trabajo.");
+        message_screen(tr("No R session with Corral", "No hay una sesión de R con Corral"),
+                       tr("Open R in a herdr pane (with corral.R in your .Rprofile)\nor press ctrl+b a to set up the workspace.",
+                          "Abre R en un panel de herdr (con corral.R en tu .Rprofile)\no usa ctrl+b a para armar el espacio de trabajo."));
         return Ok(());
     };
     if !dir.join("plots-url").is_file() {
-        message_screen("Todavía no hay gráficos", "Dibuja algo en la consola de R, por ejemplo plot(1:10),\ny vuelve a abrir este visor con ctrl+b f.");
+        message_screen(tr("No plots yet", "Todavía no hay gráficos"),
+                       tr("Draw something in the R console, for example plot(1:10),\nthen open this viewer again with ctrl+b f.",
+                          "Dibuja algo en la consola de R, por ejemplo plot(1:10),\ny vuelve a abrir este visor con ctrl+b f."));
         return Ok(());
     }
     if env::which("chafa").is_none() {
-        message_screen("Falta chafa", "Instálalo con: sudo apt install chafa");
+        message_screen(tr("chafa is missing", "Falta chafa"), tr("Install it with: sudo apt install chafa", "Instálalo con: sudo apt install chafa"));
         return Ok(());
     }
     let kitty = image_mode().0 == "kitty";
@@ -533,7 +560,9 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
 
     let mut ids = httpgd_ids(&dir);
     if ids.is_empty() && httpgd_state(&dir).is_null() {
-        message_screen("httpgd no responde", "¿Cerraste R o el dispositivo gráfico?\nDibuja de nuevo y vuelve a abrir el visor.");
+        message_screen(tr("httpgd isn't responding", "httpgd no responde"),
+                       tr("Did you close R or the graphics device?\nDraw again and reopen the viewer.",
+                          "¿Cerraste R o el dispositivo gráfico?\nDibuja de nuevo y vuelve a abrir el visor."));
         return Ok(());
     }
     let mut upid = httpgd_state(&dir).get("upid").clone();
@@ -552,7 +581,7 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
         let area = rows.saturating_sub(2).max(4);
         out(&format!("{}\x1b[2J\x1b[H", if kitty { "\x1b_Ga=d,q=2\x1b\\" } else { "" }));
         if ids.is_empty() {
-            out(&format!("\x1b[3;3H{muted}No hay gráficos en esta sesión. Dibuja algo en R.{RESET}"));
+            out(&format!("\x1b[3;3H{muted}{}{RESET}", tr("No plots in this session. Draw something in R.", "No hay gráficos en esta sesión. Dibuja algo en R.")));
         } else {
             let (w, h, zoom) = if kitty {
                 // Real pixels when the terminal reports them; otherwise ~9x19 px per cell.
@@ -577,23 +606,24 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
                         Ok(o) => {
                             let _ = std::io::stdout().write_all(&o.stdout);
                         }
-                        Err(e) => out(&format!("\x1b[3;3H{accent}No pude dibujar el gráfico: {e}{RESET}")),
+                        Err(e) => out(&format!("\x1b[3;3H{accent}{}{RESET}", trf!("Couldn't draw the plot: {e}", "No pude dibujar el gráfico: {e}"))),
                     }
                 }
-                _ => out(&format!("\x1b[3;3H{accent}No pude traer el gráfico de httpgd{RESET}")),
+                _ => out(&format!("\x1b[3;3H{accent}{}{RESET}", tr("Couldn't get the plot from httpgd", "No pude traer el gráfico de httpgd"))),
             }
         }
         let pos = if ids.is_empty() { "0/0".to_string() } else { format!("{}/{}", idx + 1, ids.len()) };
         let live = if follow { format!("{green}●{RESET} ") } else { String::new() };
-        let hint = "←/→ historial · o abrir en el navegador · q salir";
-        let mut footer = format!(" {accent}◔{RESET} {text}Gráfico {pos}{RESET}  {live}{dim}{}{RESET}", clip(hint, cols.saturating_sub(20)));
+        let hint = tr("←/→ history · o open in the browser · q quit", "←/→ historial · o abrir en el navegador · q salir");
+        let plot = tr("Plot", "Gráfico");
+        let mut footer = format!(" {accent}◔{RESET} {text}{plot} {pos}{RESET}  {live}{dim}{}{RESET}", clip(hint, cols.saturating_sub(20)));
         if !status.is_empty() {
             footer += &format!("  {muted}{status}{RESET}");
         }
         out(&format!("\x1b[{rows};1H\x1b[2K{footer}"));
     };
 
-    let Some(scr) = Screen::enter(false) else { return Err("no hay una terminal".into()) };
+    let Some(scr) = Screen::enter(false) else { return Err(tr("no terminal", "no hay una terminal").into()) };
     let mut size = scr.size();
     render(&ids, idx, follow, &status);
     let mut last_poll = Instant::now();
@@ -621,7 +651,7 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
                 render(&ids, idx, follow, &status);
             }
             Some("o") => {
-                render(&ids, idx, follow, "abriendo…");
+                render(&ids, idx, follow, tr("opening…", "abriendo…"));
                 if let Ok(info) = ensure_mirador() {
                     open_mirador_window(&info);
                 }

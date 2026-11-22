@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The script editor · Corral docs</title>
+<meta name="description" content="The script pane: Fresh, running code, the temporary draft and how to save it, completion and diagnostics for R and Python, formatting with Air and Ruff, and agents writing in the draft.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>The script editor</h1>
+    <p class="intro">The script pane is <a href="https://getfresh.dev">Fresh</a>, a terminal editor without modes, with VS Code's shortcuts, menus and mouse. Corral adds running code in the console, a temporary draft, completion from your live R session and formatting on save.</p>
+
+    <h2>Run code</h2>
+    <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>R</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) runs the selection or, without one, the whole statement under the cursor, including <code>|&gt;</code> or <code>+</code> chains over several lines, and moves to the next statement.</li>
+    <li><kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>) runs the whole file with <code>source(echo = TRUE)</code>.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>L</kbd> inserts <code>&lt;-</code> and <kbd>Ctrl</kbd>+<kbd>U</kbd> inserts <code>|&gt;</code>.</li>
+    </ul>
+    <p>The file decides the console: code from a <code>.R</code> file goes to R and code from a <code>.py</code> file goes to Python, which comes into view (and starts, the first time). <a href="keys.html#script-editor">Keyboard shortcuts</a> lists every key.</p>
+
+    <h3>In Python</h3>
+    <p><kbd>Ctrl</kbd>+<kbd>R</kbd> sends the whole statement under the cursor: a function with all its body (blank lines included), an <code>if</code> with its <code>else</code>, a call spread over several lines, or a function with its decorators. The code reaches IPython as one pasted block and shows up at <code>In [n]:</code>. A selection is sent without its common indentation. <kbd>F5</kbd> runs the file with <code>%run -i</code>, which leaves the variables in the session. <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd> do nothing in a <code>.py</code> file.</p>
+
+    <h3>From any pane</h3>
+    <p>Select text with the mouse in any pane, for example code Claude wrote; herdr copies it on its own. Then press <kbd>ctrl+b</kbd> <kbd>enter</kbd> to run it in the console in view. Without a selection, it sends what is in the clipboard.</p>
+
+    <h2>The draft</h2>
+    <p>Each layout opens a new, empty <code>draft.R</code> inside the project, in <code>.corral/&lt;workspace&gt;-&lt;date&gt;/</code>. Being in the project means Air, lintr and the language server use the project's configuration (<code>air.toml</code>, <code>.lintr</code>, <code>DESCRIPTION</code>, <code>renv.lock</code>).</p>
+    <p>Corral creates <code>.corral/.gitignore</code> with <code>*</code>, so git doesn't see those files and you don't have to touch your <code>.gitignore</code>. The file explorer doesn't show <code>.corral/</code> because its name starts with a dot.</p>
+    <p>The draft is deleted when you close the editor, its pane or the layout. If something closes the editor abruptly, the abandoned draft is deleted the next time you open a layout in that project. A file you saved by hand in the draft's folder is kept, and that folder is deleted after two days.</p>
+    <p>If you open the layout in your home folder, or in a folder you can't write to, the draft goes to <code>$XDG_RUNTIME_DIR/corral/borradores/</code>, which WSL empties when it restarts.</p>
+    <p>The draft is a real file, and not an "untitled" buffer, because completion only works in saved files. New untitled files open as R, without completion until you save them.</p>
+
+    <h2>Save your work</h2>
+    <p>The draft is lost when the layout closes, unless you save it:</p>
+    <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>S</kbd> in the draft asks for a name and saves the file in the project (the folder where you opened the layout). You can type <code>analisis/modelo</code> or a full path. Without an extension it adds <code>.R</code>, and if the file exists it asks before replacing it. From then on the editor works on the new file. In any other file, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves as usual.</li>
+    <li>"Save as" in the File menu starts in the draft's folder, which can't be changed. If you save there under another name, Corral moves the file into the project with that name. If the project already has a file with that name, Corral leaves yours in the draft's folder and tells you.</li>
+    <li>Or ask Claude. It uses <code>corral script --save path.R</code>, which also saves what you haven't saved yet.</li>
+    </ul>
+    <pre><code><span class="p">$ </span>corral script --read
+<span class="p">$ </span>corral script --save analisis/modelo.R</code></pre>
+    <p><code>--read</code> prints the current draft, unsaved edits included. <code>--save</code> refuses to replace an existing file unless you add <code>--force</code>.</p>
+
+    <h2>Completion and diagnostics</h2>
+    <p>Completion appears in a menu while you type. You also get help when you hover over a function, its signature when you open the parenthesis, and go to definition. Diagnostics show only real problems: style is never flagged, because the formatter fixes it when you save.</p>
+
+    <h3>R with Ark</h3>
+    <p>With Ark as the console (the default), the same R as your console gives the completion, so it knows your session: <code>autos$</code> offers the columns of your <code>autos</code>. The diagnostics are Ark's, mostly syntax errors.</p>
+
+    <h3>Plain R</h3>
+    <p>With plain R as the console, completion comes from the <code>languageserver</code> package, which only sees the text of your files. The diagnostics are lintr's <em>correctness</em> rules (an object that doesn't exist, <code>x == NA</code>, a repeated argument), or the project's <code>.lintr</code> if it has one.</p>
+    <p>Fresh starts the server with <code>corral _lsp</code>, which picks Ark's or <code>languageserver</code> according to the console.</p>
+
+    <h3>Python</h3>
+    <p>Completion, help and go to definition come from ty, which reads the project's <code>.venv</code> and so knows your packages. ty can check types too, but Corral turns those diagnostics off so they don't repeat Ruff's. The diagnostics are Ruff's, with its default rules: real errors such as undefined names, unused imports and syntax errors. If the project has a Ruff configuration in <code>pyproject.toml</code> or <code>ruff.toml</code>, Ruff uses it.</p>
+    <p>ty is still a 0.0 version. If something fails, go back to python-lsp-server; the change applies when the editor opens again:</p>
+    <pre><code><span class="p">$ </span>corral config python_lsp pylsp
+<span class="p">$ </span>corral config python_lsp ty</code></pre>
+
+    <h3>The project folder</h3>
+    <p>The language server reads every R file in the project folder. Fresh finds that folder by going up from the open file until it finds <code>.corral</code>, <code>.git</code>, <code>DESCRIPTION</code>, <code>renv.lock</code> or another marker.</p>
+
+    <h2>Formatting and indentation</h2>
+    <ul>
+    <li><strong>Indentation while you type</strong>, the way Air leaves it: one level inside an open parenthesis, one level for the lines that follow <code>|&gt;</code>, <code>%&gt;%</code>, <code>+</code> or another operator, and back to the margin when the statement ends.</li>
+    <li><strong>Formatting with <a href="https://posit-dev.github.io/air/">Air</a></strong> every time you save (<kbd>Ctrl</kbd>+<kbd>S</kbd>). In Python, Ruff formats on save the same way.</li>
+    </ul>
+
+    <h2>Reopen the editor after a change</h2>
+    <p>Each editor reads its configuration and plugins when it opens. If you change Fresh's <code>config.json</code> or Corral's plugin, close the editor with <kbd>Ctrl</kbd>+<kbd>Q</kbd> (save the draft first if you need it) and open the layout again with <kbd>ctrl+b</kbd> <kbd>a</kbd>. The same goes for a shortcut you change with <code>corral keys --change</code>.</p>
+    <p>Corral's editor settings are in <code>fresh/config.json</code> and its plugin in <code>fresh/plugins/corral.ts</code>, in Corral's folder. Fresh comes with update checks and telemetry turned off (<code>check_for_updates: false</code>). Corral also turns off the Fresh plugins it doesn't use, such as agent orchestration (herdr does that already), welcome screens, Kubernetes, devcontainers, and languages like C# or C++.</p>
+
+    <h2>Agents in the draft</h2>
+    <p>Claude can read your draft and put code into it. The text goes at the end, on a new line, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>, and your unsaved work stays:</p>
+    <pre><code><span class="p">$ </span>echo 'resumen &lt;- summary(autos)' | corral script --write</code></pre>
+    <p><code>--write</code> reads the text from stdin, or from a file you name. With <code>--replace</code>, it replaces the whole draft. The editor doesn't let other programs change a buffer you haven't saved, so Corral leaves the request next to the draft and its editor plugin applies it.</p>
+    <p>Corral's skill tells Claude to replace the draft only when you ask, and never to save it on its own: the draft is temporary on purpose. See <a href="agents.html">Working with agents</a>.</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

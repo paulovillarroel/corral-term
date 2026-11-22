@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · Corral docs</title>
+<meta name="description" content="What Corral is, the pieces it is made of, and when it acts.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Overview</h1>
+    <p class="intro">Corral is a data science IDE for R and Python, both first-class, with R first. It lives in your terminal. It gives you what you would otherwise open a desktop IDE for (a script you run piece by piece, a live console, your variables, tables and plots) next to your AI agents, and it opens in about 400 milliseconds.</p>
+
+    <h2>What you get</h2>
+    <ul>
+      <li><strong>A script editor</strong> (<a href="https://getfresh.dev">Fresh</a>) where <kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line or the selection and <kbd>F5</kbd> runs the file, with completion from your live R session and formatting with <a href="https://posit-dev.github.io/air/">Air</a>.</li>
+      <li><strong>A console</strong> for R, running on <a href="https://github.com/posit-dev/ark">Ark</a>, Positron's R kernel, or plain R if you prefer. Python runs in IPython inside your project's uv environment, in the same spot, one key away.</li>
+      <li><strong>A variables pane</strong> that updates after every command, and a <strong>table viewer</strong> for <code>View()</code> that pages through millions of rows with DuckDB.</li>
+      <li><strong>Plots</strong> in Mirador, a light page in your browser that shows each new plot about 80 ms after it is drawn.</li>
+      <li><strong>Agents in the same session.</strong> Claude Code runs code in your console with <code>corral eval</code>, so its objects land where you can see them.</li>
+    </ul>
+
+    <h2>R and Python, both first-class</h2>
+    <p>Both languages get the whole workbench: the editor with completion and formatting (Air for R, Ruff for Python), the console, the variables pane, <code>View()</code>, plots in Mirador and agents running code in your session. R comes first: it is the default console, and its language server is Ark's, which knows your live objects.</p>
+    <p>Projects often mix the two, so there is no language to choose up front. Running a <code>.py</code> file (or <kbd>ctrl+b</kbd> <kbd>y</kbd>) brings the Python console into the console spot; the one you are not using waits in a hidden tab and keeps its state.</p>
+
+    <h2>How it is built</h2>
+    <p>Corral is one small program, <code>corral</code>, written in Rust with no dependencies. It talks to the pieces that do the heavy lifting, most of them written in Rust as well:</p>
+    <table>
+      <thead><tr><th>Piece</th><th>What it does here</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://herdr.dev/tui/">herdr</a></td><td>The terminal workspace. Every console lives in a herdr pane, so closing the window loses nothing.</td></tr>
+        <tr><td><a href="https://github.com/posit-dev/ark">Ark</a></td><td>The R kernel from Positron: the console and the language server, which knows your live objects.</td></tr>
+        <tr><td><a href="https://getfresh.dev">Fresh</a></td><td>The script editor, with a Corral plugin for running code and keeping the draft.</td></tr>
+        <tr><td>Mirador</td><td>Corral's viewer in the browser, served by the <code>corral</code> binary: your plots, and tables when you send them there.</td></tr>
+        <tr><td><a href="https://duckdb.org">DuckDB</a></td><td>Queries the tables you open with <code>View()</code>, one page at a time.</td></tr>
+        <tr><td><a href="https://docs.astral.sh/uv/">uv</a>, ty, Ruff</td><td>Python: the console's environment, completion and diagnostics.</td></tr>
+      </tbody>
+    </table>
+    <p>The only parts that are not Rust run inside your own sessions: a small R file that R loads, a Python module that IPython loads, and the editor plugin. <a href="architecture.html">Architecture</a> has the diagrams: the layers, what runs where, and how code, tables and plots travel.</p>
+
+    <h2>When Corral acts</h2>
+    <p>Corral stays out of the way of everything you already have:</p>
+    <ul>
+      <li><strong>In R</strong>, it only switches on in the console a Corral layout opens, or in an R where you turn it on (<kbd>ctrl+b</kbd> <kbd>m</kbd>, or <code>corral_activate()</code>). Any other R works as always, with its own <code>View()</code> and graphics device.</li>
+      <li><strong>The layout</strong> (script, console and variables) only appears when you ask for it with <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+a</kbd>.</li>
+      <li><strong>Agents</strong> use your console only when the workspace has an active Corral console; otherwise they work as usual.</li>
+    </ul>
+
+    <div class="note"><p>New here? <a href="install.html">Install Corral</a>, then follow the <a href="quickstart.html">quick start</a>: it takes about two minutes.</p></div>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

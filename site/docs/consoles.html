@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consoles: R and Python · Corral docs</title>
+<meta name="description" content="The R console on Ark or plain R, the Python console in IPython through uv, marking any pane as the console, restarting a console, and help in the browser.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Consoles: R and Python</h1>
+    <p class="intro">The console spot holds R or Python. R runs on <a href="https://github.com/posit-dev/ark">Ark</a>, Positron's R kernel, or on plain R if you prefer. Python runs in IPython inside your project's uv environment.</p>
+
+    <h2>R on Ark</h2>
+    <p>When Ark is installed, the R console is Ark. Corral starts it and talks to it directly over the Jupyter protocol, with its own console written in Rust (3 MB). This is how it behaves:</p>
+    <ul>
+    <li>The prompt is <code>In [1]:</code>, and <code>...:</code> on the lines that follow. Code from <kbd>Ctrl</kbd>+<kbd>R</kbd> arrives as one pasted block and shows complete at the prompt.</li>
+    <li><kbd>Enter</kbd> runs the code when the expression is complete. If a parenthesis or a brace is still open, it moves to the next line, indented. <kbd>Alt</kbd>+<kbd>Enter</kbd> runs it anyway.</li>
+    <li><kbd>↑</kbd> <kbd>↓</kbd> go through the history; if you already typed something, only the entries that start the same. The history is saved in <code>~/.local/state/corral/historial-r.jsonl</code>.</li>
+    <li><kbd>Tab</kbd> completes with R's own completion: functions, arguments, columns after <code>$</code>, packages.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>C</kbd> interrupts what is running, or clears what you typed. <kbd>Ctrl</kbd>+<kbd>D</kbd> on an empty line closes the console, like <code>q()</code>. <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>E</kbd>, <kbd>Ctrl</kbd>+<kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>W</kbd> and <kbd>Ctrl</kbd>+<kbd>L</kbd> work too.</li>
+    <li><code>readline()</code> and <code>menu()</code> ask their questions in the console, as in R.</li>
+    <li><code>?mean</code> or <code>help(mean)</code> open the help in a browser window.</li>
+    <li>Variables, plots in Mirador, <code>View()</code>, <code>corral eval</code> and the rest of Corral work the same as with plain R. Ark points some R options (the graphics device, the browser, the editor) at Positron's panes, which don't exist here; Corral's R file protects them with <code>ark.protected_options</code> so they stay Corral's.</li>
+    </ul>
+
+    <h3>Why Ark</h3>
+    <p>The gain is in the editor and in resources. Completion comes from the console's own R, so you don't need a second R for the language server. Measured with the same packages loaded (dplyr and ggplot2) and one plot, Ark takes about 330 MB with its language server included, plus about 6 MB for the console and the bridge. Plain R takes about 250 MB, plus about 450 MB for <code>languageserver</code>. At rest, Ark uses 0.1 % CPU and <code>languageserver</code> 3 %.</p>
+
+    <h3>Install or update Ark</h3>
+    <pre><code><span class="p">$ </span>corral ark
+<span class="p">$ </span>corral ark --install</code></pre>
+    <p><code>corral ark</code> shows what is installed and whether the R console uses Ark. <code>--install</code> downloads Ark into <code>~/.local/share/corral/ark</code>; without a version it installs 0.1.252, the one Corral was tested with. You can name another version (<code>corral ark --install 0.1.252</code>), and Corral uses the newest one installed.</p>
+    <div class="note warn"><p>Ark is still a 0.1 version, and Corral talks to its language server over an internal Positron channel (<code>positron.lsp</code>) that can change between versions. That is why <code>corral ark --install</code> installs the tested version. If a new version fails, <code>corral config r_console r</code> goes back to plain R.</p></div>
+
+    <h3>Plain R</h3>
+    <pre><code><span class="p">$ </span>corral config r_console r
+<span class="p">$ </span>corral config r_console ark</code></pre>
+    <p>The first goes back to plain R, the second to Ark. The change applies to the consoles you open afterwards. Without Ark installed, the console is plain R anyway. <code>r_console</code> also takes a command of your own.</p>
+
+    <h3>Ark with jupyter-console</h3>
+    <p>To use Ark through <code>jupyter-console</code> instead of Corral's console:</p>
+    <pre><code><span class="p">$ </span>corral config ark_frontend jupyter
+<span class="p">$ </span>corral config ark_frontend corral</code></pre>
+    <p>The second goes back to Corral's console. Corral writes its own kernel definition for Ark, so your Jupyter setup stays as it is. <code>corral doctor</code> tells you if <code>jupyter-console</code> is missing (<code>uv tool install jupyter-console</code> installs it).</p>
+
+    <h2>Python in IPython</h2>
+    <p>R is the default console. In a project with R and Python you don't choose up front: the console follows what you run.</p>
+    <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.py</code> file show the Python console in place of the R one. The first time, they start it: IPython with <code>uv run --with ipython</code> in the project folder, so it uses the project's environment (its <code>.venv</code> and its packages) without adding IPython to it. If the folder isn't a uv project, uv uses the <code>.venv</code> it finds, or a Python of its own.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a <code>.R</code> file go back to R. <kbd>ctrl+b</kbd> <kbd>y</kbd> switches by hand.</li>
+    <li>The console you don't see keeps running in the "corral (oculto)" tab, with its variables. If you go to that tab, you can use it there as well.</li>
+    <li>The variables pane, Mirador and <code>View()</code> follow the console in view. The pane's header says which one, for example "R 4.6.1" or "Python 3.14.3".</li>
+    </ul>
+    <p>The first start can take a few seconds while uv prepares the environment. Python needs <a href="https://docs.astral.sh/uv/">uv</a>. matplotlib figures go to Mirador (see <a href="plots.html#python-figures">Python figures</a>), and <code>View(df)</code> opens pandas, polars or pyarrow tables.</p>
+
+    <h3>Another Python command</h3>
+    <p>To start the Python console with another command, for example with more packages:</p>
+    <pre><code><span class="p">$ </span>corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/.local/share/corral-term/py/startup.py'</code></pre>
+    <p>Keep <code>-i …/py/startup.py</code> at the end: that file switches Corral on inside IPython.</p>
+
+    <h2>Use any pane as the console</h2>
+    <p>In a pane where R or IPython runs, <kbd>ctrl+b</kbd> <kbd>m</kbd> marks it as the console and, if R or IPython is already open there, switches Corral on in it. It picks R or Python by what runs in the pane.</p>
+    <pre><code><span class="p">$ </span>corral console
+<span class="p">$ </span>corral console --lang python</code></pre>
+    <p><code>corral console</code> does the same; <code>--lang r|python</code> sets the language and <code>--pane</code> names another pane. In R, you can also switch Corral on with <code>corral_activate()</code>.</p>
+    <p>The Python console needs IPython: <kbd>ctrl+b</kbd> <kbd>m</kbd> on a <code>python</code> without IPython marks the pane, but doesn't switch Corral on.</p>
+
+    <h2>Restart a console</h2>
+    <p>If you quit the console with <code>q()</code> or <code>exit()</code>, its pane is left with a shell. The next <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>ctrl+b</kbd> <kbd>y</kbd> or <code>corral eval</code> starts the console again in the same pane. The variables pane follows the new session.</p>
+    <p>After a restart of the Ark console, the editor's completion reconnects when Fresh starts the language server again: close and open the file, or restart Fresh.</p>
+
+    <h2>Help in the browser</h2>
+    <p>With Ark, <code>?mean</code> or <code>help(mean)</code> open the help page in a browser window. Corral opens it with <code>corral open</code>, so it uses the same browser as Mirador (see <a href="config.html#environment-variables"><code>CORRAL_BROWSER</code></a>).</p>
+
+    <nav class="pager" aria-label="Pages"></nav>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R and Python, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

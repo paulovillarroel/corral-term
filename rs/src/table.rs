@@ -4,6 +4,7 @@
 //! opens at once and costs no memory while you look at it.
 
 use crate::env;
+use crate::i18n::{thousands, tr};
 use crate::json::Value;
 use crate::mirador::{duck, sql_ident, sql_lit, table_source};
 use crate::term::{clip, out, width, Screen};
@@ -20,6 +21,12 @@ struct Col {
     name: String,
     ty: String,
     numeric: bool,
+}
+
+impl AsRef<str> for Col {
+    fn as_ref(&self) -> &str {
+        &self.name
+    }
 }
 
 fn numeric(ty: &str) -> bool {
@@ -92,15 +99,7 @@ impl Viewer {
     }
 
     fn where_clause(&self) -> String {
-        let mut parts: Vec<String> = self.conditions.iter().map(|(_, sql)| format!("({sql})")).collect();
-        let q = self.filter.trim();
-        if !q.is_empty() {
-            let pattern = format!("%{}%", q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
-            let any: Vec<String> = self.cols.iter()
-                .map(|c| format!("CAST({} AS VARCHAR) ILIKE {} ESCAPE '\\'", sql_ident(&c.name), sql_lit(&pattern))).collect();
-            parts.push(format!("({})", any.join(" OR ")));
-        }
-        if parts.is_empty() { String::new() } else { format!(" WHERE {}", parts.join(" AND ")) }
+        where_sql(&self.conditions, &self.filter, &self.cols)
     }
 
     fn filtered(&self) -> bool {
@@ -113,7 +112,7 @@ impl Viewer {
         let check = format!("SELECT count(*) AS n FROM {}{}", self.src, self.where_clause());
         if let Err(e) = count(&check) {
             self.conditions.pop();
-            self.status = format!("filtro no válido: {}", e.lines().next().unwrap_or(&e));
+            self.status = invalid_filter(&e);
             return;
         }
         self.requery();
@@ -121,7 +120,7 @@ impl Viewer {
 
     fn order_clause(&self) -> String {
         match self.sort {
-            Some((c, desc)) => format!(" ORDER BY {} {} NULLS LAST", sql_ident(&self.cols[c].name), if desc { "DESC" } else { "ASC" }),
+            Some((c, desc)) => order_sql(&self.cols[c].name, desc),
             None => String::new(),
         }
     }
@@ -186,34 +185,42 @@ impl Viewer {
         };
         let c = &self.colors;
         let mut f = String::from("\x1b[2J\x1b[H");
+        let (all, ncols) = (thousands(self.all as u64), self.cols.len());
+        let rows_word = if self.all == 1 { tr("row", "fila") } else { tr("rows", "filas") };
+        let cols_word = if ncols == 1 { tr("column", "columna") } else { tr("columns", "columnas") };
         let count = if !self.filtered() {
-            format!("{} filas · {} columnas", self.all, self.cols.len())
+            format!("{all} {rows_word} · {ncols} {cols_word}")
         } else {
-            format!("{} de {} filas · {} columnas", self.total, self.all, self.cols.len())
+            let shown = thousands(self.total as u64);
+            trf!("{shown} of {all} {rows_word} · {ncols} {cols_word}", "{shown} de {all} {rows_word} · {ncols} {cols_word}")
         };
         f += &format!("\x1b[1;2H{}▸▸{RESET} {}{BOLD}{}{RESET}", c.accent, c.text, clip(&self.title, cols.saturating_sub(width(&count) + 8)));
         f += &format!("\x1b[1;{}H{}{count}{RESET}", cols.saturating_sub(width(&count)).max(1), c.muted);
-        let mut info: Vec<String> = self.conditions.iter().map(|(label, _)| format!("filtro: {label}")).collect();
+        let mut info: Vec<String> = self.conditions.iter().map(|(label, _)| trf!("filter: {label}", "filtro: {label}")).collect();
         if !self.filter.is_empty() {
-            info.push(format!("buscando «{}»", self.filter));
+            info.push(trf!("searching “{}”", "buscando «{}»", self.filter));
         }
         if let Some((i, desc)) = self.sort {
-            info.push(format!("orden: {} {}", self.cols[i].name, if desc { "▼" } else { "▲" }));
+            info.push(trf!("sort: {} {}", "orden: {} {}", self.cols[i].name, if desc { "▼" } else { "▲" }));
         }
         f += &format!("\x1b[2;2H{}{}{RESET}", c.dim, clip(&info.join(" · "), cols.saturating_sub(3)));
         f += &body;
         let hint = if let Some((is_filter, q)) = &self.typing {
             if *is_filter {
-                format!("filtro: {q}▏  Enter aplica · Esc cancela · p. ej. mpg > 20 & cyl == 6, region %in% c(\"a\", \"b\")")
+                trf!("filter: {q}▏  Enter applies · Esc cancels · e.g. mpg > 20 & cyl == 6, region %in% c(\"a\", \"b\")",
+                     "filtro: {q}▏  Enter aplica · Esc cancela · p. ej. mpg > 20 & cyl == 6, region %in% c(\"a\", \"b\")")
             } else {
-                format!("/{q}▏  Enter para buscar · Esc cancela")
+                trf!("/{q}▏  Enter to search · Esc cancels", "/{q}▏  Enter para buscar · Esc cancela")
             }
         } else if !self.status.is_empty() {
             self.status.clone()
         } else {
             match self.mode {
-                Mode::Data => "/ buscar · f filtrar · = igual a la celda · x quitar filtros · s ordenar · Enter fila · i resumen · Shift+rueda columnas · q cerrar".into(),
-                _ => "↑↓ mover · Esc volver · q cerrar".into(),
+                Mode::Data => tr(
+                    "/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Shift+wheel columns · q close",
+                    "/ buscar · f filtrar · = igual a la celda · x quitar filtros · s ordenar · Enter fila · i resumen · m Mirador · Shift+rueda columnas · q cerrar",
+                ).into(),
+                _ => tr("↑↓ move · Esc back · q close", "↑↓ mover · Esc volver · q cerrar").into(),
             }
         };
         f += &format!("\x1b[{rows};1H\x1b[2K {}{}{RESET}", c.dim, clip(&hint, cols.saturating_sub(2)));
@@ -224,7 +231,7 @@ impl Viewer {
         let c = &self.colors;
         let values = self.cache.get(i.wrapping_sub(self.cache_start)).cloned().unwrap_or_default();
         let name_w = self.cols.iter().map(|c| width(&c.name)).max().unwrap_or(4).min(30);
-        let mut f = format!("\x1b[3;2H{}Fila {}{RESET}", c.muted, i + 1);
+        let mut f = format!("\x1b[3;2H{}{} {}{RESET}", c.muted, tr("Row", "Fila"), thousands(i as u64 + 1));
         for (n, (col, v)) in self.cols.iter().zip(values.iter()).enumerate().skip(self.top).take(area) {
             let y = TOP + 1 + n - self.top;
             let value = match v { Value::Num(x) => format!("{x}"), other => fmt(other) };
@@ -241,7 +248,7 @@ impl Viewer {
         let widths: Vec<usize> = (0..scols.len()).map(|i| {
             srows.iter().map(|r| width(&fmt(&r[i]))).max().unwrap_or(0).max(width(&scols[i].name)).clamp(3, 24)
         }).collect();
-        let mut f = format!("\x1b[3;2H{}Resumen de DuckDB (SUMMARIZE){RESET}", c.muted);
+        let mut f = format!("\x1b[3;2H{}{}{RESET}", c.muted, tr("DuckDB's summary (SUMMARIZE)", "Resumen de DuckDB (SUMMARIZE)"));
         let mut x = 2;
         let mut header = String::new();
         for (i, col) in scols.iter().enumerate() {
@@ -331,7 +338,7 @@ impl Viewer {
             }
         }
         if self.total == 0 {
-            f += &format!("\x1b[{};4H{}Ninguna fila coincide.{RESET}", TOP + 2, c.muted);
+            f += &format!("\x1b[{};4H{}{}{RESET}", TOP + 2, c.muted, tr("No rows match.", "Ninguna fila coincide."));
         }
         f
     }
@@ -353,6 +360,50 @@ impl Viewer {
     }
 }
 
+// --------------------------------------------------------------------------- shared with Mirador's table view
+
+/// The WHERE clause for the filters (their SQL, all of them) and a search for a
+/// text in every column; empty when there is neither.
+pub(crate) fn where_sql<C: AsRef<str>>(conditions: &[(String, String)], search: &str, cols: &[C]) -> String {
+    let mut parts: Vec<String> = conditions.iter().map(|(_, sql)| format!("({sql})")).collect();
+    let q = search.trim();
+    if !q.is_empty() {
+        let pattern = format!("%{}%", q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let any: Vec<String> = cols.iter()
+            .map(|c| format!("CAST({} AS VARCHAR) ILIKE {} ESCAPE '\\'", sql_ident(c.as_ref()), sql_lit(&pattern))).collect();
+        parts.push(format!("({})", any.join(" OR ")));
+    }
+    if parts.is_empty() { String::new() } else { format!(" WHERE {}", parts.join(" AND ")) }
+}
+
+/// ORDER BY one column, missing values last.
+pub(crate) fn order_sql(name: &str, desc: bool) -> String {
+    format!(" ORDER BY {} {} NULLS LAST", sql_ident(name), if desc { "DESC" } else { "ASC" })
+}
+
+/// What DuckDB said about a filter it rejected, as the viewer shows it.
+pub(crate) fn invalid_filter(error: &str) -> String {
+    let why = error.lines().next().unwrap_or(error);
+    trf!("invalid filter: {why}", "filtro no válido: {why}")
+}
+
+/// The filter that keeps the rows whose column `name` has the value `cell` (the
+/// `=` key): what it shows (R style) and its SQL.
+pub(crate) fn equal_condition(name: &str, cell: &Value) -> (String, String) {
+    match cell {
+        Value::Null => (format!("is.na({name})"), format!("{} IS NULL", sql_ident(name))),
+        Value::Num(n) => (format!("{name} == {}", fmt(cell)), format!("{} = {n}", sql_ident(name))),
+        Value::Bool(b) => (format!("{name} == {}", fmt(cell)), format!("{} = {b}", sql_ident(name))),
+        Value::Str(t) => (format!("{name} == \"{t}\""), format!("CAST({} AS VARCHAR) = {}", sql_ident(name), sql_lit(t))),
+        other => (format!("{name} == {}", other.to_json()), format!("CAST({} AS VARCHAR) = {}", sql_ident(name), sql_lit(&other.to_json()))),
+    }
+}
+
+/// A column name as a filter starts with it: as is, or in `backticks`.
+pub(crate) fn filter_name(name: &str) -> String {
+    if plain(name) { name.to_string() } else { format!("`{name}`") }
+}
+
 /// A plain SQL identifier (no quoting needed).
 fn plain(name: &str) -> bool {
     let mut chars = name.chars();
@@ -361,7 +412,7 @@ fn plain(name: &str) -> bool {
 
 /// A filter written the R way or the SQL way, as DuckDB SQL: `&` `|` `!` `%in% c(...)`,
 /// `is.na(x)`, "text" in double quotes; column names with dots (or `backticks`) get quoted.
-fn translate(expr: &str, cols: &[Col]) -> String {
+pub(crate) fn translate<C: AsRef<str>>(expr: &str, cols: &[C]) -> String {
     let chars: Vec<char> = expr.chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -373,7 +424,7 @@ fn translate(expr: &str, cols: &[Col]) -> String {
             // "text" is a value in R, unless it names a column; `name` is always a column.
             let end = chars[i + 1..].iter().position(|&x| x == c).map(|p| i + 1 + p).unwrap_or(chars.len());
             let inner: String = chars[i + 1..end.min(chars.len())].iter().collect();
-            if c == '`' || cols.iter().any(|col| col.name == inner) {
+            if c == '`' || cols.iter().any(|col| col.as_ref() == inner) {
                 out += &sql_ident(&inner);
             } else {
                 out += &sql_lit(&inner);
@@ -410,7 +461,7 @@ fn translate(expr: &str, cols: &[Col]) -> String {
             let end = chars[i..].iter().position(|&x| !is_word(x)).map(|p| i + p).unwrap_or(chars.len());
             let word: String = chars[i..end].iter().collect();
             match word.as_str() {
-                w if cols.iter().any(|col| col.name == w) && !plain(w) => out += &sql_ident(w),
+                w if cols.iter().any(|col| col.as_ref() == w) && !plain(w) => out += &sql_ident(w),
                 "NA" | "NULL" => out += "NULL",
                 _ => out += &word,
             }
@@ -426,12 +477,12 @@ fn translate(expr: &str, cols: &[Col]) -> String {
         .replace("= NULL", "IS NULL")
 }
 
-fn count(sql: &str) -> Result<usize, String> {
+pub(crate) fn count(sql: &str) -> Result<usize, String> {
     Ok(duck(sql)?.arr().first().and_then(|r| r.get("n").num()).unwrap_or(0.0) as usize)
 }
 
 pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
-    let file = args.first().cloned().or_else(|| std::env::var("CORRAL_FILE").ok()).ok_or("falta el archivo (argumento o CORRAL_FILE)")?;
+    let file = args.first().cloned().or_else(|| std::env::var("CORRAL_FILE").ok()).ok_or(tr("the file is missing (an argument or CORRAL_FILE)", "falta el archivo (argumento o CORRAL_FILE)"))?;
     // Your own viewer, or VisiData if you prefer it (corral config table_viewer visidata).
     if let Ok(custom) = std::env::var("CORRAL_TABLE_VIEWER") {
         let argv: Vec<String> = custom.split_whitespace().map(|a| a.replace("{file}", &file)).collect();
@@ -447,7 +498,9 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
         return Err(err.to_string());
     }
     if env::which("duckdb").is_none() {
-        message_screen("Falta DuckDB", "El visor de tablas consulta el archivo con DuckDB.\nInstálalo o usa `corral config table_viewer visidata`.");
+        message_screen(tr("DuckDB is missing", "Falta DuckDB"),
+                       tr("The table viewer reads the file with DuckDB.\nInstall it, or use `corral config table_viewer visidata`.",
+                          "El visor de tablas consulta el archivo con DuckDB.\nInstálalo o usa `corral config table_viewer visidata`."));
         return Ok(());
     }
     let title = std::env::var("CORRAL_TITLE").ok().filter(|t| !t.is_empty())
@@ -455,13 +508,14 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
     let mut v = match Viewer::open(&file, &title) {
         Ok(v) => v,
         Err(e) => {
-            message_screen("No pude abrir la tabla", &e);
+            message_screen(tr("Couldn't open the table", "No pude abrir la tabla"), &e);
             return Ok(());
         }
     };
-    let Some(scr) = Screen::enter(true) else { return Err("no hay una terminal".into()) };
+    let Some(scr) = Screen::enter(true) else { return Err(tr("not a terminal", "no hay una terminal").into()) };
     let mut size = scr.size();
     v.render(&scr);
+    let mut spanish = crate::i18n::es();
     let mut dirty = false;
     loop {
         // Draw once the input that already arrived is handled: a burst of wheel
@@ -475,7 +529,14 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
             size = scr.size();
             v.render(&scr);
         }
-        let Some(key) = key else { continue };
+        let Some(key) = key else {
+            // The language switched (corral config language): draw in the new one.
+            if crate::i18n::es() != spanish {
+                spanish = !spanish;
+                v.render(&scr);
+            }
+            continue;
+        };
         let (_, rows) = scr.size();
         let area = rows.saturating_sub(TOP + 1).max(1);
         v.status.clear();
@@ -587,22 +648,13 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
             "/" => v.typing = Some((false, String::new())), // an empty search clears it
             "f" => {
                 // Start from the current column's name.
-                let name = &v.cols[v.col].name;
-                let start = if plain(name) { name.clone() } else { format!("`{name}`") };
-                v.typing = Some((true, format!("{start} ")));
+                v.typing = Some((true, format!("{} ", filter_name(&v.cols[v.col].name))));
             }
             "=" if v.total > 0 => {
                 // Keep the rows with the value of the selected cell.
                 v.ensure(v.row, 1);
-                let col = &v.cols[v.col];
                 let cell = v.cache.get(v.row.wrapping_sub(v.cache_start)).map(|r| r[v.col].clone()).unwrap_or(Value::Null);
-                let (label, sql) = match &cell {
-                    Value::Null => (format!("is.na({})", col.name), format!("{} IS NULL", sql_ident(&col.name))),
-                    Value::Num(n) => (format!("{} == {}", col.name, fmt(&cell)), format!("{} = {n}", sql_ident(&col.name))),
-                    Value::Bool(b) => (format!("{} == {}", col.name, fmt(&cell)), format!("{} = {b}", sql_ident(&col.name))),
-                    Value::Str(t) => (format!("{} == \"{t}\"", col.name), format!("CAST({} AS VARCHAR) = {}", sql_ident(&col.name), sql_lit(t))),
-                    other => (format!("{} == {}", col.name, other.to_json()), format!("CAST({} AS VARCHAR) = {}", sql_ident(&col.name), sql_lit(&other.to_json()))),
-                };
+                let (label, sql) = equal_condition(&v.cols[v.col].name, &cell);
                 v.add_condition(label, sql);
             }
             "x" => {
@@ -615,6 +667,17 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
                 v.top = 0;
             }
             "i" => v.summary(),
+            "m" => {
+                // The same file in Mirador, in the browser; this viewer stays open.
+                let path = std::fs::canonicalize(&file).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| file.clone());
+                let session = std::env::var("CORRAL_SESSION").ok();
+                v.status = tr("opening in Mirador…", "abriendo en Mirador…").into();
+                v.render(&scr);
+                v.status = match crate::plots::table_to_mirador(&path, &title, session.as_deref()) {
+                    Ok(()) => tr("open in Mirador, in the browser · q closes this viewer", "abierta en Mirador, en el navegador · q cierra este visor").into(),
+                    Err(e) => format!("Mirador: {e}"),
+                };
+            }
             _ => {}
         }
         dirty = true;
@@ -647,6 +710,19 @@ mod tests {
         assert_eq!(sql("`Sepal.Length` >= 5.5"), "\"Sepal.Length\" >= 5.5");
         assert_eq!(sql("x != NA"), "x IS NOT NULL");
         assert_eq!(sql("x == NA"), "x IS NULL");
+    }
+
+    #[test]
+    fn equal_to_the_cell() {
+        assert_eq!(equal_condition("region", &Value::Str("North".into())),
+                   ("region == \"North\"".into(), "CAST(\"region\" AS VARCHAR) = 'North'".into()));
+        assert_eq!(equal_condition("mpg", &Value::Num(21.0)).0, "mpg == 21");
+        assert_eq!(equal_condition("x", &Value::Null), ("is.na(x)".into(), "\"x\" IS NULL".into()));
+        assert_eq!(filter_name("Sepal.Length"), "`Sepal.Length`");
+        assert_eq!(filter_name("mpg"), "mpg");
+        let names = ["mpg".to_string(), "cyl".to_string()];
+        assert_eq!(where_sql(&[("mpg > 20".into(), "mpg > 20".into())], "", &names), " WHERE (mpg > 20)");
+        assert_eq!(translate("mpg > 20 & cyl == 6", &names), "mpg > 20  AND  cyl == 6");
     }
 
     #[test]
