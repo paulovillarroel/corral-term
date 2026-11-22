@@ -72,7 +72,7 @@ Don't use it when the user asked for a new or different plot, or wants to compar
 
 ## The user's script
 
-The Script pane above the console holds a temporary scratch file that is thrown away when the editor, its pane or the layout closes, unless saved. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't touch them directly (use the commands below), cite or clean them up. Its current text, unsaved edits included:
+The Script pane above the console holds a temporary scratch file that is thrown away when the editor, its pane or the layout closes, unless saved. There is one per language (`draft.R`, `draft.py`) when the user moves between R and Python, and these commands act on the one for the console in view. It lives in the project's `.corral/` folder (git-ignored); files there are scratch, not part of the project, so don't touch them directly (use the commands below), cite or clean them up. Its current text, unsaved edits included:
 
 ```bash
 corral script --read
