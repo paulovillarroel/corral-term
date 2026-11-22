@@ -331,7 +331,7 @@
     <div class="show-text">
       <div class="section-label"><span>Command palette</span><span>ctrl+b space</span></div>
       <h2>Every shortcut and action, one key away.</h2>
-      <p><kbd>ctrl+b</kbd> <kbd>space</kbd> opens Corral's palette from any pane: every shortcut and action in one searchable list, from the layouts to the editor, the consoles, the tables and Mirador. Type a few letters, press <kbd>Enter</kbd>, and it runs.</p>
+      <p><kbd>ctrl+b</kbd> <kbd>space</kbd> opens Corral's palette from any pane: every shortcut and action in one searchable list, grouped from the layouts to the editor, the consoles, the tables and Mirador, then agents, appearance and help. Each entry starts with its category, so typing <code>agents</code> or <code>editor</code> lists just those. Type a few letters, press <kbd>Enter</kbd>, and it runs.</p>
       <p>It reads your actual configuration, so it shows your keys after you change them. Themes and the language are in it too.</p>
       <div class="card">
         <div class="row"><span>ctrl+b space</span><span>open it from any pane</span></div>
@@ -340,40 +340,37 @@
         <div class="row"><span>corral keys --change</span><span>rebind a shortcut</span></div>
       </div>
     </div>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette: 66 shortcuts grouped as Layouts, In any pane and Script editor, each with its keys">
-      <div class="tui-bar"><span>Corral: shortcuts</span><span>66 shortcuts</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#5c5c5c;">Search for a shortcut or an action…</span>                                                <span style="color:#5c5c5c;">66 shortcuts</span>
-<span style="color:#5c5c5c;">────────────────────────────────────────────────────────────────────────────────────────────────────</span>
-  <span style="color:#a0a0a0;font-weight:700;">LAYOUTS</span>
-<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Layout, agent first </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                                                  </span><span style="color:#ffc799;background:#343434;">ctrl+b a</span><span style="background:#343434;">  </span>
-   <span style="color:#ffffff;">Layout, code first</span>                                                               <span style="color:#ffc799;">ctrl+b shift+a</span>
-
-  <span style="color:#a0a0a0;font-weight:700;">IN ANY PANE (HERDR)</span>
-   <span style="color:#ffffff;">Send the selection to the console (R or Python)</span>                                    <span style="color:#ffc799;">ctrl+b enter</span>
-   <span style="color:#ffffff;">Use this pane as the console</span>                                                           <span style="color:#ffc799;">ctrl+b m</span>
-   <span style="color:#ffffff;">Close (keeps the agent and the rest of the tab)</span>                                  <span style="color:#ffc799;">ctrl+b shift+c</span>
-   <span style="color:#ffffff;">Expand the script (or agent) or the console</span>                                            <span style="color:#ffc799;">ctrl+b t</span>
-   <span style="color:#ffffff;">R or Python console</span>                                                                    <span style="color:#ffc799;">ctrl+b y</span>
-   <span style="color:#ffffff;">Show the plots</span>                                                                         <span style="color:#ffc799;">ctrl+b f</span>
-   <span style="color:#ffffff;">Show the variables</span>                                                                     <span style="color:#ffc799;">ctrl+b d</span>
-   <span style="color:#ffffff;">Open Mirador (plots and tables in the browser)</span>                                   <span style="color:#ffc799;">ctrl+b shift+m</span>
-   <span style="color:#ffffff;">Shortcuts and actions (palette)</span>                                                    <span style="color:#ffc799;">ctrl+b space</span>
-   <span style="color:#ffffff;">Add the script editor above the console</span>
-   <span style="color:#ffffff;">Dark 2026 theme (VS Code&#x27;s and Positron&#x27;s)</span>
-   <span style="color:#ffffff;">Back to herdr&#x27;s theme</span>
-   <span style="color:#ffffff;">Language: English</span>
-   <span style="color:#ffffff;">Idioma: español</span>
-   <span style="color:#ffffff;">All of herdr&#x27;s shortcuts (panes, tabs, workspaces)</span>                                     <span style="color:#ffc799;">ctrl+b ?</span>
+    <figure class="tui-shot" role="img" aria-label="Corral's palette: 74 shortcuts and actions, grouped by part of the IDE, each starting with its category (Layout, Editor, Console…) and showing its keys">
+      <div class="tui-bar"><span>Corral: shortcuts</span><span>74 shortcuts</span></div>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#5c5c5c;">Search for a shortcut or an action…</span>                                              <span style="color:#5c5c5c;">74 shortcuts</span>
+<span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
+  <span style="color:#a0a0a0;font-weight:700;">LAYOUTS AND PANES</span>
+<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Layout: agent first ↵                                                                  </span><span style="color:#ffc799;background:#343434;">ctrl+b a</span>
+   <span style="color:#ffffff;">Layout: code first</span>                                                               <span style="color:#ffc799;">ctrl+b shift+a</span>
+   <span style="color:#ffffff;">Layout: start with R</span>                                                                           <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Layout: start with Python</span>                                                                      <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Layout: expand the script (or agent) or the console</span>                                    <span style="color:#ffc799;">ctrl+b t</span>
+   <span style="color:#ffffff;">Layout: add the script editor above the console</span>                                                <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Layout: close (keeps the agent and the rest of the tab)</span>                          <span style="color:#ffc799;">ctrl+b shift+c</span>
 
   <span style="color:#a0a0a0;font-weight:700;">SCRIPT EDITOR</span>
-   <span style="color:#ffffff;">Save (a draft asks where)</span>                                                                <span style="color:#ffc799;">ctrl+s</span>
-   <span style="color:#ffffff;">Run the line or the selection</span>                                     <span style="color:#ffc799;">ctrl+r  ctrl+enter  alt+enter</span>
-   <span style="color:#ffffff;">Run the whole file</span>                                                         <span style="color:#ffc799;">F5  ctrl+shift+enter</span>
-   <span style="color:#ffffff;">Insert &lt;-</span>                                                                         <span style="color:#ffc799;">ctrl+l  alt+-</span>
-   <span style="color:#ffffff;">Insert |&gt;</span>                                                                  <span style="color:#ffc799;">ctrl+u  ctrl+shift+m</span>
-   <span style="color:#ffffff;">Comment or uncomment</span>                                                       <span style="color:#ffc799;">ctrl+/  ctrl+shift+c</span>
-   <span style="color:#ffffff;">Autocomplete</span>                                                                         <span style="color:#ffc799;">ctrl+space</span>
-   <span style="color:#ffffff;">Editor&#x27;s command palette (all its actions)</span>                                               <span style="color:#ffc799;">ctrl+p</span>
+   <span style="color:#ffffff;">Editor: save (a draft asks where)</span>                                                        <span style="color:#ffc799;">ctrl+s</span>
+   <span style="color:#ffffff;">Editor: run the line or the selection</span>                             <span style="color:#ffc799;">ctrl+r  ctrl+enter  alt+enter</span>
+   <span style="color:#ffffff;">Editor: run the whole file</span>                                                 <span style="color:#ffc799;">F5  ctrl+shift+enter</span>
+   <span style="color:#ffffff;">Editor: insert &lt;-</span>                                                                 <span style="color:#ffc799;">ctrl+l  alt+-</span>
+   <span style="color:#ffffff;">Editor: insert |&gt;</span>                                                          <span style="color:#ffc799;">ctrl+u  ctrl+shift+m</span>
+   <span style="color:#ffffff;">Editor: comment or uncomment</span>                                               <span style="color:#ffc799;">ctrl+/  ctrl+shift+c</span>
+   <span style="color:#ffffff;">Editor: autocomplete</span>                                                                 <span style="color:#ffc799;">ctrl+space</span>
+   <span style="color:#ffffff;">Editor: command palette (all its actions)</span>                                                <span style="color:#ffc799;">ctrl+p</span>
+   <span style="color:#ffffff;">Editor: find in the file</span>                                                                 <span style="color:#ffc799;">ctrl+f</span>
+   <span style="color:#ffffff;">Editor: undo</span>                                                                             <span style="color:#ffc799;">ctrl+z</span>
+   <span style="color:#ffffff;">Editor: close (the drafts are discarded)</span>                                                 <span style="color:#ffc799;">ctrl+q</span>
+
+  <span style="color:#a0a0a0;font-weight:700;">CONSOLE (R AND PYTHON)</span>
+   <span style="color:#ffffff;">Console: R or Python</span>                                                                   <span style="color:#ffc799;">ctrl+b y</span>
+   <span style="color:#ffffff;">Console: send the selection (R or Python)</span>                                          <span style="color:#ffc799;">ctrl+b enter</span>
+   <span style="color:#ffffff;">Console: use this pane as the console</span>                                                  <span style="color:#ffc799;">ctrl+b m</span>
+   <span style="color:#ffffff;">R console: run, if the expression is complete</span>                                             <span style="color:#ffc799;">enter</span>
 
  <span style="color:#5c5c5c;">↑↓ select · Enter run · Esc close · type to search</span></pre>
     </figure>
@@ -447,7 +444,7 @@
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>
-      <p>Yes. Corral speaks English by default; <code>corral config language es</code>, or "Corral: idioma: español" in the palette, switches its windows, messages and Mirador to Spanish. Commands stay in English.</p>
+      <p>Yes. Corral speaks English by default; <code>corral config language es</code>, or "Idioma: español" in the palette, switches its windows, messages and Mirador to Spanish. Commands stay in English.</p>
     </details>
     <details>
       <summary>How do I remove it?</summary>
