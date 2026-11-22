@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.4
+
+Every download checked.
 
 - Fresh, DuckDB, Air and Ark are always checked against SHA-256s written into Corral's code for the versions it installs; before, only when their projects published a checksum, and Ark never. A version of Ark you choose yourself is checked against the SHA-256 GitHub reports for it.
 - The installer checks the package's build provenance attestation when the GitHub CLI is there (`gh` 2.49 or later, logged in), and stops if it doesn't hold.
@@ -12,6 +14,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 - Docs: the install page no longer describes the old fallback to `main`, or the repository as private.
 - Docs: what restricted output doesn't stop (an agent that writes code to get values out), and why it pairs with `ask`.
+- Docs: herdr's own memory and CPU, measured apart; with it, Corral uses about 200 MB.
 
 ## 0.1.3
 
