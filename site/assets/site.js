@@ -45,7 +45,7 @@ function store(key, value) {
 function currentTheme() {
   const set = document.documentElement.dataset.theme;
   if (set) return set;
-  return matchMedia("(prefers-color-scheme: light)").matches ? "paper" : "ink";
+  return "ink"; // dark by default, like a terminal; paper only when chosen
 }
 
 function paintSwitch() {
@@ -110,7 +110,8 @@ const side = document.querySelector(".side");
 if (side) {
   const here = location.pathname.split("/").pop() || "index.html";
   const flat = [];
-  side.innerHTML = NAV.map(([group, pages]) => {
+  const head = '<div class="side-head"><b>Documentation</b><button type="button" class="side-close">Close</button></div>';
+  side.innerHTML = head + NAV.map(([group, pages]) => {
     const items = pages.map(([href, title]) => {
       flat.push([href, title]);
       const current = href === here ? ' aria-current="page"' : "";
@@ -129,8 +130,20 @@ if (side) {
       (next ? `<a class="next" href="${next[0]}"><span>Next</span><b>${next[1]}</b></a>` : "");
   }
 
+  // On a phone the sections open over the page (see .side in the CSS): the button
+  // says Close while it is open, and Esc or picking a page closes it too.
   const toggle = document.querySelector(".menu-toggle");
-  if (toggle) toggle.addEventListener("click", () => side.classList.toggle("open"));
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "false");
+    const setOpen = (open) => {
+      side.classList.toggle("open", open);
+      document.body.classList.toggle("menu-open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+    };
+    toggle.addEventListener("click", () => setOpen(!side.classList.contains("open")));
+    side.addEventListener("click", (e) => { if (e.target.closest("a, .side-close")) setOpen(false); });
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && side.classList.contains("open")) setOpen(false); });
+  }
 }
 
 const toc = document.querySelector(".toc");

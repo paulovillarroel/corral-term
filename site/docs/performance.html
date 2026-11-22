@@ -23,7 +23,7 @@
     <button class="menu-toggle" type="button">Menu</button>
     <a class="hide-sm" href="./" aria-current="page">Docs</a>
     <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
-    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
     <a class="btn" href="install.html">Install</a>
   </nav>
 </header>
@@ -36,7 +36,7 @@
     <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB. These are the measurements against Positron, and the gains of each piece of Corral since it became one Rust binary.</p>
 
     <h2>Corral and Positron</h2>
-    <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="(prefers-color-scheme: dark)"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
+    <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="all"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
 
     <h3>How it was measured</h3>
     <ul>
@@ -86,7 +86,7 @@
     <p>An earlier measurement, before Fresh, loading R and the language servers were optimized, gave Corral 181 MB and 0.7 % CPU at rest.</p>
 
     <h2>Corral in Rust</h2>
-    <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="(prefers-color-scheme: dark)"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
+    <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="all"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
     <p>The engines were already in Rust: herdr, Fresh, Ark, Air, Ruff and uv. Now all of Corral is one Rust binary, built from <code>rs/</code> with no dependencies. The only parts that aren't Rust run inside your own sessions: <code>r/corral.R</code> in R and <code>py/</code> in IPython.</p>
     <p>The first pieces to move to Rust were what runs on every key press, what Claude uses and the processes that stay open. These are the gains of that stage:</p>
     <table>

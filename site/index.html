@@ -23,7 +23,7 @@
     <a href="docs/">Docs</a>
     <a class="hide-sm" href="docs/performance.html">Performance</a>
     <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
-    <span class="theme-switch hide-sm"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
     <a class="btn" href="docs/install.html">Install</a>
   </nav>
 </header>
@@ -36,7 +36,7 @@
       <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
       <p class="lead">Corral is an IDE that lives in your terminal, built with modern technology around the data science workflow: write, run, explore your data, plot. For R and Python, blazing fast with massive data, ready for professional work and ready to run with your agents.</p>
       <div class="install">
-        <code>curl -LsSf https://corral-term.dev/install.sh | sh</code>
+        <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
         <button class="copy" type="button">Copy</button>
       </div>
       <p class="os-note">Linux and Windows (WSL); macOS not supported yet. Checks everything first, never uses sudo.</p>
@@ -91,6 +91,7 @@
       </div>
     </div>
   </div>
+  <img class="mock-img" src="assets/shots/corral-layout.webp" width="2040" height="1030" alt="A Corral layout in herdr: Claude Code on the left; the script, the R console and the variables on the right">
   <p class="shot-caption">Your agent on the left; the script, a live R console and your objects on the right, all in one session.</p>
     </div>
   </div>
@@ -298,7 +299,7 @@
     <h2>Measured, not promised.</h2>
     <p>Same machine, same project, R in WSL, two runs each. Positron is a capable IDE; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. <a href="docs/performance.html">How it was measured →</a></p>
     <picture data-themed>
-      <source srcset="assets/charts/vs-positron-dark.svg" media="(prefers-color-scheme: dark)">
+      <source srcset="assets/charts/vs-positron-dark.svg" media="all">
       <img src="assets/charts/vs-positron-light.svg" width="760" alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB; 0.36 % idle CPU vs 13.9 %">
     </picture>
   </section>
@@ -307,7 +308,7 @@
     <h2>One line to install. It checks everything first.</h2>
     <p>The installer tells you what's missing and what to run, and changes nothing until everything is there. No sudo; every file it touches is backed up, and <code>corral uninstall</code> takes it all out again.</p>
     <div class="install">
-      <code>curl -LsSf https://corral-term.dev/install.sh | sh</code>
+      <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
       <button class="copy" type="button">Copy</button>
     </div>
   </section>
