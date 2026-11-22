@@ -3,8 +3,10 @@
 
 #[macro_use]
 mod i18n;
+mod approve;
 mod ark;
 mod atajos;
+mod audit;
 mod console;
 mod editor;
 mod env;
@@ -44,6 +46,7 @@ Workspace
 Code and data
   send         sends code to the console (Ctrl+R, F5, ctrl+b enter)
   eval         runs code in your console and prints the result (for agents)
+  audit        what agents ran in your consoles (--last N, --json)
   vars         the variables (window, --json for agents, --split)
   view         opens a table (parquet, csv…), --mirador for the browser
   plots        the plots (ctrl+b f)
@@ -75,6 +78,7 @@ Espacio de trabajo
 Código y datos
   send         envía código a la consola (Ctrl+R, F5, ctrl+b enter)
   eval         ejecuta código en tu consola e imprime el resultado (para agentes)
+  audit        lo que los agentes ejecutaron en tus consolas (--last N, --json)
   vars         las variables (ventana, --json para agentes, --split)
   view         abre una tabla (parquet, csv…), --mirador para el navegador
   plots        los gráficos (ctrl+b f)
@@ -96,6 +100,8 @@ fn main() {
     let result = match args.first().map(String::as_str) {
         Some("send") => send::run(rest, &args),
         Some("eval") => eval::run(rest),
+        Some("_approve") => approve::run(rest),
+        Some("audit") => audit::run(rest),
         Some("_console") => console::run(rest),
         Some("_editor") => editor::run(rest),
         Some("keys") => atajos::run(rest, false),

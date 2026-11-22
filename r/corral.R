@@ -393,6 +393,23 @@ local({
     invisible(f)
   }
 
+  # A sensitive session: every request from an agent waits for your approval, and
+  # the agent sees only whether it worked and the shape of the objects, never values.
+  # It lasts until this R ends; corral_sensitive(FALSE) lifts it.
+  env$corral_sensitive <- function(on = TRUE) {
+    flag <- file.path(session_dir, "sensitive")
+    if (isTRUE(on)) {
+      dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
+      writeLines("1", flag)
+      message(tr("Sensitive session: agents need your approval for each request and only see the structure of results, not values.",
+                 "Sesi\u00f3n sensible: los agentes necesitan tu aprobaci\u00f3n en cada petici\u00f3n y solo ven la estructura de los resultados, no los valores."))
+    } else {
+      unlink(flag)
+      message(tr("This session is no longer marked sensitive.", "Esta sesi\u00f3n ya no est\u00e1 marcada como sensible."))
+    }
+    invisible(isTRUE(on))
+  }
+
   env$View <- function(x, title, mirador = FALSE) {
     if (missing(title)) title <- paste(deparse(substitute(x)), collapse = " ")
     env$corral_view(x, title, mirador = mirador)

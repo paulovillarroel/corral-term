@@ -611,10 +611,25 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
     let dir = PathBuf::from(session.get("dir").str().unwrap_or(""));
     let data = std::fs::read_to_string(dir.join("vars.json")).ok().and_then(|t| crate::json::parse(&t).ok())
         .ok_or(tr("this session doesn't publish variables (is jsonlite missing?)", "esta sesión no publica variables (¿falta jsonlite?)"))?;
+    // Restricted output (a sensitive session, or agent_output structure): no previews of
+    // values, which can be the data itself; dimensions and signatures stay.
+    let restricted = dir.join("sensitive").exists() || env::config().get("agent_output").str() == Some("structure");
+    let mut vars = data.get("vars").clone();
+    if restricted {
+        if let Value::Arr(items) = &mut vars {
+            for v in items.iter_mut() {
+                let keep = matches!(v.get("kind").str(), Some("data") | Some("function"));
+                if !keep {
+                    v.set("preview", Value::Null);
+                }
+            }
+        }
+    }
     let out = obj(vec![("session", session.get("id").clone()),
                        ("lang", session.get("lang").str().unwrap_or("r").into()),
                        ("console", session.get("pane_id").clone()),
-                       ("vars", data.get("vars").clone())]);
+                       ("restricted", restricted.into()),
+                       ("vars", vars)]);
     print!("{}", out.to_json_pretty(1));
     Ok(())
 }

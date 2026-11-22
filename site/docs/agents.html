@@ -43,7 +43,60 @@
 
   <main class="content">
     <h1>Working with agents</h1>
-    <p class="intro">Agents run code in your console with <code>corral eval</code>, so their objects, plots and tables land in the session you are looking at. Claude Code learns how from Corral's skill.</p>
+    <p class="intro">Agents run code in your console with <code>corral eval</code>, so their objects, plots and tables land in the session you are looking at. Any agent that can run shell commands learns how from Corral's skill.</p>
+
+    <h2 id="the-agent-harness">The agent harness</h2>
+    <p>Corral is the harness between your agent and your live session: a few commands the agent calls from its own shell, a skill that teaches it when and how to call them, and rules that Corral enforces around every call. The agent gets no hidden channel into your session. Everything it runs is typed into the console you are looking at, it waits its turn, and what it gets back depends on what you allow.</p>
+    <figure class="arch">
+      <svg viewBox="0 0 680 300" role="img" aria-labelledby="harness-t harness-d">
+        <title id="harness-t">Corral as the agent harness</title>
+        <desc id="harness-d">The agent calls corral eval; Corral checks what you allow, asks you if needed and queues it; the code runs in your console, where you see it; Corral returns the output or only its structure to the agent and records the request in the audit log.</desc>
+        <defs><marker id="harness-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <text class="t" x="40" y="22" dominant-baseline="central">The request</text>
+        <g class="ui"><rect x="40" y="40" width="170" height="64" rx="6"/><text class="t" x="125" y="60" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="82" text-anchor="middle" dominant-baseline="central">calls corral eval</text></g>
+        <line class="arr" x1="212" y1="72" x2="252" y2="72" marker-end="url(#harness-arrow)"/>
+        <g class="core"><rect x="254" y="40" width="172" height="64" rx="6"/><text class="t" x="340" y="60" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="82" text-anchor="middle" dominant-baseline="central">checks, asks you, queues</text></g>
+        <line class="arr" x1="428" y1="72" x2="468" y2="72" marker-end="url(#harness-arrow)"/>
+        <g class="eng"><rect x="470" y="40" width="170" height="64" rx="6"/><text class="t" x="555" y="60" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="555" y="82" text-anchor="middle" dominant-baseline="central">runs it where you see</text></g>
+        <text class="t" x="40" y="160" dominant-baseline="central">The answer</text>
+        <g class="eng"><rect x="470" y="178" width="170" height="64" rx="6"/><text class="t" x="555" y="198" text-anchor="middle" dominant-baseline="central">Your session</text><text class="s" x="555" y="220" text-anchor="middle" dominant-baseline="central">objects, plots stay</text></g>
+        <line class="arr" x1="468" y1="210" x2="428" y2="210" marker-end="url(#harness-arrow)"/>
+        <g class="core"><rect x="254" y="178" width="172" height="64" rx="6"/><text class="t" x="340" y="198" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="220" text-anchor="middle" dominant-baseline="central">full or structure, audit</text></g>
+        <line class="arr" x1="252" y1="210" x2="212" y2="210" marker-end="url(#harness-arrow)"/>
+        <g class="ui"><rect x="40" y="178" width="170" height="64" rx="6"/><text class="t" x="125" y="198" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="220" text-anchor="middle" dominant-baseline="central">reads what it may</text></g>
+        <line class="arr" x1="555" y1="106" x2="555" y2="176" marker-end="url(#harness-arrow)"/>
+        <g class="legend">
+          <rect class="ui-k" x="40" y="270" width="12" height="12" rx="3"/><text class="s" x="58" y="276" dominant-baseline="central">the agent</text>
+          <rect class="core-k" x="150" y="270" width="12" height="12" rx="3"/><text class="s" x="168" y="276" dominant-baseline="central">Corral</text>
+          <rect class="eng-k" x="240" y="270" width="12" height="12" rx="3"/><text class="s" x="258" y="276" dominant-baseline="central">your session, in plain sight</text>
+        </g>
+      </svg>
+    </figure>
+
+    <h3>What the harness gives the agent</h3>
+    <table>
+    <thead><tr><th>Tool</th><th>What the agent gets</th><th>What happens in your session</th><th>Who decides</th></tr></thead>
+    <tbody>
+    <tr><td><code>corral eval</code></td><td>What the code printed, errors, warnings and new plots as PNG; or, with restricted output, only whether it worked and the shape of the objects</td><td>The code runs in your console, in view, and its objects stay</td><td>You: <code>agents</code>, <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
+    <tr><td><code>corral eval --check</code></td><td>Which console, R or Python, its version and whether it is in view</td><td>Nothing</td><td>—</td></tr>
+    <tr><td><code>corral vars --json</code></td><td>Names, classes, dimensions and short previews of your objects (no previews of values with restricted output)</td><td>Nothing: it reads, it doesn't run code</td><td>You: <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
+    <tr><td><code>corral script --read</code>, <code>--write</code>, <code>--save</code></td><td>Your draft's text; a way to write into it or save it in the project</td><td>Changes to the draft show in your editor, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes them</td><td>The skill asks you first; the agent's own permissions</td></tr>
+    <tr><td><code>View(df)</code>, through <code>corral eval</code></td><td>Nothing back: it shows you a table</td><td>The table viewer opens next to your console</td><td>Same as <code>corral eval</code></td></tr>
+    <tr><td><code>corral toggle</code>, <code>switch</code>, <code>layout</code></td><td>Nothing back</td><td>The panes you see change</td><td>The skill asks you first</td></tr>
+    <tr><td><code>corral keys --json</code></td><td>Your shortcuts, as you configured them</td><td>Nothing</td><td>—</td></tr>
+    </tbody>
+    </table>
+
+    <h3>What always holds</h3>
+    <ul>
+      <li><strong>In plain sight.</strong> Code is typed into your console after a <code># corral eval</code> line; nothing runs in a hidden process.</li>
+      <li><strong>One at a time.</strong> Requests to a console queue; several agents never interleave.</li>
+      <li><strong>Bounded.</strong> Each request has a time limit, and its output is clipped before it reaches the agent.</li>
+      <li><strong>Yours to decide.</strong> <code>agents on</code>, <code>ask</code> or <code>off</code>; full or restricted output; one session marked sensitive. Corral enforces these in its own code, whatever the model was told.</li>
+      <li><strong>Recorded.</strong> Every request lands in the local audit log: <code>corral audit</code>.</li>
+      <li><strong>Any agent.</strong> Claude Code, Codex, Gemini CLI, opencode or another: the harness is shell commands plus a skill in the open <a href="https://agentskills.io">Agent Skills</a> format.</li>
+    </ul>
+    <p>The harness is not a sandbox: an agent with an unrestricted shell can do things outside it. The <a href="security.html">Security model</a> explains how to close that gap with the agent's own permissions.</p>
 
     <h2>corral eval</h2>
     <p><code>corral eval</code> runs code in your console and prints what it printed. R is the default; <code>--lang python</code> runs Python, and starts the Python console if it isn't there yet. You see each command appear in the console after a <code># corral eval</code> line, and the objects, plots and tables stay in your session.</p>
@@ -115,6 +168,7 @@
     <li>Using <code>Rscript</code> or a separate Python when your console isn't available.</li>
     </ul>
     <p>It never types keys into your console. If the console has a half-typed line, it asks you to finish or clear it.</p>
+    <div class="note"><p>These are instructions for the agent. What Corral enforces whatever the agent decides (approving every request, restricted output, sensitive sessions, the audit log) is in the <a href="security.html">Security model</a>.</p></div>
     <p>It still uses <code>Rscript</code> or a separate Python for package checks (<code>devtools::test()</code>, <code>R CMD check</code>, <code>pytest</code>), and for work you want kept apart from your session.</p>
 
     <h2>Agents in your draft</h2>

@@ -117,6 +117,7 @@ The user opens the same list with `ctrl+b space` (searchable; Enter runs the act
 - Keep output small: `head()`, `str()`, `summary()`, `dplyr::glimpse()`; `df.head()`, `df.info()`, `df.describe()`. Output over 20,000 characters is truncated and the full text path is printed.
 - For long jobs pass `--timeout <seconds>` (default 300) and tell the user. After exit 2 the code may still be running; check later with `corral eval 'invisible(NULL)'` (or `corral eval --lang python 'None'`).
 - If the console has a half-typed line, ask the user to finish or clear it. Never send keys to the console yourself.
+- The user decides what you may do, and Corral enforces it (exit code 3 means it didn't run): with `agents ask` (or a session marked with `corral_sensitive()`) each request waits until they approve it in a popup; if they refuse, don't retry or rephrase it unless they ask. With `agents off`, nothing runs: ask them to run it. With restricted output you get only whether it worked, the first line of an error and the shape of the objects; work from that, and never try to get values another way (printing them in errors, writing files you then read, or other tools).
 - Several agents can share one console: requests queue and run one at a time.
 - To show a table to the user, run `View(df)` through `corral eval` (pandas, polars or pyarrow in Python); it opens in their table viewer, in the terminal. Only when the user asks for the browser, use `View(df, mirador = TRUE)` (`mirador=True` in Python) to open it in Mirador.
 

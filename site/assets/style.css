@@ -405,6 +405,32 @@ kbd {
   .tui-shot pre { font-size: 10px; }
 }
 
+/* Humans and agents, one session: the three parts side by side, stacked on a phone. */
+.together { padding: 104px 0 8px; }
+.together .section-label { margin-top: 0; margin-bottom: 28px; }
+.together h2 { margin: 0 0 18px; max-width: 900px; color: var(--fg); font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.12; }
+.together-lead { max-width: 780px; margin: 0; }
+.trio { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1.15fr); gap: 20px; align-items: stretch; margin-top: 40px; }
+.who { display: flex; flex-direction: column; gap: 10px; padding: 24px 24px 22px; border: 1px solid var(--line-2); background: var(--chrome); }
+.who svg { width: 22px; height: 22px; color: var(--muted); }
+.who b { color: var(--fg); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.who span { color: var(--text); font-size: 14.5px; line-height: 1.6; }
+.who.shared { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--chrome)); }
+.who.shared svg { color: var(--accent); }
+.op { align-self: center; color: var(--muted); font: 400 26px/1 var(--mono); }
+@media (max-width: 860px) {
+  .together { padding-top: 64px; }
+  .together h2 { font-size: 28px; }
+  .trio { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .op { justify-self: center; }
+  .op.arrow { transform: rotate(90deg); }
+}
+
+.more-links { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 22px !important; font-size: 14.5px; }
+.more-links a { color: var(--fg); text-decoration-color: var(--accent); }
+.more-links a::after { content: " →"; color: var(--muted); }
+#harness .arch { margin: 0; }
+
 /* Code shows what you type: no programming ligatures (JetBrains Mono turns <- and |> into arrows).
    Last in the file, because the `font` shorthand above resets font-variant-ligatures. */
 code, kbd, pre, .mono, .mock, .mock *, .card, .install code, .stats, .meta,

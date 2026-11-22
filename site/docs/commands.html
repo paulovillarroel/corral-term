@@ -133,6 +133,11 @@
     </table>
     <p><a href="agents.html">Working with agents</a> explains the output and the exit codes.</p>
 
+    <h3>corral audit</h3>
+    <pre><code><span class="p">$ </span>corral audit
+<span class="p">$ </span>corral audit --last 100 --json</code></pre>
+    <p>What agents asked to run in your consoles, newest last: when, the outcome (ok, error, refused, blocked, not approved), the language, the agent's pane and the code. <code>--json</code> prints the log's lines as they are. See the <a href="security.html">Security model</a>.</p>
+
     <h3>corral vars</h3>
     <p>The variables of the console in view, over the terminal (<kbd>ctrl+b</kbd> <kbd>d</kbd>).</p>
     <table>

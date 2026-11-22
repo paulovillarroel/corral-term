@@ -17,6 +17,7 @@ const NAV = [
     ["data.html", "Variables and tables"],
     ["plots.html", "Plots and Mirador"],
     ["agents.html", "Working with agents"],
+    ["security.html", "Security model"],
   ]],
   ["Configure", [
     ["themes.html", "Themes"],

@@ -3,7 +3,15 @@
 //! with `.corral_eval()` / `_corral_eval()`, which writes the output and a
 //! status file; new plots are saved as PNG. A console that isn't there, isn't
 //! in view or was quit is started or brought into view first.
+//!
+//! What agents may do is the user's call, and Corral enforces it here, whatever the
+//! agent was told: `corral config agents off|ask|on` (off refuses, ask shows every
+//! request in a popup first, see approve.rs) and `corral config agent_output
+//! full|structure` (structure returns no values, only whether it worked and the
+//! shape of the objects). A session marked with corral_sensitive() is always ask +
+//! structure. Every request goes to the local audit log (audit.rs).
 
+use crate::audit;
 use crate::console;
 use crate::env;
 use crate::herdr;
@@ -109,6 +117,106 @@ fn fail(code: i32, msg: &str) -> ! {
     std::process::exit(code)
 }
 
+/// off, ask or on (the default): `corral config agents`.
+fn access_mode() -> &'static str {
+    match env::config().get("agents").str() {
+        Some("off") => "off",
+        Some("ask") => "ask",
+        _ => "on",
+    }
+}
+
+/// What every audit line of this request carries.
+fn audit_entry(o: &Opts, code: &str, access: &str, output: &str, decision: &str) -> Value {
+    obj(vec![
+        ("decision", decision.into()),
+        ("lang", o.lang.as_str().into()),
+        ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null)),
+        ("workspace", env::current_workspace().map(Value::from).unwrap_or(Value::Null)),
+        ("access", access.into()),
+        ("output", output.into()),
+        ("code", code.into()),
+    ])
+}
+
+/// Ask the user in a popup; true when they let it run.
+fn approve(edir: &Path, rid: &str, code: &str, lang: &str, restricted: bool) -> Result<bool, String> {
+    let request = edir.join(format!("{rid}.request.json"));
+    let decision = edir.join(format!("{rid}.decision"));
+    env::write_json(&request, &obj(vec![
+        ("code", code.into()),
+        ("lang", lang.into()),
+        ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null)),
+        ("restricted", restricted.into()),
+        ("decision", decision.to_string_lossy().to_string().into()),
+    ]));
+    let end = Instant::now() + Duration::from_secs(APPROVAL_SECS);
+    // herdr shows one popup at a time: while the user has another one open (the
+    // palette, a viewer), wait for it instead of failing.
+    loop {
+        match crate::vars::open_popup("approve", &[("CORRAL_REQUEST", &request.to_string_lossy())]) {
+            Ok(()) => break,
+            Err(e) if e.to_lowercase().contains("busy") && Instant::now() < end => std::thread::sleep(Duration::from_secs(1)),
+            Err(e) if e.to_lowercase().contains("busy") => {
+                return Err(tr("another Corral window stayed open in herdr, so the user couldn't be asked; nothing ran",
+                              "otra ventana de Corral siguió abierta en herdr, así que no pude preguntarle al usuario; no se ejecutó nada").into())
+            }
+            Err(e) => return Err(trf!("couldn't ask the user ({e}); nothing ran", "no pude preguntarle al usuario ({e}); no se ejecutó nada")),
+        }
+    }
+    while Instant::now() < end {
+        if let Ok(answer) = std::fs::read_to_string(&decision) {
+            return Ok(answer.trim() == "run");
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let _ = std::fs::write(&decision, "expired"); // the popup sees it and closes
+    Err(trf!("the user didn't answer within {APPROVAL_SECS} s; nothing ran", "el usuario no respondió en {APPROVAL_SECS} s; no se ejecutó nada"))
+}
+
+const APPROVAL_SECS: u64 = 300;
+
+/// Restricted output: whether it worked, the error's first line, how many warnings,
+/// and the shape of the session's objects. No printed output, no values, no plots.
+fn restricted_report(sdir: &Path, since: SystemTime, output: &str, result: &Value) -> String {
+    let mut out = Vec::new();
+    let printed = output.lines().count();
+    out.push(trf!("[corral] restricted output: the agent doesn't see values ({printed} lines printed in the user's console)",
+                  "[corral] salida restringida: el agente no ve valores ({printed} líneas impresas en la consola del usuario)"));
+    if result.get("status").str() == Some("error") {
+        let first = result.get("error").str().unwrap_or("").lines().next().unwrap_or("").to_string();
+        let first: String = first.chars().take(200).collect();
+        out.push(trf!("[corral] error: {first}", "[corral] error: {first}"));
+    }
+    let warnings = result.get("warnings").arr().len();
+    if warnings > 0 {
+        out.push(trf!("[corral] {warnings} warning(s), not shown", "[corral] {warnings} advertencia(s), sin mostrar"));
+    }
+    // The session describes its objects right after the command; give it a moment.
+    let vars_file = sdir.join("vars.json");
+    let end = Instant::now() + Duration::from_millis(1500);
+    while Instant::now() < end {
+        let fresh = std::fs::metadata(&vars_file).and_then(|m| m.modified()).is_ok_and(|t| t >= since);
+        if fresh {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let vars = env::read_json(&vars_file);
+    let shapes: Vec<String> = vars.get("vars").arr().iter().take(40).map(|v| {
+        let (name, kind, class) = (v.get("name").str().unwrap_or("?"), v.get("kind").str().unwrap_or(""), v.get("class").str().unwrap_or(""));
+        // Only dimensions and signatures: a value's preview can be the data itself.
+        match kind {
+            "data" | "function" => format!("{name} ({class}, {})", v.get("preview").str().unwrap_or("")),
+            _ => format!("{name} ({class})"),
+        }
+    }).collect();
+    if !shapes.is_empty() {
+        out.push(trf!("[corral] objects: {}", "[corral] objetos: {}", shapes.join("; ")));
+    }
+    out.join("\n")
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let o = parse(args);
     let ws = env::current_workspace();
@@ -135,6 +243,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     if code.trim().is_empty() {
         fail(1, tr("no code to run", "no hay código que ejecutar"));
+    }
+    let access = access_mode();
+    if access == "off" {
+        audit::record(audit_entry(&o, &code, access, "-", "blocked"));
+        println!("{}", tr("[corral] agents can't run code in the user's console (corral config agents off). Nothing ran; ask the user.",
+                          "[corral] los agentes no pueden ejecutar código en la consola del usuario (corral config agents off). No se ejecutó nada; pregúntale al usuario."));
+        std::process::exit(3);
     }
 
     // The console has to be there, running, and in view: the usual case needs nothing;
@@ -166,17 +281,39 @@ pub fn run(args: &[String]) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(20));
     }
 
+    let sensitive = sdir.join("sensitive").exists();
+    let restricted = sensitive || env::config().get("agent_output").str() == Some("structure");
+    let output_mode = if restricted { "structure" } else { "full" };
+    let access = if sensitive { "ask" } else { access };
+    let secs = now() as u64;
+    let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
+    if access == "ask" {
+        match approve(&edir, &rid, &code, &o.lang, restricted) {
+            Ok(true) => {}
+            Ok(false) => {
+                audit::record(audit_entry(&o, &code, access, output_mode, "refused"));
+                println!("{}", tr("[corral] the user refused this request: nothing ran. Don't run it again unless they ask for it.",
+                                  "[corral] el usuario rechazó esta petición: no se ejecutó nada. No la repitas salvo que te lo pida."));
+                std::process::exit(3);
+            }
+            Err(e) => {
+                audit::record(audit_entry(&o, &code, access, output_mode, "not approved"));
+                println!("[corral] {e}");
+                std::process::exit(3);
+            }
+        }
+    }
+
     if let Err(e) = console::wait_for_prompt(&pane, o.wait_idle, &o.lang, Some(&edir)) {
         fail(2, &e);
     }
-    let secs = now() as u64;
-    let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
     let ext = if o.lang == "python" { "py" } else { "R" };
     let body = if code.ends_with('\n') { code.clone() } else { format!("{code}\n") };
     std::fs::write(edir.join(format!("{rid}.{ext}")), body).map_err(|e| e.to_string())?;
     // If the console only gets to it after the agent gave up, it must not run.
     std::fs::write(edir.join(format!("{rid}.deadline")), format!("{}", now() + o.timeout)).map_err(|e| e.to_string())?;
     let before = plots_json(&sid, "state");
+    let started = SystemTime::now();
     let call = if o.lang == "python" { format!("_corral_eval(\"{rid}\")") } else { format!(".corral_eval(\"{rid}\")") };
     herdr::send_text(&pane, &format!("{call}\r"))?;
 
@@ -191,27 +328,54 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let output = std::fs::read(&out_file).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
     if !result_file.exists() {
-        println!("{}", clip_output(&output, o.max_chars, &out_file));
+        if !restricted {
+            println!("{}", clip_output(&output, o.max_chars, &out_file));
+        }
+        let mut e = audit_entry(&o, &code, access, output_mode, "ran");
+        e.set("status", "timeout".into());
+        audit::record(e);
         let (secs, file) = (o.timeout, out_file.display());
         println!("\n{}", trf!("[corral] still running after {secs:.0} s; the full output will be in {file}",
                                 "[corral] sigue corriendo después de {secs:.0} s; la salida completa quedará en {file}"));
         std::process::exit(2);
     }
     let result = std::fs::read_to_string(&result_file).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::obj());
-    println!("{}", clip_output(output.trim_end(), o.max_chars, &out_file));
-    for w in result.get("warnings").arr() {
-        if let Some(w) = w.str() {
-            println!("{}", trf!("[corral] warning: {w}", "[corral] advertencia: {w}"));
+    let shown = if restricted {
+        restricted_report(&sdir, started, &output, &result)
+    } else {
+        let mut text = clip_output(output.trim_end(), o.max_chars, &out_file);
+        for w in result.get("warnings").arr() {
+            if let Some(w) = w.str() {
+                text += &format!("\n{}", trf!("[corral] warning: {w}", "[corral] advertencia: {w}"));
+            }
         }
-    }
+        text
+    };
+    println!("{shown}");
+    let status = result.get("status").str().unwrap_or("ok").to_string();
+    let mut entry = audit_entry(&o, &code, access, output_mode, "ran");
+    entry.set("status", status.as_str().into());
+    entry.set("printed_chars", (output.chars().count() as f64).into());
+    entry.set("returned_chars", (shown.chars().count() as f64).into());
     if result.get("status").str() == Some("expired") {
+        audit::record(entry);
         println!("{}", tr("[corral] the request expired before it ran", "[corral] la petición venció antes de ejecutarse"));
         std::process::exit(2);
     }
 
-    // New plots: saved as PNG for the agent, numbered as the user sees them.
+    // New plots: saved as PNG for the agent, numbered as the user sees them
+    // (with restricted output, only counted: the user sees them, the agent doesn't).
     let after = plots_json(&sid, "state");
-    if !after.is_null() {
+    let mut plots_shared = 0usize;
+    if restricted && !after.is_null() {
+        let old = before.get("hsize").num().unwrap_or(0.0) as usize;
+        let new = after.get("hsize").num().unwrap_or(0.0) as usize;
+        if new > old {
+            let n = new - old;
+            println!("{}", trf!("[corral] {n} new plot(s) for the user (ctrl+b f); not shared with the agent (restricted output)",
+                                "[corral] {n} gráfico(s) nuevo(s) para el usuario (ctrl+b f); no se comparten con el agente (salida restringida)"));
+        }
+    } else if !after.is_null() {
         let old = before.get("hsize").num().unwrap_or(0.0) as usize;
         let new = after.get("hsize").num().unwrap_or(0.0) as usize;
         let changed = before.is_null() || before.get("upid") != after.get("upid");
@@ -241,6 +405,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let params = [("id", id.clone()), ("width", "900".into()), ("height", "600".into()), ("renderer", "png".into())];
             if let Some((bytes, _)) = plots_raw(&sid, "plot", &params) {
                 if std::fs::write(&png, bytes).is_ok() {
+                    plots_shared += 1;
                     let shown = png.display();
                     println!("{}", trf!("[corral] plot {number} saved to {shown} (ctrl+b f to see it in herdr)",
                                         "[corral] gráfico {number} guardado en {shown} (ctrl+b f para verlo en herdr)"));
@@ -252,5 +417,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                                 "[corral] reemplazó {removed} gráfico(s) de la petición anterior; el usuario ve solo la versión nueva"));
         }
     }
+    entry.set("plots_shared", (plots_shared as f64).into());
+    audit::record(entry);
     std::process::exit(if result.get("status").str() == Some("error") { 1 } else { 0 })
 }

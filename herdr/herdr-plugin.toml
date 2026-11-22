@@ -141,6 +141,16 @@ width = "70%"
 height = "80%"
 command = ["../rs/target/release/corral", "_keys"]
 
+# Before an agent's code runs, when you asked to approve it (corral config agents ask,
+# or a session marked with corral_sensitive()). Enter runs it; n or Esc refuses.
+[[panes]]
+id = "approve"
+title = "Corral: approve the agent's code"
+placement = "popup"
+width = "84%"
+height = "70%"
+command = ["../rs/target/release/corral", "_approve"]
+
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]
 id = "table"

@@ -551,6 +551,22 @@ class Session:
 # --------------------------------------------------------------------------- what the user and agents call
 
 
+def corral_sensitive(on: bool = True) -> None:
+    """Mark this session sensitive: every request from an agent waits for your approval,
+    and the agent sees only whether it worked and the shape of the objects, never values.
+    It lasts until this Python ends; corral_sensitive(False) lifts it."""
+    session = _require()
+    flag = session.dir / "sensitive"
+    if on:
+        session.dir.mkdir(parents=True, exist_ok=True)
+        flag.write_text("1\n")
+        print(tr("Sensitive session: agents need your approval for each request and only see the structure of results, not values.",
+                 "Sesión sensible: los agentes necesitan tu aprobación en cada petición y solo ven la estructura de los resultados, no los valores."))
+    else:
+        flag.unlink(missing_ok=True)
+        print(tr("This session is no longer marked sensitive.", "Esta sesión ya no está marcada como sensible."))
+
+
 def View(x, title: str | None = None, mirador: bool = False) -> None:
     """Open a table (pandas, polars, pyarrow, a 2-D numpy array) in Corral's table viewer,
     or in Mirador, in the browser, with mirador=True."""
@@ -753,7 +769,7 @@ def activate(shell=None) -> None:
     except Exception:
         pass
 
-    helpers = {"View": View, "_corral_eval": corral_eval, "_corral_show": show_plot}
+    helpers = {"View": View, "corral_sensitive": corral_sensitive, "_corral_eval": corral_eval, "_corral_show": show_plot}
     shell.user_ns.update(helpers)
     shell.user_ns_hidden.update(helpers)
     _session.snapshot()

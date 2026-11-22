@@ -9,7 +9,7 @@
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Corral: the agentic Data Science IDE for R and Python</title>
-<meta name="description" content="Corral is an IDE that lives in your terminal, built with modern technology around the data science workflow: script editor, live console, variables, tables and plots for R and Python, next to your AI agents. Written in Rust, with DuckDB for your data, and ready in milliseconds.">
+<meta name="description" content="Corral is a terminal-native data science workspace for R and Python, built for working alongside AI agents: you and your agent share one live session, the same objects, data, plots and results, under your control. Written in Rust, with DuckDB for your data, and ready in milliseconds.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@
     <div class="hero-text">
       <div class="eyebrow">R and Python · in your terminal</div>
       <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
-      <p class="lead">Corral is an IDE that lives in your terminal, built with modern technology around the data science workflow: write, run, explore your data, plot. For R and Python, blazing fast with massive data, ready for professional work and ready to run with your agents.</p>
+      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R and Python, blazing fast with massive data, ready for professional work.</p>
       <div class="install">
         <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
         <button class="copy" type="button">Copy</button>
@@ -117,6 +117,62 @@
 </section>
 
 <div class="wrap">
+  <section class="together" id="together">
+    <div class="section-label"><span>Humans and agents, one session</span><span>under your control</span></div>
+    <h2>Not an IDE with AI bolted on. A workspace you and your agent share.</h2>
+    <p class="together-lead">You and your agent work on the same computational context. No copying code from a chat into a console, no re-running an agent's script to get its objects back, no switching windows: the agent works in the session you are looking at, and you decide what it may do. Corral is the harness in between: a few commands the agent calls, a skill that teaches them, and rules it can't skip (<a href="docs/agents.html#the-agent-harness">how it works</a>). Built for the flow of data science as it is done today, and out of your way.</p>
+    <div class="trio">
+      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><b>You, the data scientist</b><span>Control the code, the data, the sessions and the analytic decisions.</span></div>
+      <div class="op" aria-hidden="true">+</div>
+      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 12v1M15 12v1M9.5 16h5"/></svg><b>Your agent</b><span>Explores, runs, transforms, models and proposes results.</span></div>
+      <div class="op arrow" aria-hidden="true">→</div>
+      <div class="who shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><b>One working session</b><span>The same objects, data, plots and results, under your control.</span></div>
+    </div>
+  </section>
+
+  <section class="showcase" id="harness">
+    <div class="mirador-grid">
+      <div class="show-text">
+        <div class="section-label"><span>The agent harness</span><span>corral eval</span></div>
+        <h2>The harness between your agent and your session.</h2>
+        <p>A few commands your agent calls from its own shell, a skill that teaches it when to call them, and rules that Corral enforces around every call, whatever the model was told.</p>
+        <ul class="points">
+          <li><b>In plain sight</b><span>the code is typed into the console you are looking at</span></li>
+          <li><b>One at a time</b><span>requests queue, with a time limit and clipped output</span></li>
+          <li><b>Yours to decide</b><span>agents on, ask or off; full output, or only its structure</span></li>
+          <li><b>Recorded</b><span>every request in a local audit log</span></li>
+          <li><b>Any agent</b><span>shell commands plus an open Agent Skills skill</span></li>
+        </ul>
+        <p class="more-links"><a href="docs/agents.html#the-agent-harness">How the harness works</a><a href="docs/security.html">Security model</a></p>
+      </div>
+        <figure class="arch">
+          <svg viewBox="0 0 680 300" role="img" aria-labelledby="home-harness-t home-harness-d">
+            <title id="home-harness-t">Corral as the agent harness</title>
+            <desc id="home-harness-d">The agent calls corral eval; Corral checks what you allow, asks you if needed and queues it; the code runs in your console, where you see it; Corral returns the output or only its structure to the agent and records the request in the audit log.</desc>
+            <defs><marker id="home-harness-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+            <text class="t" x="40" y="22" dominant-baseline="central">The request</text>
+            <g class="ui"><rect x="40" y="40" width="170" height="64" rx="6"/><text class="t" x="125" y="60" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="82" text-anchor="middle" dominant-baseline="central">calls corral eval</text></g>
+            <line class="arr" x1="212" y1="72" x2="252" y2="72" marker-end="url(#home-harness-arrow)"/>
+            <g class="core"><rect x="254" y="40" width="172" height="64" rx="6"/><text class="t" x="340" y="60" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="82" text-anchor="middle" dominant-baseline="central">checks, asks you, queues</text></g>
+            <line class="arr" x1="428" y1="72" x2="468" y2="72" marker-end="url(#home-harness-arrow)"/>
+            <g class="eng"><rect x="470" y="40" width="170" height="64" rx="6"/><text class="t" x="555" y="60" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="555" y="82" text-anchor="middle" dominant-baseline="central">runs it where you see</text></g>
+            <text class="t" x="40" y="160" dominant-baseline="central">The answer</text>
+            <g class="eng"><rect x="470" y="178" width="170" height="64" rx="6"/><text class="t" x="555" y="198" text-anchor="middle" dominant-baseline="central">Your session</text><text class="s" x="555" y="220" text-anchor="middle" dominant-baseline="central">objects, plots stay</text></g>
+            <line class="arr" x1="468" y1="210" x2="428" y2="210" marker-end="url(#home-harness-arrow)"/>
+            <g class="core"><rect x="254" y="178" width="172" height="64" rx="6"/><text class="t" x="340" y="198" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="220" text-anchor="middle" dominant-baseline="central">full or structure, audit</text></g>
+            <line class="arr" x1="252" y1="210" x2="212" y2="210" marker-end="url(#home-harness-arrow)"/>
+            <g class="ui"><rect x="40" y="178" width="170" height="64" rx="6"/><text class="t" x="125" y="198" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="220" text-anchor="middle" dominant-baseline="central">reads what it may</text></g>
+            <line class="arr" x1="555" y1="106" x2="555" y2="176" marker-end="url(#home-harness-arrow)"/>
+            <g class="legend">
+              <rect class="ui-k" x="40" y="270" width="12" height="12" rx="3"/><text class="s" x="58" y="276" dominant-baseline="central">the agent</text>
+              <rect class="core-k" x="150" y="270" width="12" height="12" rx="3"/><text class="s" x="168" y="276" dominant-baseline="central">Corral</text>
+              <rect class="eng-k" x="240" y="270" width="12" height="12" rx="3"/><text class="s" x="258" y="276" dominant-baseline="central">your session, in plain sight</text>
+            </g>
+          </svg>
+        </figure>
+    </div>
+  </section>
+
   <div class="section-label"><span>The data science workflow, in your terminal</span><span>ctrl+b a</span></div>
 
   <article class="feature">
@@ -350,6 +406,10 @@
     <details>
       <summary>Does my data leave my machine?</summary>
       <p>Your data and code never leave it: Corral runs everything locally, and Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does. The one thing Corral sends is an anonymous ping when an installation finishes (version, system and country, no IP), to count installs; <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>).</p>
+    </details>
+    <details>
+      <summary>Can I use it with sensitive data?</summary>
+      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), let agents see only the shape of results and never values (<code>agent_output structure</code>), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>
