@@ -78,7 +78,7 @@
     <ul>
       <li><strong>herdr</strong> is the terminal workspace. The agent, the script, the console and the variables are herdr panes, so closing the window loses nothing. Corral talks to herdr through its socket: one JSON request, one JSON reply, no CLI process per call.</li>
       <li><strong>corral</strong> is one Rust binary that depends only on the C library. The short commands (a layout, sending code, <code>corral eval</code>) run and exit in milliseconds; the long-lived ones are the viewers (the variables pane, the table viewer) and Mirador's server, a few MB each.</li>
-      <li><strong>The engines.</strong> Ark runs R, and corral talks to it over ZeroMQ with the Jupyter protocol, implemented in corral itself. IPython runs Python in your project's uv environment. DuckDB answers the table viewer's queries. Mirador shows plots, and tables when you ask, in your browser.</li>
+      <li><strong>The engines.</strong> Ark runs R, and corral talks to it over ZeroMQ with the Jupyter protocol, implemented in corral itself. IPython runs Python in your project's uv environment. DuckDB answers the table viewer's queries. Mirador, written from scratch for Corral and exclusive to it, shows plots, and tables when you ask, in your browser: its server is part of the <code>corral</code> binary, in Rust, and its tables run on DuckDB.</li>
     </ul>
 
     <h3>Inside the binary</h3>

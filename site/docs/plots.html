@@ -47,6 +47,7 @@
 
     <h2>Mirador</h2>
     <p>Mirador shows your plots at the size of the window, with their history (<kbd>←</kbd> and <kbd>→</kbd>) and a download as SVG or PNG.</p>
+    <p>Mirador is new: it was written from scratch for Corral, exists only in Corral, and is not a fork of another viewer. Its server lives inside the <code>corral</code> binary, in Rust; the tables you open in it are DuckDB queries, the same ones the terminal's table viewer runs; and the page itself is one light HTML file, with no frameworks and nothing loaded from the internet.</p>
     <figure class="browser">
       <div class="browser-bar"><i></i><i></i><i></i><span>127.0.0.1 · Mirador</span></div>
       <img src="../assets/shots/mirador-plots.webp" width="2880" height="1800" loading="lazy" alt="Mirador showing a ggplot2 scatter plot of the Palmer penguins, with the session's plot history below">
