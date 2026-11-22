@@ -5,6 +5,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 ## Unreleased
 
 - Agents know Corral's settings and docs: the skill lists every `corral config` key, points to the docs that come with Corral and to `corral --help`, and tells agents never to change `agents` or `agent_output` themselves.
+- Docs: the install page says how to read the installer in Spanish: `curl -LsSf https://corral-term.dev/install.sh | CORRAL_LANG=es sh`.
 
 ### Fixes
 
