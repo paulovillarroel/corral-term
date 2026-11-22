@@ -6,7 +6,8 @@
 //!
 //! What agents may do is the user's call, and Corral enforces it here, whatever the
 //! agent was told: `corral config agents off|ask|on` (off refuses, ask shows every
-//! request in a popup first, see approve.rs) and `corral config agent_output
+//! request in a popup first, see approve.rs, and is the default; on runs it without
+//! asking) and `corral config agent_output
 //! full|review|structure` (review shows you the result before the agent gets it;
 //! structure returns no values, only whether it worked and the shape of the
 //! objects). A session marked with corral_sensitive() is always ask, plus review or
@@ -129,12 +130,17 @@ fn fail(code: i32, msg: &str) -> ! {
     std::process::exit(code)
 }
 
-/// off, ask or on (the default): `corral config agents`.
+/// off, ask (the default) or on: `corral config agents`. Anything but an explicit
+/// `on` asks, so a missing or mistyped setting never runs code unseen.
 fn access_mode() -> &'static str {
-    match env::config().get("agents").str() {
+    access_from(env::config().get("agents").str())
+}
+
+fn access_from(setting: Option<&str>) -> &'static str {
+    match setting {
         Some("off") => "off",
-        Some("ask") => "ask",
-        _ => "on",
+        Some("on") => "on",
+        _ => "ask",
     }
 }
 
@@ -484,7 +490,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::prints_something;
+    use super::{access_from, prints_something};
+
+    #[test]
+    fn asks_unless_told_otherwise() {
+        assert_eq!(access_from(None), "ask");
+        assert_eq!(access_from(Some("ask")), "ask");
+        assert_eq!(access_from(Some("On")), "ask");
+        assert_eq!(access_from(Some("yes")), "ask");
+        assert_eq!(access_from(Some("on")), "on");
+        assert_eq!(access_from(Some("off")), "off");
+    }
 
     #[test]
     fn echo_is_not_a_result() {
