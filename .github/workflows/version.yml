@@ -10,7 +10,7 @@
 # The release notes are that version's section of CHANGELOG.md ("## 0.1.4"), with
 # GitHub's link to the full list of changes below; without a section, nothing is
 # published, so add it before tagging.
-name: Versión
+name: Release
 
 on:
   push:
@@ -22,25 +22,25 @@ permissions:
   attestations: write
 
 jobs:
-  paquete:
+  package:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
-      - name: Notas de la versión (CHANGELOG.md)
+      - name: Release notes (CHANGELOG.md)
         run: |
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md" || { echo "::error::CHANGELOG.md has no section '## $v'"; exit 1; }
           cat "$RUNNER_TEMP/notes.md"
 
-      - name: Compilar corral (Rust, estático)
+      - name: Build corral (Rust, static)
         run: |
           rustup target add x86_64-unknown-linux-musl
           cargo build --release --locked --target x86_64-unknown-linux-musl --manifest-path rs/Cargo.toml
           ./rs/target/x86_64-unknown-linux-musl/release/corral --version
 
-      - name: Armar el paquete
+      - name: Assemble the package
         run: |
           git archive --format=tar --prefix=corral-term/ HEAD | tar -x -C "$RUNNER_TEMP"
           mkdir -p "$RUNNER_TEMP/corral-term/rs/target/release"
@@ -49,12 +49,12 @@ jobs:
           sha256sum corral-term-x86_64-linux.tar.gz > corral-term-x86_64-linux.tar.gz.sha256
           cat corral-term-x86_64-linux.tar.gz.sha256
 
-      - name: Atestar el origen del paquete
+      - name: Attest the package's provenance
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: corral-term-x86_64-linux.tar.gz
 
-      - name: Publicar la versión
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 install.sh --title "Corral $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
