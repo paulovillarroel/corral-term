@@ -22,7 +22,7 @@ A Corral layout has the agent pane on the left and, on the right, the script pan
 
 ## Shortcuts
 
-`corral keys --json` lists every shortcut: `group`, `keys`, `description`, `id`, `runnable` (an action you can also run with its command) and `changeable`. `corral keys --list` prints the same for people. Read it before answering "which key does…": the user may have changed the defaults.
+`corral keys --json` lists every shortcut: `group`, `keys`, `description`, `id`, `runnable` (an action you can also run with its command) and `changeable`. `corral keys --list` prints the same for people. Read it before answering "which key does…": the user may have changed the defaults. The palette (`ctrl+b space`) groups them by part of the IDE (layouts and panes, script editor, console, variables, tables, plots and Mirador), then agents, appearance and language, and help; each description starts with its category (`Layout:`, `Editor:`, `Console:`, `Agents:`, `Theme:`…), so you can tell the user to type that category in the palette.
 
 Change one with:
 
@@ -32,7 +32,7 @@ corral keys --change ID TECLA
 
 - `herdr:<action>` (keys used in any pane): `TECLA` is what comes after `ctrl+b`, like `t`, `shift+k` or `space`, or the whole shortcut (`"ctrl+b t"`). herdr takes it at once.
 - `editor:<action>` (keys in the script pane): `TECLA` is the whole shortcut, like `ctrl+e`, `f6` or `ctrl+shift+enter`. The user has to close the editor with `Ctrl+Q` and open the layout again.
-- Other groups (console, variables, tables, Mirador) are part of Corral and can't be changed this way.
+- Keys with other IDs (the R console's, the variables pane's, the tables' and Mirador's) are part of Corral and can't be changed this way.
 
 The command refuses keys herdr already uses (`ctrl+b ?` lists them) and keys another shortcut has. Tell the user what it said; add `--force` only if they agree to take the key from the other shortcut. Before changing, note the current key from `--json`, so you can put it back if the user asks.
 
