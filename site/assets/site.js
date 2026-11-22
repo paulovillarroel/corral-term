@@ -103,15 +103,6 @@ document.querySelectorAll(".content pre").forEach((pre) => {
   pre.appendChild(b);
 });
 
-// ---------------------------------------------------------------- install tabs
-
-document.querySelectorAll(".os-tabs button").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".os-tabs button").forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
-    // Visibility, not display: the hidden note keeps its room, so the layout doesn't jump.
-    document.querySelectorAll(".os-note").forEach((n) => n.setAttribute("aria-hidden", String(n.dataset.for !== tab.dataset.os)));
-  });
-});
 
 // ---------------------------------------------------------------- docs
 
