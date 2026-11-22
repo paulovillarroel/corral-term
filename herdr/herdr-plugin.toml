@@ -151,6 +151,16 @@ width = "84%"
 height = "70%"
 command = ["../rs/target/release/corral", "_approve"]
 
+# Review mode (corral config agent_output review): the result, before the agent gets
+# it. Enter shares it; n keeps it, and the agent gets only its structure.
+[[panes]]
+id = "review"
+title = "Corral: share this result with the agent?"
+placement = "popup"
+width = "84%"
+height = "76%"
+command = ["../rs/target/release/corral", "_approve"]
+
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]
 id = "table"

@@ -613,7 +613,8 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
         .ok_or(tr("this session doesn't publish variables (is jsonlite missing?)", "esta sesión no publica variables (¿falta jsonlite?)"))?;
     // Restricted output (a sensitive session, or agent_output structure): no previews of
     // values, which can be the data itself; dimensions and signatures stay.
-    let restricted = dir.join("sensitive").exists() || env::config().get("agent_output").str() == Some("structure");
+    // review counts too: these previews would reach the agent without the user seeing them.
+    let restricted = dir.join("sensitive").exists() || matches!(env::config().get("agent_output").str(), Some("structure" | "review"));
     let mut vars = data.get("vars").clone();
     if restricted {
         if let Value::Arr(items) = &mut vars {

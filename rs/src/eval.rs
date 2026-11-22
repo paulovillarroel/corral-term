@@ -7,8 +7,9 @@
 //! What agents may do is the user's call, and Corral enforces it here, whatever the
 //! agent was told: `corral config agents off|ask|on` (off refuses, ask shows every
 //! request in a popup first, see approve.rs) and `corral config agent_output
-//! full|structure` (structure returns no values, only whether it worked and the
-//! shape of the objects). A session marked with corral_sensitive() is always ask +
+//! full|review|structure` (review shows you the result before the agent gets it;
+//! structure returns no values, only whether it worked and the shape of the
+//! objects). A session marked with corral_sensitive() is always ask, plus review or
 //! structure. Every request goes to the local audit log (audit.rs).
 
 use crate::audit;
@@ -104,6 +105,17 @@ fn clip_output(text: &str, limit: usize, full: &Path) -> String {
          "{head}\n\n[corral] … salida recortada ({n} caracteres); completa en {full} …\n\n{tail}")
 }
 
+/// Whether the output holds anything besides the console echoing the code back
+/// (`> ` and `+ ` in R, `>>> ` and `... ` in Python): an assignment prints nothing
+/// worth reviewing.
+fn prints_something(output: &str, code: &str) -> bool {
+    let code_lines: Vec<&str> = code.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    output.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).any(|l| {
+        let rest = ["> ", "+ ", ">>> ", "... "].iter().find_map(|p| l.strip_prefix(p));
+        !matches!(rest, Some(r) if code_lines.contains(&r.trim()))
+    })
+}
+
 fn plot_ids(sid: &str) -> Vec<String> {
     plots_json(sid, "plots").get("plots").arr().iter().filter_map(|p| match p.get("id") {
         Value::Str(s) => Some(s.clone()),
@@ -139,39 +151,58 @@ fn audit_entry(o: &Opts, code: &str, access: &str, output: &str, decision: &str)
     ])
 }
 
-/// Ask the user in a popup; true when they let it run.
-fn approve(edir: &Path, rid: &str, code: &str, lang: &str, restricted: bool) -> Result<bool, String> {
-    let request = edir.join(format!("{rid}.request.json"));
-    let decision = edir.join(format!("{rid}.decision"));
-    env::write_json(&request, &obj(vec![
-        ("code", code.into()),
-        ("lang", lang.into()),
-        ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null)),
-        ("restricted", restricted.into()),
-        ("decision", decision.to_string_lossy().to_string().into()),
-    ]));
+/// Why the user couldn't be asked, or didn't answer.
+enum NoAnswer {
+    Busy,
+    Failed(String),
+    Timeout,
+}
+
+/// Open one of Corral's question popups (approve.rs) and wait for the answer:
+/// true for yes (run it, share it). herdr shows one popup at a time, so while the
+/// user has another one open (the palette, a viewer), wait for it instead of failing.
+fn ask_user(edir: &Path, rid: &str, entrypoint: &str, mut request: Value) -> Result<bool, NoAnswer> {
+    let path = edir.join(format!("{rid}.{entrypoint}.json"));
+    let decision = edir.join(format!("{rid}.{entrypoint}.decision"));
+    request.set("kind", entrypoint.into());
+    request.set("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null));
+    request.set("decision", decision.to_string_lossy().to_string().into());
+    env::write_json(&path, &request);
     let end = Instant::now() + Duration::from_secs(APPROVAL_SECS);
-    // herdr shows one popup at a time: while the user has another one open (the
-    // palette, a viewer), wait for it instead of failing.
     loop {
-        match crate::vars::open_popup("approve", &[("CORRAL_REQUEST", &request.to_string_lossy())]) {
+        match crate::vars::open_popup(entrypoint, &[("CORRAL_REQUEST", &path.to_string_lossy())]) {
             Ok(()) => break,
             Err(e) if e.to_lowercase().contains("busy") && Instant::now() < end => std::thread::sleep(Duration::from_secs(1)),
-            Err(e) if e.to_lowercase().contains("busy") => {
-                return Err(tr("another Corral window stayed open in herdr, so the user couldn't be asked; nothing ran",
-                              "otra ventana de Corral siguió abierta en herdr, así que no pude preguntarle al usuario; no se ejecutó nada").into())
-            }
-            Err(e) => return Err(trf!("couldn't ask the user ({e}); nothing ran", "no pude preguntarle al usuario ({e}); no se ejecutó nada")),
+            Err(e) if e.to_lowercase().contains("busy") => return Err(NoAnswer::Busy),
+            Err(e) => return Err(NoAnswer::Failed(e)),
         }
     }
     while Instant::now() < end {
         if let Ok(answer) = std::fs::read_to_string(&decision) {
-            return Ok(answer.trim() == "run");
+            return Ok(matches!(answer.trim(), "run" | "share"));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     let _ = std::fs::write(&decision, "expired"); // the popup sees it and closes
-    Err(trf!("the user didn't answer within {APPROVAL_SECS} s; nothing ran", "el usuario no respondió en {APPROVAL_SECS} s; no se ejecutó nada"))
+    Err(NoAnswer::Timeout)
+}
+
+/// Ask before the code runs; true when the user lets it run.
+fn approve(edir: &Path, rid: &str, code: &str, lang: &str, output_mode: &str) -> Result<bool, String> {
+    let request = obj(vec![("code", code.into()), ("lang", lang.into()), ("output", output_mode.into())]);
+    ask_user(edir, rid, "approve", request).map_err(|why| match why {
+        NoAnswer::Busy => tr("another Corral window stayed open in herdr, so the user couldn't be asked; nothing ran",
+                             "otra ventana de Corral siguió abierta en herdr, así que no pude preguntarle al usuario; no se ejecutó nada").into(),
+        NoAnswer::Failed(e) => trf!("couldn't ask the user ({e}); nothing ran", "no pude preguntarle al usuario ({e}); no se ejecutó nada"),
+        NoAnswer::Timeout => trf!("the user didn't answer within {APPROVAL_SECS} s; nothing ran", "el usuario no respondió en {APPROVAL_SECS} s; no se ejecutó nada"),
+    })
+}
+
+/// Review mode: show the user the result before the agent gets it; true to share it.
+/// No answer (or no way to ask) keeps it: the agent gets only the structure.
+fn review(edir: &Path, rid: &str, text: &str, lang: &str, plots: usize) -> bool {
+    let request = obj(vec![("text", text.into()), ("lang", lang.into()), ("plots", (plots as f64).into())]);
+    ask_user(edir, rid, "review", request).unwrap_or(false)
 }
 
 const APPROVAL_SECS: u64 = 300;
@@ -282,13 +313,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let sensitive = sdir.join("sensitive").exists();
-    let restricted = sensitive || env::config().get("agent_output").str() == Some("structure");
-    let output_mode = if restricted { "structure" } else { "full" };
+    // full, review or structure; a sensitive session never gets full.
+    let output_mode = match (env::config().get("agent_output").str(), sensitive) {
+        (Some("review"), _) => "review",
+        (Some("structure"), _) | (_, true) => "structure",
+        _ => "full",
+    };
     let access = if sensitive { "ask" } else { access };
     let secs = now() as u64;
     let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
     if access == "ask" {
-        match approve(&edir, &rid, &code, &o.lang, restricted) {
+        match approve(&edir, &rid, &code, &o.lang, output_mode) {
             Ok(true) => {}
             Ok(false) => {
                 audit::record(audit_entry(&o, &code, access, output_mode, "refused"));
@@ -328,7 +363,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let output = std::fs::read(&out_file).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
     if !result_file.exists() {
-        if !restricted {
+        if output_mode == "full" {
             println!("{}", clip_output(&output, o.max_chars, &out_file));
         }
         let mut e = audit_entry(&o, &code, access, output_mode, "ran");
@@ -340,9 +375,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         std::process::exit(2);
     }
     let result = std::fs::read_to_string(&result_file).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::obj());
-    let shown = if restricted {
-        restricted_report(&sdir, started, &output, &result)
-    } else {
+    let full_text = {
         let mut text = clip_output(output.trim_end(), o.max_chars, &out_file);
         for w in result.get("warnings").arr() {
             if let Some(w) = w.str() {
@@ -351,12 +384,42 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
         text
     };
+    let after = plots_json(&sid, "state");
+    let new_plots = if after.is_null() {
+        0
+    } else {
+        let (old, new) = (before.get("hsize").num().unwrap_or(0.0) as usize, after.get("hsize").num().unwrap_or(0.0) as usize);
+        let changed = before.is_null() || before.get("upid") != after.get("upid");
+        if new > old { new - old } else if changed && new > 0 { 1 } else { 0 }
+    };
+    // Whether the agent gets the result itself: always (full), never (structure), or
+    // when the user says so after seeing it (review; nothing to see needs no question).
+    let share = match output_mode {
+        "structure" => false,
+        "review" if !prints_something(&output, &code) && result.get("warnings").arr().is_empty() && new_plots == 0 => true,
+        "review" => review(&edir, &rid, &full_text, &o.lang, new_plots),
+        _ => true,
+    };
+    let restricted = !share;
+    let shown = if restricted {
+        let mut text = restricted_report(&sdir, started, &output, &result);
+        if output_mode == "review" {
+            text += &format!("\n{}", tr("[corral] the user kept this result to themselves; you got only its structure. Ask them what they found, or for what you need.",
+                                         "[corral] el usuario se guardó este resultado; recibiste solo su estructura. Pregúntale qué encontró, o pídele lo que necesitas."));
+        }
+        text
+    } else {
+        full_text
+    };
     println!("{shown}");
     let status = result.get("status").str().unwrap_or("ok").to_string();
     let mut entry = audit_entry(&o, &code, access, output_mode, "ran");
     entry.set("status", status.as_str().into());
     entry.set("printed_chars", (output.chars().count() as f64).into());
     entry.set("returned_chars", (shown.chars().count() as f64).into());
+    if output_mode == "review" {
+        entry.set("shared", share.into());
+    }
     if result.get("status").str() == Some("expired") {
         audit::record(entry);
         println!("{}", tr("[corral] the request expired before it ran", "[corral] la petición venció antes de ejecutarse"));
@@ -365,13 +428,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     // New plots: saved as PNG for the agent, numbered as the user sees them
     // (with restricted output, only counted: the user sees them, the agent doesn't).
-    let after = plots_json(&sid, "state");
     let mut plots_shared = 0usize;
     if restricted && !after.is_null() {
-        let old = before.get("hsize").num().unwrap_or(0.0) as usize;
-        let new = after.get("hsize").num().unwrap_or(0.0) as usize;
-        if new > old {
-            let n = new - old;
+        if new_plots > 0 {
+            let n = new_plots;
             println!("{}", trf!("[corral] {n} new plot(s) for the user (ctrl+b f); not shared with the agent (restricted output)",
                                 "[corral] {n} gráfico(s) nuevo(s) para el usuario (ctrl+b f); no se comparten con el agente (salida restringida)"));
         }
@@ -420,4 +480,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
     entry.set("plots_shared", (plots_shared as f64).into());
     audit::record(entry);
     std::process::exit(if result.get("status").str() == Some("error") { 1 } else { 0 })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prints_something;
+
+    #[test]
+    fn echo_is_not_a_result() {
+        assert!(!prints_something("> x <- 1\n", "x <- 1"));
+        assert!(!prints_something("> f <- function(a) {\n+   a\n+ }\n", "f <- function(a) {\n  a\n}"));
+        assert!(!prints_something(">>> y = 2\n", "y = 2"));
+        assert!(prints_something("> mean(x)\n[1] 50.7\n", "mean(x)"));
+        assert!(prints_something("> print(df)\n> other\n", "print(df)"));
+    }
 }

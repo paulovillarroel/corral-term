@@ -555,7 +555,7 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
-    let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("agent_output", &["full", "structure"]),
+    let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"])];
     if let Some((_, values)) = allowed.iter().find(|(k, _)| k == key) {
