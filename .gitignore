@@ -3,3 +3,7 @@ __pycache__/
 .Rhistory
 .RData
 .Rproj.user/
+
+# The website: Vercel copies install.sh into site/ when it builds (vercel.json).
+site/install.sh
+.vercel

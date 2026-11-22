@@ -1,7 +1,7 @@
 #!/bin/sh
 # Corral's installer.
 #
-#   curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh
+#   curl -LsSf https://corral-term.dev/install.sh | sh
 #
 # From a copy of the repository it installs that copy, without downloading anything:
 #   sh install.sh
@@ -17,7 +17,7 @@
 set -eu
 
 REPO=paulovillarroel/corral-term
-LINE="curl -LsSf https://raw.githubusercontent.com/$REPO/main/install.sh | sh"
+LINE="curl -LsSf https://corral-term.dev/install.sh | sh"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     red=$(printf '\033[31m'); bold=$(printf '\033[1m'); off=$(printf '\033[0m')

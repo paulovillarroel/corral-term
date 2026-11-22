@@ -74,7 +74,7 @@
     </table>
 
     <h2>Install with one line</h2>
-    <pre><code><span class="p">$ </span>curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh</code></pre>
+    <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
     <pre><code>Corral 0.1.0: what it needs, without changing anything.
 
@@ -114,11 +114,11 @@ Optional
 
     <h2>Check without installing</h2>
     <p>To see the checklist without changing anything, add <code>--check</code>:</p>
-    <pre><code><span class="p">$ </span>curl -LsSf https://raw.githubusercontent.com/paulovillarroel/corral-term/main/install.sh | sh -s -- --check</code></pre>
+    <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh -s -- --check</code></pre>
     <p>Once Corral is installed, <code>corral install --check</code> does the same.</p>
 
     <h2>Install from a clone</h2>
-    <p>From a copy of the repository, the installer uses that copy where it is, without downloading anything. This is the way to install while the repository is private, because the <code>curl</code> line needs it to be public:</p>
+    <p>From a copy of the repository, the installer uses that copy where it is, without downloading anything. This is the way to install while the repository is private: the <code>curl</code> line downloads Corral from GitHub, which works once the repository is public.</p>
     <pre><code><span class="p">$ </span>git clone https://github.com/paulovillarroel/corral-term.git
 <span class="p">$ </span>sh corral-term/install.sh</code></pre>
     <p>If the copy has no compiled <code>corral</code>, the installer builds it with <code>cargo</code>. When you change something in <code>rs/</code>, build it again with <code>cargo build --release</code>; <code>corral --version</code> tells you which folder the binary you are using comes from.</p>
