@@ -330,8 +330,8 @@ registerHandler("corral_run_file", async function () {
 });
 
 // Scratch files: Fresh does not let outside programs read unsaved buffers, so
-// mirror each Corral scratch buffer to ".actual.R" next to it (an R or a Python
-// draft alike). `corral script
+// mirror each Corral scratch buffer to ".actual.R" next to it (".actual.py" for a
+// Python draft, so the two drafts of a session don't overwrite each other). `corral script
 // --save/--read` (and Claude) read that copy. It is written when typing
 // pauses for 0.4 s (at least every 2 s while typing goes on) and when the
 // buffer shows up.
@@ -343,7 +343,7 @@ let dirtySince = 0;
 function scratchCopy(id: number): [string, string] | null {
   const path = editor.getBufferPath(id) || "";
   if (!isScratch(path)) return null;
-  return [path, path.replace(/(draft|borrador)\.(R|py)$/, ".actual.R")];
+  return [path, path.replace(/(draft|borrador)\.(R|py)$/, ".actual.$2")];
 }
 
 async function mirror(id: number): Promise<void> {
@@ -543,7 +543,8 @@ editor.setTimeout(800, "corral_scratch_shown");
 // Text sent to the draft from the terminal: Fresh doesn't let other programs
 // change an unsaved buffer, so `corral script --write` leaves a request in
 // the draft's folder (.pedido.json) and this applies it to the buffer as one
-// edit (Ctrl+Z undoes it), then answers in .respuesta.json.
+// edit (Ctrl+Z undoes it), then answers in .respuesta.json. "abrir" (from
+// `corral switch`) opens the other language's draft in a tab, or shows it.
 const scratchWatches: Record<number, string> = {}; // watch handle -> draft folder
 const watchedFolders: Record<string, boolean> = {};
 let lastRequest = "";
@@ -562,7 +563,7 @@ async function watchScratch(path: string): Promise<void> {
 registerHandler("corral_scratch_request", async function (args: { handle: number; path: string }) {
   const folder = scratchWatches[args.handle];
   if (!folder || !args.path.endsWith("/.pedido.json")) return;
-  let req: { id?: string; modo?: string; texto?: string };
+  let req: { id?: string; modo?: string; texto?: string; archivo?: string };
   try {
     req = JSON.parse(editor.readFile(folder + "/.pedido.json") || "");
   } catch (e) {
@@ -573,9 +574,13 @@ registerHandler("corral_scratch_request", async function (args: { handle: number
   let ok = false;
   let msg = "";
   try {
-    const id = ["draft.R", "borrador.R", "draft.py", "borrador.py"]
-      .map((name) => editor.findBufferByPath(folder + "/" + name)).find((b) => b) || 0;
-    if (!id) {
+    const names = req.archivo && SCRATCH_NAME.test(req.archivo) ? [req.archivo] : ["draft.R", "borrador.R", "draft.py", "borrador.py"];
+    const id = names.map((name) => editor.findBufferByPath(folder + "/" + name)).find((b) => b) || 0;
+    if (req.modo === "abrir") {
+      // The draft of the console now in view: show its tab, or open it next to the other one.
+      ok = id ? editor.showBuffer(id) : editor.openFile(folder + "/" + names[0], null, null);
+      if (!ok) msg = tr("the editor could not open the draft", "el editor no pudo abrir el borrador");
+    } else if (!id) {
       msg = tr("the draft is not open in the editor (if you saved it in the project, edit that file)",
         "el borrador no está abierto en el editor (si lo guardaste en el proyecto, edita ese archivo)");
     } else {

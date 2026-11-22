@@ -286,9 +286,15 @@ pub fn editor_command(editor: &str, target: &Path, scratch: bool) -> String {
     }
 }
 
+/// The editor plugin's live copy of a draft: .actual.R or .actual.py, next to it.
+pub fn live_copy(scratch: &Path) -> PathBuf {
+    let ext = scratch.extension().and_then(|e| e.to_str()).unwrap_or("R");
+    scratch.with_file_name(format!(".actual.{ext}"))
+}
+
 /// Latest text of a draft: the editor plugin's live copy if newer, else the file.
 fn scratch_text(scratch: &Path) -> String {
-    let live = scratch.with_file_name(".actual.R");
+    let live = live_copy(scratch);
     let newest = [live, scratch.to_path_buf()].into_iter()
         .filter_map(|p| std::fs::metadata(&p).and_then(|m| m.modified()).ok().map(|t| (t, p)))
         .max_by_key(|(t, _)| *t);
@@ -299,26 +305,72 @@ fn scratch_text(scratch: &Path) -> String {
 /// editor doesn't let other programs change an unsaved buffer, so this leaves a
 /// request next to the draft; Corral's editor plugin applies it, as one edit the
 /// user can undo with Ctrl+Z, and answers.
-fn scratch_write(scratch: &Path, text: &str, replace: bool) -> Result<(), String> {
+/// Ask the editor plugin to do something with a draft (`modo`: agregar, reemplazar
+/// or abrir), and wait up to `wait` for its answer; None if it didn't answer.
+fn scratch_request(scratch: &Path, mode: &str, text: &str, wait: Duration) -> Result<Option<Value>, String> {
     let folder = scratch.parent().ok_or(tr("the draft has no folder", "borrador sin carpeta"))?;
+    let name = scratch.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let rid = env::random_hex(4);
     let answer = folder.join(".respuesta.json");
     let tmp = folder.join(".pedido.tmp");
-    let request = obj(vec![("id", rid.as_str().into()), ("modo", if replace { "reemplazar" } else { "agregar" }.into()),
-                           ("texto", text.into())]);
+    let request = obj(vec![("id", rid.as_str().into()), ("modo", mode.into()), ("archivo", name.into()), ("texto", text.into())]);
     std::fs::write(&tmp, request.to_json()).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, folder.join(".pedido.json")).map_err(|e| e.to_string())?; // in one step
-    let end = Instant::now() + Duration::from_secs(5);
-    let mut reply = Value::Null;
+    let end = Instant::now() + wait;
+    let mut reply = None;
     while Instant::now() < end {
-        reply = std::fs::read_to_string(&answer).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::Null);
-        if reply.get("id").str() == Some(rid.as_str()) {
+        let r = std::fs::read_to_string(&answer).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::Null);
+        if r.get("id").str() == Some(rid.as_str()) {
+            reply = Some(r);
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
     let _ = std::fs::remove_file(folder.join(".pedido.json"));
-    if reply.get("id").str() != Some(rid.as_str()) {
+    Ok(reply)
+}
+
+/// The draft for `lang` next to `draft`, in the same folder and naming:
+/// draft.R and draft.py, or borrador.R and borrador.py.
+fn sibling_draft(draft: &Path, lang: &str) -> Option<PathBuf> {
+    let name = draft.file_name()?.to_str()?;
+    if !is_scratch_name(name) {
+        return None;
+    }
+    let stem = if name.starts_with("borrador") { "borrador" } else { "draft" };
+    Some(draft.with_file_name(format!("{stem}.{}", if lang == "python" { "py" } else { "R" })))
+}
+
+/// After the console switches to `lang`: the editor opens that language's draft
+/// in another tab, next to the other one, and it becomes the workspace's draft
+/// (what `corral script --read/--write/--save` use). Both stay temporary.
+pub fn draft_follows(lang: &str) {
+    let ws = env::current_workspace();
+    let key = ws.as_deref().unwrap_or("default").to_string();
+    let mut index = env::read_json(&scratch_index());
+    let Some(current) = index.get(&key).str().map(PathBuf::from) else { return };
+    let Some(target) = sibling_draft(&current, lang) else { return };
+    let editor_open = herdr::panes(ws.as_deref()).ok().is_some_and(|p| labeled(&p, "corral:script").is_some());
+    if !editor_open {
+        return;
+    }
+    // Already there: the editor just shows its tab.
+    if !target.exists() && std::fs::write(&target, "").is_err() {
+        return;
+    }
+    // An editor started before this version doesn't know "abrir": then nothing opens.
+    if let Ok(Some(reply)) = scratch_request(&target, "abrir", "", Duration::from_secs(2)) {
+        if reply.get("ok") == &Value::Bool(true) {
+            index.set(&key, target.to_string_lossy().to_string().into());
+            env::write_json(&scratch_index(), &index);
+        }
+    }
+}
+
+fn scratch_write(scratch: &Path, text: &str, replace: bool) -> Result<(), String> {
+    let reply = scratch_request(scratch, if replace { "reemplazar" } else { "agregar" }, text, Duration::from_secs(5))?
+        .unwrap_or(Value::Null);
+    if reply.is_null() {
         return Err(tr("the editor did not answer: is the draft open? An editor opened before Corral was updated \
                        needs to be closed (Ctrl+Q) and opened again",
                       "el editor no respondió: ¿está abierto el borrador? Un editor abierto antes de actualizar Corral \
@@ -354,6 +406,9 @@ pub fn script(args: &[String]) -> Result<(), String> {
         let index = env::read_json(&scratch_index());
         let scratch = PathBuf::from(index.get(ws.as_deref().unwrap_or("default")).str()
             .ok_or(tr("this workspace has no Corral draft", "este workspace no tiene un borrador de Corral"))?);
+        // In a session that goes back and forth between R and Python, the draft of the console in view.
+        let lang = herdr::panes(ws.as_deref()).map(|p| env::active_lang(ws.as_deref(), &p)).unwrap_or_else(|_| "r".into());
+        let scratch = sibling_draft(&scratch, &lang).filter(|d| d.exists()).unwrap_or(scratch);
         if a.flag("--write") {
             let text = match &file {
                 Some(f) => std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?,
@@ -525,6 +580,23 @@ pub fn mark_console(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn each_language_has_its_draft_next_to_the_other() {
+        let r = Path::new("/p/.corral/w-1/draft.R");
+        assert_eq!(sibling_draft(r, "python"), Some(PathBuf::from("/p/.corral/w-1/draft.py")));
+        assert_eq!(sibling_draft(r, "r"), Some(r.to_path_buf()));
+        let py = Path::new("/p/.corral/w-1/borrador.py");
+        assert_eq!(sibling_draft(py, "r"), Some(PathBuf::from("/p/.corral/w-1/borrador.R")));
+        assert_eq!(sibling_draft(Path::new("/p/analysis.R"), "python"), None);
+    }
+
+    #[test]
+    fn each_draft_has_its_own_live_copy() {
+        assert_eq!(live_copy(Path::new("/d/draft.R")), PathBuf::from("/d/.actual.R"));
+        assert_eq!(live_copy(Path::new("/d/draft.py")), PathBuf::from("/d/.actual.py"));
+    }
 
     #[test]
     fn fresh_starts_in_corrals_language() {

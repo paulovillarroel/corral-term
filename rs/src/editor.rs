@@ -35,8 +35,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::process::exit(status.code().unwrap_or(0))
 }
 
-/// Remove a scratch file and Corral's live copy of it, then its folder if
-/// nothing else is left there (a file you saved there by hand stays).
+/// Remove a scratch file, and the other language's draft next to it, with
+/// Corral's live copies, then the folder if nothing else is left there (a file
+/// you saved there by hand stays).
 pub fn discard(file: &Path) {
     let Some(name) = file.file_name().and_then(|n| n.to_str()) else { return };
     if !crate::workspace::is_scratch_name(name) {
@@ -47,7 +48,9 @@ pub fn discard(file: &Path) {
     if !in_scratch {
         return;
     }
-    for name in [name, ".actual.R", ".pedido.json", ".pedido.tmp", ".respuesta.json"] {
+    let stem = if name.starts_with("borrador") { "borrador" } else { "draft" };
+    for name in [format!("{stem}.R"), format!("{stem}.py"), ".actual.R".into(), ".actual.py".into(),
+                 ".pedido.json".into(), ".pedido.tmp".into(), ".respuesta.json".into()] {
         let _ = std::fs::remove_file(dir.join(name));
     }
     let _ = std::fs::remove_dir(dir); // fails, as it should, if something else is there

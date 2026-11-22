@@ -252,6 +252,7 @@ pub fn switch(args: &[String]) -> Result<(), String> {
         Some(_) => return Err(tr("usage: corral switch [r|python]", "uso: corral switch [r|python]").into()),
     };
     let (pane, started) = console::show(lang, true)?;
+    crate::workspace::draft_follows(lang);
     let started = started || pane.as_deref().is_some_and(|p| console::ensure_running(p, lang));
     let note = if started { tr(": starting (the first time, uv prepares the environment)", ": iniciando (la primera vez uv prepara el entorno)") } else { "" };
     env::notify(tr("Console", "Consola"), &format!("{}{note}", console::lang_name(lang)));
