@@ -1,4 +1,4 @@
-# Each version tag (v0.0.1, v0.0.2, ...) publishes the package install.sh
+# Each version tag (v0.1.0, v0.1.1, ...) publishes the package install.sh
 # downloads: the repository plus the Rust corral already compiled, so whoever
 # installs it doesn't need Rust. The binary is static (musl) and runs on any
 # x86_64 Linux, WSL included.

@@ -65,4 +65,4 @@ sh corral-term/install.sh
 
 ## Status
 
-Version 0.0.1, in daily use on Windows with WSL. Linux x86_64 and WSL are supported; macOS is not yet.
+Version 0.1.0, in daily use on Windows with WSL. Linux x86_64 and WSL are supported; macOS is not yet.

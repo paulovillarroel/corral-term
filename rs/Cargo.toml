@@ -1,6 +1,6 @@
 [package]
 name = "corral"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 description = "Corral's fast path: the commands that run on every keystroke, without Python's startup"
 license = "MIT"
