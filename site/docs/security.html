@@ -136,9 +136,9 @@
     <h3>Limits that are always on</h3>
     <ul>
       <li>One request at a time per console: several agents queue, they don't interleave.</li>
-      <li>A request that isn't done in time is cut (<code>--timeout</code>, 300 s by default), and one that the console only reaches after the agent gave up never runs.</li>
+      <li>The agent stops waiting after <code>--timeout</code> (300 s by default, and it can ask for more): the code is not interrupted, it keeps running in your console and its full output is kept. A request that the console only reaches after the agent gave up never starts.</li>
       <li>Output is clipped to <code>--max-chars</code> (20,000 by default); the full output stays in a file on your machine.</li>
-      <li>Code only runs in a console that has Corral active and is in view; it is typed where you can see it.</li>
+      <li>Code only runs in a console with Corral active, and it is typed where you can see it: if that console is in a hidden tab, or not started yet, Corral brings it into view (or starts it) first. If you are running something there yourself, the request waits for the prompt (<code>--wait-idle</code>, 20 s) and otherwise tells the agent the console is busy; it never types over a half-written line.</li>
     </ul>
 
     <h2>What Corral doesn't do</h2>
