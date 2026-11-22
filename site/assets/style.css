@@ -309,8 +309,10 @@ kbd {
   .menu-toggle { display: inline-flex; }
   /* On a phone the sections open over the whole screen, wherever you are in the page,
      with their own bar and Close button on top. */
-  .side { display: none; position: fixed; inset: 0; z-index: 40; height: auto; overflow-y: auto; overscroll-behavior: contain;
-          background: var(--bg); border: 0; padding: 0 16px 48px; }
+  /* align-self back to stretch: the desktop "start" would size the panel to its content
+     (taller than the screen), so it could not scroll. */
+  .side { display: none; position: fixed; inset: 0; z-index: 40; height: auto; align-self: stretch; overflow-y: auto;
+          overscroll-behavior: contain; -webkit-overflow-scrolling: touch; background: var(--bg); border: 0; padding: 0 16px 48px; }
   .side.open { display: block; }
   .side .side-head { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; height: 60px;
                      margin: 0 -16px 20px; padding: 0 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
