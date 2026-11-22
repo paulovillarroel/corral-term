@@ -175,7 +175,7 @@
     <pre><code><span class="p">$ </span>corral script --read
 <span class="p">$ </span>echo 'modelo &lt;- lm(mpg ~ wt, data = autos)' | corral script --write
 <span class="p">$ </span>corral script --save analisis/modelo.R</code></pre>
-    <p><code>--read</code> prints the draft, unsaved edits included. <code>--write</code> adds text at the end, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>; with <code>--replace</code> it replaces everything. <code>--save</code> writes the draft into your project, and refuses to replace a file unless you add <code>--force</code>. <a href="editor.html#agents-in-the-draft">The script editor</a> has the details.</p>
+    <p>They act on the draft of the console in view: <code>draft.R</code> or <code>draft.py</code> in a session that uses both. <code>--read</code> prints the draft, unsaved edits included. <code>--write</code> adds text at the end, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>; with <code>--replace</code> it replaces everything. <code>--save</code> writes the draft into your project, and refuses to replace a file unless you add <code>--force</code>. <a href="editor.html#agents-in-the-draft">The script editor</a> has the details.</p>
 
     <h2>Without a Corral console</h2>
     <p>Claude uses your console only if the workspace has an active Corral console. Otherwise, it works as usual. If Claude opens its own R instead of using yours, <code>corral eval --check</code> should answer with your console; if it doesn't, switch Corral on in that R with <kbd>ctrl+b</kbd> <kbd>m</kbd>.</p>
