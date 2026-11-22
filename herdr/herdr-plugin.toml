@@ -3,7 +3,7 @@
 
 id = "corral"
 name = "Corral"
-version = "0.1.0"
+version = "0.1.1"
 min_herdr_version = "0.9.5"
 description = "R and Python consoles, tables and plots next to your agents"
 platforms = ["linux"]
