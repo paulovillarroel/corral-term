@@ -875,8 +875,17 @@ fn count_install(update: bool, in_place: bool) {
     }
 }
 
+// The installer (install.sh) also passes --from, --in-place and --rerun.
+fn install_usage() -> &'static str {
+    tr("usage: corral install [--check]", "uso: corral install [--check]")
+}
+
 /// `corral install [--from FOLDER] [--in-place] [--check] [--rerun COMMAND]`.
 pub fn cmd_install(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", install_usage());
+        return Ok(());
+    }
     let (mut src, mut in_place, mut only_check, mut again) = (None::<PathBuf>, false, false, "corral install".to_string());
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -885,7 +894,7 @@ pub fn cmd_install(args: &[String]) -> Result<(), String> {
             "--in-place" => in_place = true,
             "--check" => only_check = true,
             "--rerun" => again = it.next().cloned().unwrap_or(again),
-            other => return Err(trf!("unknown option {other}\nusage: corral install [--check]", "opción desconocida {other}\nuso: corral install [--check]")),
+            other => return Err(trf!("unknown option {other}\n{}", "opción desconocida {other}\n{}", install_usage())),
         }
     }
     let src = match src {
@@ -913,7 +922,16 @@ pub fn cmd_install(args: &[String]) -> Result<(), String> {
 // ----------------------------------------------------------------------- uninstall
 
 /// `corral uninstall`: take out what the installer added (and the user's own Corral lines it recognizes).
-pub fn cmd_uninstall(_args: &[String]) -> Result<(), String> {
+pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
+    let usage = tr("usage: corral uninstall", "uso: corral uninstall");
+    if env::wants_help(args) {
+        println!("{usage}");
+        return Ok(());
+    }
+    // Nothing else is an option: a typo must not remove Corral.
+    if let Some(bad) = args.first() {
+        return Err(trf!("unknown option {bad}\n{usage}", "opción desconocida {bad}\n{usage}"));
+    }
     let s = style();
     migrate_old_install();
     let done = env::read_json(&manifest());

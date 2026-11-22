@@ -682,7 +682,16 @@ fn open_popup() -> bool {
     false
 }
 
+fn usage() -> &'static str {
+    tr("usage: corral keys [--list | --json | --change ID KEY [--force]]",
+       "uso: corral keys [--list | --json | --change ID TECLA [--force]]")
+}
+
 pub fn run(args: &[String], popup: bool) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", usage());
+        return Ok(());
+    }
     let has = |f: &str| args.iter().any(|a| a == f);
     if has("--json") {
         println!("{}", to_json(&entries()).to_json_pretty(1));

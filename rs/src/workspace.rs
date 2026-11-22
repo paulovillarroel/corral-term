@@ -480,7 +480,8 @@ pub fn script(args: &[String]) -> Result<(), String> {
 
 /// `corral close` (ctrl+b shift+c): Corral's panes (script, console, variables)
 /// go; everything else, the agent included, stays.
-pub fn close(_args: &[String]) -> Result<(), String> {
+pub fn close(args: &[String]) -> Result<(), String> {
+    Args::parse(args, &[], &[], tr("usage: corral close", "uso: corral close"))?;
     let ws = env::current_workspace();
     let pane = env::current_pane();
     let mut tab = env::plugin_context().get("tab_id").str().map(String::from)

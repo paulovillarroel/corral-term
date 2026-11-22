@@ -150,12 +150,19 @@ pub fn open_mirador_window(info: &Value) {
     bring_to_front("Mirador", true);
 }
 
+fn mirador_usage() -> &'static str {
+    tr("usage: corral mirador [--open] [--url] [--stop] [--foreground]", "uso: corral mirador [--open] [--url] [--stop] [--foreground]")
+}
+
 /// `corral mirador [--open] [--url] [--stop] [--foreground]`.
 pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", mirador_usage());
+        return Ok(());
+    }
     let has = |f: &str| args.iter().any(|a| a == f);
     if let Some(bad) = args.iter().find(|a| !["--open", "--url", "--stop", "--foreground"].contains(&a.as_str())) {
-        return Err(trf!("unknown option {bad}\nusage: corral mirador [--open] [--url] [--stop] [--foreground]",
-                        "opción desconocida {bad}\nuso: corral mirador [--open] [--url] [--stop] [--foreground]"));
+        return Err(trf!("unknown option {bad}\n{}", "opción desconocida {bad}\n{}", mirador_usage()));
     }
     if has("--stop") {
         let info = mirador_info();
@@ -387,9 +394,14 @@ fn session_dir() -> Option<PathBuf> {
 /// `corral plots [--inline]` (ctrl+b f): Mirador at the latest plot, or the
 /// in-terminal viewer on a terminal that draws images.
 pub fn cmd_plots(args: &[String]) -> Result<(), String> {
+    let usage = tr("usage: corral plots [--inline]", "uso: corral plots [--inline]");
+    if env::wants_help(args) {
+        println!("{usage}");
+        return Ok(());
+    }
     let inline = args.iter().any(|a| a == "--inline");
     if let Some(bad) = args.iter().find(|a| *a != "--inline") {
-        return Err(trf!("unknown option {bad}\nusage: corral plots [--inline]", "opción desconocida {bad}\nuso: corral plots [--inline]"));
+        return Err(trf!("unknown option {bad}\n{usage}", "opción desconocida {bad}\n{usage}"));
     }
     if inline || image_mode().0 == "kitty" {
         let dir = session_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
@@ -578,6 +590,10 @@ pub fn table_to_mirador(path: &str, title: &str, session: Option<&str>) -> Resul
 /// `corral open [URL]`: a local URL (quarto preview, httpgd, a clicked link) in
 /// the browser; without one, Mirador.
 pub fn cmd_open(args: &[String]) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", tr("usage: corral open [URL]", "uso: corral open [URL]"));
+        return Ok(());
+    }
     let url = args.first().cloned().or_else(|| std::env::var("HERDR_PLUGIN_CLICKED_URL").ok().filter(|u| !u.is_empty()));
     match url {
         Some(u) => {
