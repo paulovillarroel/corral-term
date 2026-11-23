@@ -925,3 +925,37 @@ fn sensitive_sessions_stay_sensitive_after_a_crash() {
     assert!(!text.contains("42"), "{text}");
     wait_for(Duration::from_secs(10), "Python's notice", || says(&pane));
 }
+
+/// An agent that runs its commands in a terminal of its own still can't loosen the
+/// harness by itself: from a pane herdr sees an agent in, it asks. From your own
+/// terminal it doesn't.
+#[test]
+#[ignore]
+fn an_agent_in_a_terminal_still_asks() {
+    let live = Live::start("agentpty");
+    live.link_plugin();
+    live.config(r#"{"agents":"ask"}"#);
+    let settings = || std::fs::read_to_string(live.dir.join("config/corral/config.json")).unwrap().split_whitespace().collect::<String>();
+    let pane = |name: &str| {
+        let split = live.run("herdr", &["pane", "split", &live.console, "--direction", "down"]);
+        let pane = field(&split, "pane_id").unwrap_or_else(|| panic!("no pane in {split}"));
+        live.run("herdr", &["pane", "rename", &pane, name]);
+        pane
+    };
+
+    // A shell with a terminal, in a pane herdr sees Claude Code in.
+    let agent = pane("agent");
+    live.run("herdr", &["pane", "report-agent", "--source", "corral-test", "--agent", "claude", "--state", "working", &agent]);
+    let seen = live.run("herdr", &["pane", "get", &agent]);
+    assert!(seen.contains("claude"), "herdr doesn't see the agent: {seen}");
+    live.run("herdr", &["pane", "run", &agent, "corral config agents on"]);
+    let request = live.answer_popup(&[], "refuse");
+    assert!(request.contains(r#""key":"agents""#) && request.contains(&format!(r#""agent_pane":"{agent}""#)), "{request}");
+    wait_for(Duration::from_secs(10), "the refusal", || live.screen(&agent).contains("refused"));
+    assert!(settings().contains(r#""agents":"ask""#), "{}", settings());
+
+    // The same in your own terminal: no popup.
+    let mine = pane("mine");
+    live.run("herdr", &["pane", "run", &mine, "corral config agents on"]);
+    wait_for(Duration::from_secs(10), "the change", || settings().contains(r#""agents":"on""#));
+}

@@ -9,8 +9,8 @@
 //!   agent would get it. Enter or y shares it; n, Esc or q keeps it, and the agent
 //!   gets only its structure.
 //!
-//! - setting: an agent's shell (no terminal) asks to loosen the harness, with
-//!   `corral config agents on` for instance. Enter or y allows it.
+//! - setting: an agent asks to loosen the harness, with `corral config agents on`
+//!   for instance. Enter or y allows it.
 //!
 //! The answer goes back in a file next to the request. Closing the popup counts as
 //! no, and it closes itself when the request is answered or expires. Keys pressed in
@@ -30,10 +30,7 @@ const GUARD: Duration = Duration::from_millis(600);
 /// Who asks: the agent herdr sees in that pane, and the pane; or nobody's pane.
 fn who(pane: Option<&str>) -> String {
     let Some(pane) = pane else { return tr("outside herdr (no pane)", "fuera de herdr (sin panel)").into() };
-    let agent = crate::herdr::panes(None).ok()
-        .and_then(|ps| ps.into_iter().find(|p| crate::herdr::pane_id(p) == pane))
-        .and_then(|p| p.get("agent").str().map(String::from));
-    let name = match agent.as_deref() {
+    let name = match crate::herdr::agent_in(pane).as_deref() {
         Some("claude") => "Claude Code".to_string(),
         Some("codex") => "Codex".to_string(),
         Some("gemini") => "Gemini CLI".to_string(),
@@ -122,8 +119,8 @@ pub fn run(_args: &[String]) -> Result<(), String> {
                 (true, _) => tr("Share this result with the agent?", "¿Compartir este resultado con el agente?"),
             };
             let sub = if changing {
-                trf!("from {agent} · it asked from a shell without a terminal, so you decide",
-                     "desde {agent} · lo pidió desde una shell sin terminal, así que decides tú")
+                trf!("from {agent} · an agent can't loosen Corral's rules on its own, so you decide",
+                     "desde {agent} · un agente no puede aflojar las reglas de Corral por su cuenta, así que decides tú")
             } else if reviewing {
                 trf!("from {agent} · exactly what it would get; keep it and it gets only the structure",
                      "desde {agent} · lo que recibiría; si te lo guardas, recibe solo la estructura")

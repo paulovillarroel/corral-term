@@ -58,6 +58,12 @@ pub fn pane_id(p: &Value) -> &str {
     p.get("pane_id").str().unwrap_or("")
 }
 
+/// The agent herdr sees running in `pane` (claude, codex…), if any.
+pub fn agent_in(pane: &str) -> Option<String> {
+    panes(None).ok()?.into_iter().find(|p| pane_id(p) == pane)
+        .and_then(|p| p.get("agent").str().map(String::from))
+}
+
 pub fn tab_id(p: &Value) -> &str {
     p.get("tab_id").str().unwrap_or("")
 }
