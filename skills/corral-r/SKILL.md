@@ -98,7 +98,7 @@ Don't save the scratch file on your own initiative; it is temporary on purpose.
 
 ## Panes, shortcuts, settings and docs
 
-When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. For a setting, a command's options or any question about how Corral works, read [reference/settings-and-docs.md](reference/settings-and-docs.md): it lists the settings, which ones you must never change (`agents`, `agent_output`), and where Corral's docs are. The essentials:
+When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. For a setting, a command's options or any question about how Corral works, read [reference/settings-and-docs.md](reference/settings-and-docs.md): it lists the settings, the R and Python versions the consoles run (rig, uv), which settings you must never change (`agents`, `agent_output`), and where Corral's docs are. The essentials:
 
 ```bash
 corral toggle script            # the right column shows: script (agent, if focused on code), console or both

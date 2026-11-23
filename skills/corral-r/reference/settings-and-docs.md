@@ -14,8 +14,10 @@ Read them whenever it helps to answer. Change one only when the user asks, and t
 | `agent_output` | `full`, `review`, `structure` | What an agent gets back. Never change it yourself (below). |
 | `agent` | a command (`claude`) | The agent a new layout runs in its agent pane. |
 | `r_console` | `ark`, `r`, or a command | The R console: Ark, plain R, or the user's own command. Consoles opened afterwards. |
+| `r_version` | unset, a version rig has (`4.5.2`) | The R the consoles run, from rig; unset follows rig's default (the R on the PATH). Set it with `corral versions r` (below). |
 | `ark_frontend` | `corral`, `jupyter` | Ark's front end: Corral's console or jupyter-console. |
 | `ark_bin` | a path | A specific Ark binary (default: the newest one installed). |
+| `python_version` | unset, a version uv has (`3.13`) | The console's Python outside uv projects. Inside a project, its `.python-version` decides. Set it with `corral versions python` (below). |
 | `python_console` | a command | The command that starts the Python console. |
 | `python_lsp` | `ty`, `pylsp` | The editor's Python language server. When the editor opens again. |
 | `images` | `auto`, `kitty`, `symbols` | How plots are drawn inside herdr. |
@@ -29,6 +31,10 @@ Read them whenever it helps to answer. Change one only when the user asks, and t
 Some settings have an environment variable that wins over them for one process (`CORRAL_LANG`, `CORRAL_IMAGES`, `CORRAL_AGENT`), and some choices exist only as variables (`CORRAL_EDITOR`, `CORRAL_VIEW`, `CORRAL_BROWSER`, `CORRAL_TABLE_VIEWER`…). The Configuration page lists them all. Don't add them to the user's shell files unless they ask.
 
 When something doesn't work, `corral doctor` checks the installation and the running pieces, and the Troubleshooting page has the known problems.
+
+## R and Python versions
+
+`corral versions r --json` (or `python`) lists the installed versions, from rig for R and uv for Python, with the one the consoles use marked (`current`) and, for Python, the uv project if there is one. When the user asks for another version, `corral versions r 4.5.2` (or `python 3.13`, or `default`) sets it; the console picks it up when it starts again. Add `--restart` only if the user agrees: it restarts that console and its objects are lost. Inside a uv project, `corral versions python` writes the project's `.python-version` (`uv python pin`) and uv rebuilds its `.venv`, so say so before doing it. rig's own default (`rig default`) isn't touched; don't change it yourself either, since in rig's admin mode it needs `sudo`.
 
 ## Commands
 
