@@ -16,7 +16,7 @@ use crate::zip;
 use std::io::IsTerminal;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const HERDR_MIN: (u32, u32, u32) = (0, 9, 5);
@@ -315,13 +315,19 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             }
             // nanoparquet even with arrow there: View() with arrow is slower, and in a
             // long session R's memory keeps growing with each table (bench/repeat.R).
-            let extra: Vec<&str> = [("nanoparquet", has[2]), ("rlang", has[4])].into_iter().filter(|(_, ok)| !ok).map(|(p, _)| p).collect();
-            if !extra.is_empty() {
-                let cmd = format!("  {}", install_r(&extra));
-                let list = extra.join(", ");
-                out.push(check("optional", State::Warn, tr("More R packages", "Más paquetes de R"), trf!("missing {list}", "faltan {list}"),
-                               &[tr("nanoparquet opens large tables faster and keeps R's memory steady; rlang avoids redrawing a plot:",
-                                    "nanoparquet abre tablas grandes más rápido y mantiene estable la memoria de R; rlang evita volver a dibujar un gráfico:"), &cmd]));
+            // The installer puts it in your R library when it's missing.
+            if has[2] {
+                out.push(check("installer", State::Ok, "nanoparquet", tr("you already have it (View()'s tables)", "ya lo tienes (las tablas de View())"), &[]));
+            } else {
+                out.push(check("installer", State::Download, "nanoparquet",
+                               tr("will install it in your R library (big tables open faster in View(), R's memory stays steady)",
+                                  "lo instalo en tu biblioteca de R (las tablas grandes abren más rápido en View() y la memoria de R se mantiene estable)"), &[]));
+            }
+            if !has[4] {
+                let cmd = format!("  {}", install_r(&["rlang"]));
+                out.push(check("optional", State::Warn, tr("More R packages", "Más paquetes de R"), tr("missing rlang", "falta rlang"),
+                               &[tr("rlang avoids redrawing a plot, and lets checkpoints see objects changed in place:",
+                                    "rlang evita volver a dibujar un gráfico, y permite que los respaldos vean objetos cambiados en el lugar:"), &cmd]));
             }
         }
     }
@@ -845,6 +851,43 @@ fn ask_agent(before: &Value, done: &mut Value) {
     }
 }
 
+/// The system's release name (noble, jammy, bookworm…), from /etc/os-release.
+fn linux_codename() -> Option<String> {
+    let text = std::fs::read_to_string("/etc/os-release").ok()?;
+    let value = |key: &str| text.lines().find_map(|l| l.strip_prefix(key)).map(|v| v.trim_matches('"').to_string()).filter(|v| !v.is_empty());
+    value("UBUNTU_CODENAME=").or_else(|| value("VERSION_CODENAME="))
+}
+
+/// nanoparquet, which View() writes R's tables with (faster than arrow, and R's memory
+/// stays steady in a long session), into your own R library: no sudo. On a system
+/// Posit's package manager builds for, it comes already compiled; otherwise from
+/// CRAN, which needs a compiler. If it fails, View() keeps working with arrow or CSV.
+fn r_nanoparquet() {
+    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+    if setup::r_packages(&r, &["nanoparquet"])[0] {
+        return;
+    }
+    println!("  {}", tr("… installing nanoparquet in your R library (seconds; a minute or two if it has to compile)",
+                        "… instalo nanoparquet en tu biblioteca de R (segundos; uno o dos minutos si hay que compilarlo)"));
+    let binaries = linux_codename().filter(|c| ["focal", "jammy", "noble", "bullseye", "bookworm"].contains(&c.as_str()))
+        .map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", "));
+    let code = format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
+if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
+lib <- path.expand(lib)
+dir.create(lib, recursive = TRUE, showWarnings = FALSE)
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+install.packages("nanoparquet", lib = lib, repos = c({}CRAN = "{CRAN}"), quiet = TRUE)
+quit(status = if (requireNamespace("nanoparquet", lib.loc = c(lib, .libPaths()), quietly = TRUE)) 0 else 1)"#, binaries.unwrap_or_default());
+    let ok = Command::new(&r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+        .status().is_ok_and(|s| s.success());
+    if ok {
+        step(tr("nanoparquet in your R library", "nanoparquet en tu biblioteca de R"), State::Ok);
+    } else {
+        step(&trf!("couldn't install nanoparquet; View() uses arrow or CSV meanwhile. To try again: {}",
+                   "no pude instalar nanoparquet; mientras tanto View() usa arrow o CSV. Para reintentarlo: {}", install_r(&["nanoparquet"])), State::Warn);
+    }
+}
+
 fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let s = style();
     println!("{}Corral {VERSION}{}: {}", s.bold, s.off,
@@ -886,6 +929,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         }
     }
     ark();
+    r_nanoparquet();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
     rprofile_step(&dest, &mut done, &mut saved);
