@@ -76,9 +76,9 @@ fn layout_state() -> (Value, String) {
 
 fn layout_usage() -> &'static str {
     tr("usage: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
-[--console COMMAND] [--ratio 0.516] [--shell] [--editor COMMAND]",
+[--console COMMAND] [--ratio N] [--shell] [--editor COMMAND]",
        "uso: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
-[--console COMANDO] [--ratio 0.516] [--shell] [--editor COMANDO]")
+[--console COMANDO] [--ratio N] [--shell] [--editor COMANDO]")
 }
 
 /// New tab: the agent on the left; on the right, the script over the console and
@@ -124,7 +124,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         .or_else(|| env::config().get("agent").str().map(String::from))
         .unwrap_or_else(|| "claude".into());
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
-    let ratio: f64 = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?.unwrap_or(0.516);
+    let ratio: f64 = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?.unwrap_or_else(|| layout::default_width(focus));
     let label = a.value("--label").unwrap_or("corral");
 
     theme::apply(); // herdr's theme rules every Corral window
@@ -163,6 +163,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         state.set("focus", "code".into());
         state.set("agent", agent_pane.as_str().into());
     }
+    state.set("widths", obj(vec![(focus, ratio.into())])); // a notebook keeps it after the console moves
     state.set("active", lang.into());
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
