@@ -238,17 +238,21 @@
     </tbody>
     </table>
 
-    <h2>Change a shortcut</h2>
+    <h2 id="change">Change a shortcut</h2>
+    <p>In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), find the shortcut, press <kbd>Tab</kbd>, and press the new key. For the shortcuts that start with <kbd>ctrl+b</kbd>, press only the key that goes after it: for <kbd>ctrl+b</kbd> <kbd>u</kbd>, just <kbd>u</kbd>. herdr takes it at once; an editor shortcut, which needs <kbd>ctrl</kbd>, <kbd>alt</kbd> or an F key, works the next time the editor opens. If the key is herdr's own or another shortcut has it, the palette says so and waits for another one. <kbd>Backspace</kbd> puts back Corral's key, and <kbd>Esc</kbd> leaves it as it was.</p>
+    <p>Your keys stay when Corral updates: Corral keeps them in <code>~/.config/corral/config.json</code>, under <code>keys</code>, and the installer puts them back.</p>
+    <p>The same from a terminal, also for keys some terminals can't send to the palette, such as <kbd>ctrl+shift+enter</kbd>:</p>
     <pre><code><span class="p">$ </span>corral keys --list
 <span class="p">$ </span>corral keys --change herdr:toggle shift+e
-<span class="p">$ </span>corral keys --change editor:corral_run_line ctrl+e</code></pre>
-    <p><code>corral keys</code> opens the palette. <code>--list</code> prints it, with the ID of each shortcut, and <code>--json</code> gives the same list to agents. <code>--change ID KEY</code> gives an action a new key:</p>
+<span class="p">$ </span>corral keys --change editor:corral_run_line ctrl+e
+<span class="p">$ </span>corral keys --reset herdr:toggle</code></pre>
+    <p><code>corral keys</code> opens the palette. <code>--list</code> prints it, with the ID of each shortcut, and <code>--json</code> gives the same list to agents. <code>--change ID KEY</code> gives an action a new key, and <code>--reset ID</code> gives it back Corral's:</p>
     <ul>
     <li><code>herdr:</code> IDs are the shortcuts that start with <kbd>ctrl+b</kbd> and work in any pane. The key is what comes after <kbd>ctrl+b</kbd> (<code>t</code>, <code>shift+k</code>, <code>space</code>) or the whole shortcut (<code>"ctrl+b t"</code>). herdr takes the change at once.</li>
     <li><code>editor:</code> IDs are the editor's. The key is the whole shortcut (<code>ctrl+e</code>, <code>f6</code>, <code>ctrl+shift+enter</code>). Close the editor with <kbd>Ctrl</kbd>+<kbd>Q</kbd> and open it again to use it.</li>
     <li>The keys of the console, the variables pane, the tables and Mirador are part of Corral and can't be changed this way.</li>
     </ul>
-    <p>It refuses keys herdr already uses (<kbd>ctrl+b</kbd> <kbd>?</kbd> lists them) and keys another shortcut has, unless you add <code>--force</code>, which takes the key from the other shortcut. Claude can read and change your shortcuts if you ask it.</p>
+    <p>It refuses keys herdr already uses (<kbd>ctrl+b</kbd> <kbd>?</kbd> lists them) and keys another shortcut has, unless you add <code>--force</code> (from a terminal), which takes the key from the other shortcut. Claude can read and change your shortcuts if you ask it.</p>
 
     <h3 id="terminals-that-drop-keys">Terminals that drop keys</h3>
     <p>From Warp, through herdr, only <kbd>Ctrl</kbd> plus a letter and the function keys reach the editor intact: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> arrives as <kbd>Enter</kbd>, and shortcuts with <kbd>Ctrl</kbd>+<kbd>Shift</kbd> or <kbd>Alt</kbd> are cut. That is why Corral's main keys are <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd>.</p>
