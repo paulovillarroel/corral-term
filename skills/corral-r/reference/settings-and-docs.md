@@ -21,6 +21,8 @@ Read them whenever it helps to answer. Change one only when the user asks, and t
 | `python_version` | unset, a version uv has (`3.13`) | The console's Python outside uv projects. Inside a project, its `.python-version` decides. Set it with `corral versions python` (below). |
 | `python_console` | a command | The command that starts the Python console. |
 | `python_lsp` | `ty`, `pylsp` | The editor's Python language server. When the editor opens again. |
+| `checkpoints` | `on`, `off` | Keep a checkpoint of each console's objects, so they come back if R or Python crashes. |
+| `checkpoint_max_mb` | `1024`, a size in MB | Objects bigger than this aren't kept in the checkpoint. |
 | `images` | `auto`, `kitty`, `symbols` | How plots are drawn inside herdr. |
 | `mirador_window` | `right`, `free` | Where a new Mirador window goes (Windows with WSL only). |
 | `mirador_size` | `0.5x0.85` | A new Mirador window's size, as fractions of the screen from 0.2 to 1 (WSL only). |
