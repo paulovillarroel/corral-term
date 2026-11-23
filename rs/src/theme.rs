@@ -592,7 +592,10 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
-    let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("agent_output", &["full", "review", "structure"]),
+    if key == "checkpoint_max_mb" && !value.parse::<u64>().is_ok_and(|mb| mb >= 1) {
+        return Err(tr("checkpoint_max_mb takes a size in MB (1 or more)", "checkpoint_max_mb acepta un tamaño en MB (1 o más)").into());
+    }
+    let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("checkpoints", &["on", "off"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"]),
                                          ("start", &["r", "python"])];
@@ -613,6 +616,8 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         ("agent_output", "full") => Some((tr("Agent output: full", "Salida para agentes: completa"), tr("They see what their code prints, and new plots.", "Ven lo que imprime su código, y los gráficos nuevos."))),
         ("agent_output", "review") => Some((tr("Agent output: review", "Salida para agentes: revisar"), tr("You see each result first, and decide whether they get it.", "Ves cada resultado primero y decides si lo reciben."))),
         ("agent_output", "structure") => Some((tr("Agent output: structure", "Salida para agentes: estructura"), tr("They see whether it worked and the shape of objects, without values. Keep agents on ask: they write the code.", "Ven si funcionó y la forma de los objetos, sin valores. Deja los agentes en ask: ellos escriben el código."))),
+        ("checkpoints", "on") => Some((tr("Checkpoints: on", "Respaldos: activados"), tr("If R or Python crashes, the next console in the project gets the objects back.", "Si R o Python se cae, la próxima consola del proyecto recupera los objetos."))),
+        ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados"), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola."))),
         ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R"), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R."))),
         ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python"), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python."))),
         _ => None,

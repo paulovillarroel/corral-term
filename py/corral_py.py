@@ -91,6 +91,34 @@ def write_json_atomic(path: Path, data) -> None:
     os.replace(tmp, path)
 
 
+_settings: list = [None, {}]
+
+
+def setting(key: str):
+    """A value from Corral's config.json, read again only when the file changes."""
+    path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "corral" / "config.json"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = None
+    if mtime != _settings[0]:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if mtime is not None else {}
+        except (OSError, ValueError):
+            data = {}
+        _settings[:] = [mtime, data if isinstance(data, dict) else {}]
+    return _settings[1].get(key)
+
+
+def pid_alive(pid) -> bool:
+    """Running, and not a zombie."""
+    try:
+        stat = Path(f"/proc/{int(pid)}/stat").read_text()
+    except (OSError, ValueError, TypeError):
+        return False
+    return stat.rsplit(")", 1)[-1].split()[0] not in ("Z", "X")
+
+
 def corral_bin() -> str | None:
     return os.environ.get("CORRAL_BIN") or shutil.which("corral")
 
@@ -382,6 +410,203 @@ class PlotServer:
 # --------------------------------------------------------------------------- session
 
 
+# --------------------------------------------------------------------------- checkpoints
+#
+# Objects that outlive a crash. After a cell that changed an object, a forked
+# copy of this Python writes the objects that changed to
+# <state>/checkpoints/py-<session>/, one pickle each, while you keep working:
+# the prompt only waits for the fork (a few ms, more with more memory in use),
+# and a cell that changed nothing costs nothing. Once a minute the copy also
+# looks at every object, for changes made in place. One copy at a time. When
+# Python ends because you closed it (exit, Ctrl+D, corral close) the checkpoint
+# goes; if it ends any other way, the next Python in this project imports the
+# modules again and loads the objects back.
+
+CHECKPOINTS = STATE_DIR / "checkpoints"
+
+try:
+    import cloudpickle as _pickler  # functions and classes defined in the session too
+except ImportError:
+    import pickle as _pickler
+
+
+def _checkpoint_every() -> float:
+    try:
+        return float(os.environ.get("CORRAL_CHECKPOINT_EVERY") or 60) or 60
+    except ValueError:
+        return 60
+
+
+def _checkpoint_max_bytes() -> float:
+    try:
+        mb = float(setting("checkpoint_max_mb") or 1024)
+    except (TypeError, ValueError):
+        mb = 1024
+    return (mb if mb > 0 else 1024) * 2**20
+
+
+class Checkpoints:
+    def __init__(self, session) -> None:
+        self.session = session
+        self.dir = CHECKPOINTS / f"py-{session.id}"
+        self.pid = os.getpid()
+        self.child = None
+        self.sigs: dict | None = None
+        self.full_at = time.time()
+
+    def after(self, sigs: dict, names: list, modules: dict) -> None:
+        """After each cell: start a copy when something changed (or a minute went by),
+        unless the last one is still writing; then it waits for the next cell."""
+        if setting("checkpoints") == "off":
+            return
+        if self.child is not None:
+            try:
+                done, _ = os.waitpid(self.child, os.WNOHANG)
+            except ChildProcessError:
+                done = self.child
+            if done == 0:
+                return
+            self.child = None
+        now = time.time()
+        full = now - self.full_at > _checkpoint_every()
+        old = self.sigs or {}
+        changed = [n for n, v in sigs.items() if old.get(n) != v]
+        if not full and not changed and old.keys() == sigs.keys() and self.sigs is not None:
+            return
+        if full:
+            self.full_at = now
+        self.sigs = dict(sigs)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # "multi-threaded, fork() may deadlock": the copy only pickles and writes
+            pid = os.fork()
+        if pid == 0:
+            try:
+                self.write(set(changed), full, names, modules)
+            finally:
+                os._exit(0)
+        self.child = pid
+
+    def write(self, changed: set, full: bool, names: list, modules: dict) -> None:
+        """In the forked copy: write what changed, by hash, then the index."""
+        import hashlib
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            closed = self.dir / "closed"
+            if closed.exists():
+                return
+            index_path = self.dir / "index.json"
+            try:
+                old = json.loads(index_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                old = {}
+            objects = old.get("objects") or {}
+            skipped = {k: v for k, v in (old.get("skipped") or {}).items() if k in names}
+            for n in [n for n in objects if n not in names]:
+                (self.dir / objects.pop(n)["file"]).unlink(missing_ok=True)
+            numbers = [int(o["file"][1:6]) for o in objects.values() if o.get("file", "")[1:6].isdigit()]
+            last = max(numbers, default=0)
+            limit = _checkpoint_max_bytes()
+            ns = self.session.shell.user_ns
+            for n in names:
+                if not full and n not in changed and (n in objects or n in skipped):
+                    continue
+                x = ns.get(n)
+                drop = lambda: (self.dir / objects.pop(n)["file"]).unlink(missing_ok=True) if n in objects else None
+                size = getattr(x, "nbytes", None)
+                if isinstance(size, int) and size > limit:
+                    drop()
+                    skipped[n] = "size"
+                    continue
+                try:
+                    data = _pickler.dumps(x, protocol=5)
+                except Exception:
+                    drop()
+                    skipped[n] = type(x).__name__  # a connection, a lock, a generator…
+                    continue
+                if len(data) > limit:
+                    drop()
+                    skipped[n] = "size"
+                    continue
+                digest = hashlib.blake2b(data, digest_size=16).hexdigest()
+                if objects.get(n, {}).get("hash") == digest:
+                    continue
+                file = objects.get(n, {}).get("file")
+                if not file:
+                    last += 1
+                    file = f"o{last:05d}.pkl"
+                tmp = self.dir / (file + ".tmp")
+                tmp.write_bytes(data)
+                os.replace(tmp, self.dir / file)
+                objects[n] = {"file": file, "hash": digest}
+                skipped.pop(n, None)
+            if closed.exists():
+                shutil.rmtree(self.dir, ignore_errors=True)
+                return
+            write_json_atomic(index_path, {
+                "lang": "python", "pid": self.pid, "session": self.session.id, "cwd": os.getcwd(),
+                "updated": time.time(), "modules": modules, "objects": objects, "skipped": skipped,
+            })
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    @staticmethod
+    def restore(shell) -> None:
+        """At startup: the newest checkpoint of a Python in this project that ended
+        without being closed comes back, modules first."""
+        if setting("checkpoints") == "off" or not CHECKPOINTS.is_dir():
+            return
+        best = None
+        for d in CHECKPOINTS.iterdir():
+            if (d / "closed").exists():
+                shutil.rmtree(d, ignore_errors=True)
+                continue
+            try:
+                idx = json.loads((d / "index.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if pid_alive(idx.get("pid")):
+                continue
+            if time.time() - float(idx.get("updated") or 0) > 7 * 86400:
+                shutil.rmtree(d, ignore_errors=True)  # a week old: nobody is coming back for it
+                continue
+            if idx.get("lang") != "python" or idx.get("cwd") != os.getcwd():
+                continue
+            if best is None or idx["updated"] > best[1]["updated"]:
+                best = (d, idx)
+        if best is None:
+            return
+        d, idx = best
+        import importlib
+        import pickle
+        ns = shell.user_ns
+        for name, module in (idx.get("modules") or {}).items():
+            try:
+                ns[name] = importlib.import_module(module)
+            except Exception:
+                pass
+        back = []
+        for name, o in (idx.get("objects") or {}).items():
+            try:
+                ns[name] = pickle.loads((d / o["file"]).read_bytes())
+                back.append(name)
+            except Exception:
+                pass
+        shutil.rmtree(d, ignore_errors=True)
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(idx["updated"])))
+        shown = ", ".join(back[:8]) + (", …" if len(back) > 8 else "")
+        print(tr(f"[corral] Restored {len(back)} objects from the Python that ended without being closed ({when}): {shown}.",
+                 f"[corral] Restauré {len(back)} objetos del Python que terminó sin que lo cerraran ({when}): {shown}."))
+        left = idx.get("skipped") or {}
+        if left:
+            mb = int(_checkpoint_max_bytes() / 2**20)
+            why = lambda r: tr(f"over {mb} MB", f"de más de {mb} MB") if r == "size" else r
+            print(tr("[corral] Not kept: ", "[corral] No se conservaron: ") + ", ".join(f"{n} ({why(r)})" for n, r in left.items()) + ".")
+
+
 class Session:
     def __init__(self, shell) -> None:
         self.shell = shell
@@ -399,6 +624,7 @@ class Session:
         self.vars_written = False
         self.plots_rev = None
         self.plots = PlotServer(self)
+        self.checkpoints = Checkpoints(self)
         self.write_meta()
         atexit.register(self.close)
 
@@ -424,14 +650,17 @@ class Session:
         # object itself, so a freed id cannot be mistaken for the old value.
         cache = self.described
         out, seen, changed = [], set(), False
+        sigs, modules = {}, {}
         for name in sorted(ns):
             if name.startswith("_") or name in HIDDEN or name in hidden:
                 continue
             x = ns[name]
             if isinstance(x, types.ModuleType):
+                modules[name] = x.__name__
                 continue
             seen.add(name)
             state = state_of(x)
+            sigs[name] = (id(x), None if type(state) is object else state)
             hit = cache.get(name)
             if hit is not None and hit[0] is x and hit[1] == state:
                 out.append(hit[2])
@@ -450,6 +679,10 @@ class Session:
         if changed or gone or not self.vars_written:
             write_json_atomic(self.dir / "vars.json", {"updated": time.time(), "vars": out})
             self.vars_written = True
+        try:  # after the variables pane: this may fork
+            self.checkpoints.after(sigs, sorted(seen), modules)
+        except Exception:
+            pass
 
     # ---- cells
 
@@ -458,6 +691,17 @@ class Session:
         self.pages_before = len(self.plots.pages)
 
     def after_cell(self, result=None) -> None:
+        t0 = time.perf_counter()
+        try:
+            self._after_cell(result)
+        finally:
+            # CORRAL_TIMING=<file>: how long this keeps the prompt waiting, in ms (for measuring Corral).
+            timing = os.environ.get("CORRAL_TIMING")
+            if timing:
+                with open(timing, "a") as f:
+                    f.write(f"{1000 * (time.perf_counter() - t0):.3f}\n")
+
+    def _after_cell(self, result) -> None:
         try:
             self.flush_figures()
             # Mirador waits for this file to change instead of asking every second and a half.
@@ -543,7 +787,9 @@ class Session:
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
     def close(self) -> None:
+        # Python closed on purpose: the session and its checkpoint go (a crash skips this).
         self.plots.close()
+        self.checkpoints.close()
         shutil.rmtree(self.dir, ignore_errors=True)
         shutil.rmtree(self.tmp, ignore_errors=True)
 
@@ -754,6 +1000,7 @@ def activate(shell=None) -> None:
     if "matplotlib.pyplot" in sys.modules:
         sys.modules["matplotlib.pyplot"].switch_backend("module://corral_mpl")
 
+    Checkpoints.restore(shell)
     _session = Session(shell)
     shell.events.register("pre_run_cell", _session.before_cell)
     shell.events.register("post_run_cell", _session.after_cell)

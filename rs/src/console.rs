@@ -74,7 +74,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 let here = std::env::current_dir().unwrap_or_else(|_| env::home());
                 let mut c = Command::new("uv");
                 c.arg("run").args(crate::versions::uv_python_args(&here))
-                    .args(["--with", "ipython", "ipython", "--no-banner", "-i"]).arg(env::repo().join("py/startup.py"));
+                    // cloudpickle keeps functions defined in the session in its checkpoints.
+                    .args(["--with", "ipython", "--with", "cloudpickle", "ipython", "--no-banner", "-i"]).arg(env::repo().join("py/startup.py"));
                 c
             }
         }

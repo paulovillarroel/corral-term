@@ -189,6 +189,8 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("switch", Group::Console, "Console: R or Python", "Consola: R o Python"),
     ("r-version", Group::Console, "Console: R version (rig)", "Consola: versión de R (rig)"),
     ("python-version", Group::Console, "Console: Python version (uv)", "Consola: versión de Python (uv)"),
+    ("checkpoints-on", Group::Console, "Console: keep the objects if R or Python crashes", "Consola: conservar los objetos si R o Python se cae"),
+    ("checkpoints-off", Group::Console, "Console: don't keep checkpoints of the objects", "Consola: no guardar respaldos de los objetos"),
     ("send", Group::Console, "Console: send the selection (R or Python)", "Consola: enviar la selección (R o Python)"),
     ("console", Group::Console, "Console: use this pane as the console", "Consola: usar este panel como consola"),
     ("vars", Group::Vars, "Variables: open them over the terminal", "Variables: abrirlas sobre la terminal"),

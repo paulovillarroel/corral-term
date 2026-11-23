@@ -213,6 +213,18 @@ pub fn remove_dead_sessions() {
     }
 }
 
+/// A session closed on purpose: its checkpoint goes, and a marker tells a copy
+/// still writing (and the next console) not to bring it back.
+pub fn close_checkpoint(session: &Value) {
+    let Some(id) = session.get("id").str() else { return };
+    let prefix = if session.get("lang").str() == Some("python") { "py" } else { "r" };
+    let dir = state_dir().join("checkpoints").join(format!("{prefix}-{id}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let _ = std::fs::write(dir.join("closed"), "");
+    }
+}
+
 /// A log that grew past 5 MB starts over, so logs don't fill the disk.
 pub fn trim_log(path: &Path) {
     if std::fs::metadata(path).is_ok_and(|m| m.len() > 5 * 1024 * 1024) {

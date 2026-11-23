@@ -403,8 +403,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         e.set("status", "console ended".into());
         audit::record(e);
         let lang = console::lang_name(&o.lang);
-        println!("\n{}", trf!("[corral] the {lang} console ended while running this (it crashed or was stopped); its objects are gone, and the next request starts a new session",
-                                "[corral] la consola de {lang} terminó mientras corría esto (se cayó o la detuvieron); sus objetos se perdieron, y la próxima petición abre una sesión nueva"));
+        let next = if env::config().get("checkpoints").str() == Some("off") {
+            tr("its objects are gone, and the next request starts a new session", "sus objetos se perdieron, y la próxima petición abre una sesión nueva")
+        } else {
+            tr("the next session gets back the objects from its last checkpoint, not what this request changed",
+               "la próxima sesión recupera los objetos de su último respaldo, no lo que cambió esta petición")
+        };
+        println!("\n{}", trf!("[corral] the {lang} console ended while running this (it crashed or was stopped); {next}",
+                                "[corral] la consola de {lang} terminó mientras corría esto (se cayó o la detuvieron); {next}"));
         std::process::exit(1);
     }
     if !result_file.exists() {

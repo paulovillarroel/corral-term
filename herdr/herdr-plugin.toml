@@ -79,6 +79,19 @@ title = "Corral: Python version (uv)"
 contexts = ["global", "workspace", "pane"]
 command = ["../rs/target/release/corral", "versions", "python"]
 
+# A crash doesn't lose the session's objects: the console keeps a checkpoint.
+[[actions]]
+id = "checkpoints-on"
+title = "Corral: keep the objects if R or Python crashes"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "checkpoints", "on"]
+
+[[actions]]
+id = "checkpoints-off"
+title = "Corral: don't keep checkpoints of the objects"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "checkpoints", "off"]
+
 [[actions]]
 id = "script"
 title = "Corral: add the script editor above the console"
