@@ -69,7 +69,7 @@
 <span class="p">$ </span>corral config agents on
 <span class="p">$ </span>corral config agents off</code></pre>
     <ul>
-      <li><code>ask</code> (the default): every request opens a popup with the exact code, which agent asked (Claude Code, Codex… and its pane, or "outside herdr" when no pane did) and what it will see back. <kbd>Enter</kbd> runs it; <kbd>n</kbd> or <kbd>Esc</kbd> refuses, and the agent is told not to try again unless you ask. With no answer in 5 minutes, nothing runs. A missing or mistyped setting also asks. The popup ignores keys for its first half second, so a key you meant for another pane, an <kbd>Enter</kbd> sending a message to your agent for instance, can't answer it.</li>
+      <li><code>ask</code> (the default): every request opens a popup with the exact code, which agent asked (Claude Code, Codex… and its pane, or "outside herdr" when no pane did) and what it will see back. What you read is what runs: control and invisible characters, which a terminal would act on or draw as nothing, show as <code>␛</code>, <code>␍</code> or <code>&lt;U+202E&gt;</code> under a warning, and long lines wrap instead of being cut. The console prints such code written out too, before its echo. <kbd>Enter</kbd> runs it; <kbd>n</kbd> or <kbd>Esc</kbd> refuses, and the agent is told not to try again unless you ask. With no answer in 5 minutes, nothing runs. A missing or mistyped setting also asks. The popup ignores keys for its first half second, so a key you meant for another pane, an <kbd>Enter</kbd> sending a message to your agent for instance, can't answer it.</li>
       <li><code>on</code>: an agent's <code>corral eval</code> runs in your console, where you watch it, without asking first. Whatever can call <code>corral eval</code> as you, an agent or a script, can run any code in your session. Watching is not the same as reading, so choose it only when the speed is worth more than reading every request.</li>
       <li><code>off</code>: <code>corral eval</code> refuses everything.</li>
     </ul>
@@ -101,7 +101,7 @@
 
     <h3>Review mode</h3>
     <pre><code><span class="p">$ </span>corral config agent_output review</code></pre>
-    <p>The middle ground, for when the agent should help you draw conclusions but you want to see what it reads first. The code runs; then a popup shows you the result exactly as the agent would get it, with any new plots. <kbd>Enter</kbd> shares it. <kbd>n</kbd> keeps it to you, and the agent gets only the structure, plus a note to ask you what you found. You might share a table of counts and keep a listing of patients, for example.</p>
+    <p>The middle ground, for when the agent should help you draw conclusions but you want to see what it reads first. The code runs; then a popup shows you the result exactly as the agent would get it, with any new plots, without its colors and with any other character that could hide text written out. <kbd>Enter</kbd> shares it. <kbd>n</kbd> keeps it to you, and the agent gets only the structure, plus a note to ask you what you found. You might share a table of counts and keep a listing of patients, for example.</p>
     <figure class="tui-shot" role="img" aria-label="Corral's review popup: the result of a count by region and one new plot, with Enter to share it and n to keep it">
       <div class="tui-bar"><span>Corral: share this result with the agent?</span><span>agent_output review</span></div>
       <pre>
@@ -123,7 +123,7 @@
     <h3>Sensitive sessions</h3>
     <p>One session can be stricter than the rest. In R or Python:</p>
     <pre><code>corral_sensitive()</code></pre>
-    <p>From then on every request from an agent to that session needs your approval, and its result goes through review if you chose <code>review</code>, or comes back restricted otherwise; full output never applies. It lasts until that console ends; <code>corral_sensitive(FALSE)</code> lifts it, and since that is a request too, you see it before it runs.</p>
+    <p>From then on every request from an agent to that session needs your approval, and its result goes through review if you chose <code>review</code>, or comes back restricted otherwise; full output never applies. It lasts until that console ends, and if it ends in a crash, its objects come back into a session marked sensitive too. Until then a checkpoint keeps a copy of them on your disk (<a href="#on-disk">below</a>); turn checkpoints off with <code>corral config checkpoints off</code> if that copy mustn't exist. <code>corral_sensitive(FALSE)</code> lifts it, and since that is a request too, you see it before it runs.</p>
 
     <h3>From the palette</h3>
     <p>All of these are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, type <code>agents</code>): ask before each request, run code without asking, can't run code; see full results, review results before they see them, see only the structure of results. A notification says what is on.</p>
@@ -131,7 +131,7 @@
     <h3>Audit log</h3>
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
-    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, R or Python, the access level and output mode, whether it ran, was refused, blocked or left unanswered, its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
+    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, R or Python, the access level and output mode, whether it ran, was refused, blocked, left unanswered or never got to run (no console, busy, its turn didn't come), its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
 
     <h3>Limits that are always on</h3>
     <ul>
@@ -152,7 +152,7 @@
     <tr><td><code>sessions/&lt;id&gt;/eval/</code></td><td>Each agent request's code and full output, for when it was clipped or timed out</td><td>A day</td></tr>
     <tr><td><code>run/</code></td><td>Copies of scripts you sent whole to the console</td><td>A day</td></tr>
     <tr><td><code>ark/</code></td><td>Keys to talk to Ark, readable only by you</td><td>Two days</td></tr>
-    <tr><td><code>checkpoints/</code></td><td>A copy of the objects of each R and Python console, to bring them back after a crash</td><td>Until the console closes or they come back; a week at most</td></tr>
+    <tr><td><code>checkpoints/</code></td><td>A copy of the objects of each R and Python console, to bring them back after a crash, and whether the session was marked sensitive</td><td>Until the console closes or they come back; a week at most</td></tr>
     <tr><td><code>ark.log</code>, <code>mirador.log</code></td><td>Ark's and Mirador's messages</td><td>Until they pass 5 MB; then they start over</td></tr>
     <tr><td>The rest (<code>layout.json</code>, <code>sizes.json</code>, <code>mirador.json</code>…)</td><td>Corral's own state: panes, sizes, Mirador's address and token. None of your data</td><td>While you use Corral</td></tr>
     </tbody>
@@ -162,7 +162,7 @@
     <h2>What Corral doesn't do</h2>
     <ul>
       <li><strong>It is not a sandbox.</strong> <code>corral eval</code> runs arbitrary code; that is what it is for. It runs with your user's permissions, in your real session: whatever R or Python can do, an approved request can do, including reading files or using the network.</li>
-      <li><strong>An agent with a free shell can go around it.</strong> It runs as you, so it could change Corral's settings, write files or use other tools. Corral does stop the plain way: <code>corral config</code> run from a shell without a terminal, as an agent's is, that gives agents more room (<code>agents on</code>, a looser <code>agent_output</code>, fewer <code>audit_days</code>) waits for your approval in a popup, and the audit log keeps the request either way. From the palette or your own terminal it doesn't ask, and tightening never does. An agent that edits <code>config.json</code> itself, or fakes a terminal, gets past that. Corral's controls hold when the agent's own permissions only let it call <code>corral eval</code> and <code>corral vars</code> (next section).</li>
+      <li><strong>An agent with a free shell can go around it.</strong> It runs as you, and nothing that runs as you can tell its commands from yours for certain. Corral stops the plain way: <code>corral config</code> that gives agents more room (<code>agents on</code>, a looser <code>agent_output</code>, fewer <code>audit_days</code>) waits for your approval in a popup when it comes from a pane herdr sees an agent in, or from a shell without a terminal, and the audit log keeps the request either way. From the palette or your own terminal it doesn't ask, and tightening never does. An agent set on it still gets past: it can edit <code>config.json</code>, write the answer to its own request in Corral's folder, run the palette's action through herdr (<code>herdr plugin action</code>), or pass for the palette or your terminal. Corral's controls hold when the agent's own permissions only let it call <code>corral eval</code> and <code>corral vars</code> (next section).</li>
       <li><strong>Restricted output hides values in replies, not in actions.</strong> Approved code could still write data somewhere the agent can read; that is why approval shows you the code first.</li>
       <li><strong>Restricted output guards against accidents, not against an agent trying to get the values.</strong> The agent writes the code, so it can put a value where the structure still shows: in the first line of an error (<code>stop(patients$name[1])</code>), in an object's name, in a table's dimensions, in whether the code worked or how many warnings it gave. A result you keep to yourself in review mode has the same limit. Against that, the control is approval: with <code>ask</code> you read the code before it runs, and sensitive sessions always ask. An agent can also be steered into this by text it read somewhere else, a file or a web page, without anyone meaning it.</li>
     </ul>
@@ -171,14 +171,15 @@
     <p>A setup for health records or anything that must not leave your organization:</p>
     <ol>
       <li><strong>Turn on Corral's controls:</strong> keep <code>agents ask</code> (the default), and add <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
-      <li><strong>Limit the agent's own tools.</strong> Let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
+      <li><strong>Limit the agent's own tools.</strong> This is the boundary that holds: let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
 <pre><code>{
   "permissions": {
     "ask": ["Bash(corral eval:*)"],
-    "deny": ["Bash(corral config:*)", "Bash(herdr:*)", "Read(./data/**)", "Edit(~/.config/corral/**)"]
+    "deny": ["Bash(corral config:*)", "Bash(herdr:*)", "Read(./data/**)",
+             "Edit(~/.config/corral/**)", "Edit(~/.local/state/corral/**)"]
   }
 }</code></pre>
-      Other agents have their own approval and sandbox modes (Codex's, for instance); set them the same way.</li>
+      Leave other shell commands on asking, as Claude Code does by default: a free shell can write those files too. Other agents have their own approval and sandbox modes (Codex's, for instance); set them the same way.</li>
       <li><strong>Choose where the model runs.</strong> A local model (opencode with a model served by Ollama, for example) keeps everything on your machine. A hosted one needs an agreement that fits your data: no training on it, zero data retention, a region you can accept and, for health data, the contract your regulation requires (a BAA under HIPAA, for example).</li>
       <li><strong>Isolate the machine.</strong> A dedicated machine, virtual machine or WSL instance whose network only reaches the approved model endpoint.</li>
       <li><strong>Keep identifiers out of reach.</strong> Work with de-identified or synthetic data in the sessions an agent can touch.</li>
