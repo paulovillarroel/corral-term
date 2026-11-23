@@ -15,7 +15,7 @@ A Corral layout has the agent pane on the left and, on the right, the script pan
 | `corral vars --json` | Reads the variables (no pane changes). | No |
 | `corral vars` | Opens the variables pane as a popup over the user's screen. | Yes |
 | `corral plots` / `corral mirador` | Brings the plot viewer to the front. | No |
-| `corral layout [--focus code]` | Opens a new Corral layout in a new tab; `--focus code` puts the script on the left. | Yes |
+| `corral layout [--focus code]` | Opens a Corral layout in a new tab; `--focus code` puts the script on the left. With a layout already open in the workspace, it switches that one between agent first and code first in place, keeping the console, the draft and the agent. | Yes |
 | `corral close` | Closes script, console and variables; the R or Python session ends and the draft is discarded. | Yes, always |
 
 `corral toggle` and `corral switch` change only what the user sees and can be undone with the same commands, so run them when asked. Without a value, `corral toggle` decides from the pane that has the focus (that is what `ctrl+b t` does for the user); from your pane always pass `script` (`agent` in the layout focused on code), `console` or `both`; the command refuses anything else.
