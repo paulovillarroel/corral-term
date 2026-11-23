@@ -104,7 +104,7 @@
  <span style="color:#5c5c5c;">/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Sh…</span></pre>
     </figure>
     <pre><code><span class="p">$ </span>corral view data/sales.parquet</code></pre>
-    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables. In R, it writes parquet with nanoparquet or arrow; without either, it uses CSV, which is much slower with big tables (about 15 s for ten million rows, and close to a second each screen), so install nanoparquet.</p>
+    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables and saves them as parquet: the console comes with pyarrow, so pandas tables do too. In R, it writes parquet with nanoparquet, which the installer adds, or arrow; without either, it uses CSV, which is much slower with big tables (about 15 s for ten million rows, and close to a second each screen).</p>
     <p>Each <code>View()</code> saves a temporary copy of the table, so a long session doesn't fill your disk: a new <code>View()</code> of the same object replaces its copy, and each session keeps the copies of its latest 20 tables, up to 2 GB in all. Mirador closes the tab of a table whose copy is gone. A file you open with <code>corral view</code> is never deleted.</p>
 
     <h3>Keys</h3>
