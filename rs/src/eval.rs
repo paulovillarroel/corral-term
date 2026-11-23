@@ -193,7 +193,7 @@ pub(crate) fn ask_user(edir: &Path, rid: &str, entrypoint: &str, mut request: Va
     Err(NoAnswer::Timeout)
 }
 
-/// An agent's shell asks to loosen the harness (`corral config agents on`, say):
+/// An agent asks to loosen the harness (`corral config agents on`, say):
 /// the user decides in a popup, and the audit log keeps the request either way.
 pub(crate) fn confirm_setting(key: &str, from: &str, to: &str, meaning: &str) -> Result<(), String> {
     let dir = env::state_dir().join("requests");
@@ -217,8 +217,8 @@ pub(crate) fn confirm_setting(key: &str, from: &str, to: &str, meaning: &str) ->
     match answer {
         Ok(true) => Ok(()),
         Ok(false) => Err(trf!("the user refused to set {key} to {to}; it stays {from}", "el usuario rechazó poner {key} en {to}; sigue en {from}")),
-        Err(_) => Err(trf!("{key} stays {from}: loosening it from a shell without a terminal needs the user's approval, and they couldn't be asked; they can change it in the palette (ctrl+b space)",
-                           "{key} sigue en {from}: aflojarlo desde una shell sin terminal necesita la aprobación del usuario, y no se le pudo preguntar; puede cambiarlo en la paleta (ctrl+b space)")),
+        Err(_) => Err(trf!("{key} stays {from}: an agent loosening it needs the user's approval, and they couldn't be asked; they can change it in the palette (ctrl+b space)",
+                           "{key} sigue en {from}: que un agente lo afloje necesita la aprobación del usuario, y no se le pudo preguntar; puede cambiarlo en la paleta (ctrl+b space)")),
     }
 }
 

@@ -541,11 +541,20 @@ fn loosens(cfg: &Value, key: &str, value: &str) -> Option<(String, String)> {
     (after > before).then(|| (shown, value.to_string()))
 }
 
-/// From the palette, or typed in a terminal: the user. A shell without a terminal
-/// (an agent's) is not.
+/// Who changes a setting. From the palette: the user. From a pane herdr sees an
+/// agent in: the agent, even in a terminal of its own (some agents run their
+/// commands in one). Elsewhere, a terminal means the user typing, and a shell
+/// without one an agent. An agent bent on it can still pass for the user (the
+/// security docs list how): this stops the plain way, not a determined one.
 fn by_the_user() -> bool {
     use std::io::IsTerminal;
-    std::env::var_os("HERDR_PLUGIN_ID").is_some() || std::io::stdin().is_terminal()
+    if std::env::var_os("HERDR_PLUGIN_ID").is_some() {
+        return true;
+    }
+    if std::env::var("HERDR_PANE_ID").is_ok_and(|p| crate::herdr::agent_in(&p).is_some()) {
+        return false;
+    }
+    std::io::stdin().is_terminal()
 }
 
 /// What a harness setting means, for the notice and for the approval popup.
@@ -564,8 +573,9 @@ fn meaning_of(key: &str, value: &str) -> Option<(String, String)> {
     }
 }
 
-/// Loosening the harness from a shell without a terminal waits for the user's
-/// approval in a popup; from the palette or a terminal it doesn't. Tightening never asks.
+/// Loosening the harness from an agent's pane, or a shell without a terminal, waits
+/// for the user's approval in a popup; from the palette or the user's own terminal
+/// it doesn't. Tightening never asks.
 fn confirm_if_loosened(cfg: &Value, key: &str, value: &str) -> Result<(), String> {
     match loosens(cfg, key, value) {
         Some((from, to)) if !by_the_user() => {
