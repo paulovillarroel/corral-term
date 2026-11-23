@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.14
+
+Mirador keeps plots at a size you choose, whatever the window.
 
 - Mirador keeps plots at a size you choose. A menu next to SVG and PNG draws R plots at 800 × 500, 1000 × 650, 1200 × 800 or any size you type, whatever the window, instead of stretching them to fit a maximized one; **Window** fits them as before. A smaller window shows them whole and scaled down, and SVG, PNG and Copy use that size. It is a setting, `corral config plot_size 1000x650`, so the palette has it ("Plots: Mirador draws them at…") and every browser shares it. Python figures keep their `figsize`.
 
