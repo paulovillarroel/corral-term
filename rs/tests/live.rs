@@ -153,6 +153,36 @@ impl Live {
         });
     }
 
+    /// Link Corral's herdr plugin, for the popups that ask the user.
+    fn link_plugin(&self) {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        self.run("herdr", &["plugin", "link", repo.join("herdr").to_str().unwrap()]);
+    }
+
+    /// Wait for a popup's request (approve or review) newer than `seen`, and answer it
+    /// as the popup would: the decision file next to it.
+    fn answer_popup(&self, seen: &[PathBuf], word: &str) -> String {
+        let dirs = [self.dir.join("state/corral/requests")];
+        let mut found = None;
+        wait_for(Duration::from_secs(20), "a popup's request", || {
+            let mut all: Vec<PathBuf> = dirs.iter().chain(
+                std::fs::read_dir(self.dir.join("state/corral/sessions")).into_iter().flatten().flatten().map(|d| d.path().join("eval")).collect::<Vec<_>>().iter())
+                .flat_map(|d| std::fs::read_dir(d).into_iter().flatten().flatten().map(|e| e.path()))
+                .filter(|p| [".approve.json", ".review.json", ".setting.json"].iter().any(|k| p.to_string_lossy().ends_with(k)))
+                .filter(|p| !seen.contains(p))
+                // Not one answered already: its decision file is there.
+                .filter(|p| std::fs::read_to_string(p).ok().and_then(|r| field(&r, "decision")).is_some_and(|d| !Path::new(&d).exists()))
+                .collect();
+            all.sort();
+            found = all.pop();
+            found.is_some()
+        });
+        let request = std::fs::read_to_string(found.as_ref().unwrap()).unwrap();
+        let decision = field(&request, "decision").expect("no decision file");
+        std::fs::write(decision, word).unwrap();
+        request
+    }
+
     fn kernel_pid(&self) -> i64 {
         self.session("r").expect("no live R session").0
     }
@@ -740,4 +770,63 @@ fn restore_time_report() {
         let _ = dir;
         println!("\n{size} of objects: back {:.1} s after the crash", killed.elapsed().as_secs_f64());
     }
+}
+
+
+/// An agent's shell (no terminal) can't loosen the harness on its own: the user
+/// decides in a popup, and the audit log keeps the request. Tightening never asks.
+#[test]
+#[ignore]
+fn an_agent_cannot_loosen_the_harness_by_itself() {
+    let live = Live::start("loosen");
+    live.link_plugin();
+    let config = live.dir.join("config/corral/config.json");
+    live.config(r#"{"agents":"ask","agent_output":"structure"}"#);
+    let agent = |args: &[&str]| -> (i32, String) {
+        let out = live.command("corral").args(args).stdin(Stdio::null()).output().unwrap();
+        (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr))
+    };
+
+    let (code, text, request) = std::thread::scope(|s| {
+        let asking = s.spawn(|| agent(&["config", "agents", "on"]));
+        let request = live.answer_popup(&[], "refuse");
+        let (code, text) = asking.join().unwrap();
+        (code, text, request)
+    });
+    assert!(request.contains(r#""key":"agents""#) && request.contains(r#""to":"on""#), "{request}");
+    assert_ne!(code, 0, "{text}");
+    assert!(text.contains("refused"), "{text}");
+    let settings = || std::fs::read_to_string(&config).unwrap().split_whitespace().collect::<String>();
+    assert!(settings().contains(r#""agents":"ask""#));
+
+    let (code, text) = std::thread::scope(|s| {
+        let asking = s.spawn(|| agent(&["config", "agent_output", "full"]));
+        live.answer_popup(&[], "allow");
+        asking.join().unwrap()
+    });
+    assert_eq!(code, 0, "{text}");
+    assert!(settings().contains(r#""agent_output":"full""#));
+
+    let started = Instant::now();
+    let (code, text) = agent(&["config", "agents", "off"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(started.elapsed() < Duration::from_secs(3), "tightening asked");
+
+    let audit = std::fs::read_to_string(live.dir.join("state/corral/audit.jsonl")).unwrap();
+    assert!(audit.contains(r#""decision":"refused""#) && audit.contains("corral config agents on"), "{audit}");
+    assert!(audit.contains(r#""decision":"allowed""#) && audit.contains("corral config agent_output full"), "{audit}");
+}
+
+/// With restricted output, a request past its timeout doesn't tell the agent where
+/// the full output is: that file holds the values it mustn't see.
+#[test]
+#[ignore]
+fn restricted_output_never_points_to_the_values() {
+    let live = Live::start("restricted");
+    live.config(r#"{"agents":"on","agent_output":"structure"}"#);
+    let (code, text) = live.eval(&["--timeout", "1", r#"Sys.sleep(3); cat("secret", 42, "\n")"#]);
+    assert_eq!(code, 2, "{text}");
+    assert!(text.contains("still running"), "{text}");
+    assert!(!text.contains(".out") && !text.contains("eval/"), "it pointed to the output: {text}");
+    assert!(!text.contains("secret"), "{text}");
 }
