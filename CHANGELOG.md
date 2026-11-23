@@ -8,6 +8,14 @@ What changed in each version of Corral. The release workflow publishes each vers
 - The audit log keeps 90 days. `corral config audit_days` changes that (a number of days, or `forever`), and the palette has "Agents: keep the audit log 30 days", "90 days" and "a year".
 - Less is left on disk: a console that starts deletes the folders of sessions that ended, an agent's requests and their full output go after a day, and Ark's and Mirador's logs start over when they pass 5 MB.
 - Docs: the security model lists what stays on your disk, what each file holds and for how long.
+- Tests run on every pull request. Live tests (`cargo test --test live -- --ignored`) start their own herdr and R and check what agents rely on: two agents at once take turns, timeouts, Ctrl+C, a crash in the middle of a request, and reading the variables while they change.
+
+### Fixes
+
+- When R crashed in the middle of an agent's request, the agent waited out its whole timeout (5 minutes by default) and was then told the code was still running. It now hears at once that the console ended. The next request used to find the dead session and say the console was busy; it now opens a new one.
+- A kernel that stalled while Corral connected to it left the console waiting forever; Corral now gives up after 10 seconds. A damaged length in a message from the kernel could crash the console.
+- Mirador: a session named `..` reached the folder above the sessions (only with Mirador's token).
+- JSON nested thousands of levels deep crashed Corral instead of being refused. TOML: `\b`, `\f`, a line-ending backslash followed by spaces or CRLF, and quotes right before a closing `"""` are read as TOML 1.0 says.
 
 ## 0.1.10
 
