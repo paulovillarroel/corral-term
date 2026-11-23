@@ -58,10 +58,12 @@ stop() {
     exit 1
 }
 
-# corral_of DIR AGAIN: make sure DIR has the `corral` command, compiling it if needed.
+# corral_of DIR AGAIN: make sure DIR has the `corral` command, compiling it if needed:
+# when there is none, or it is another version than the code (after a git pull).
 corral_of() {
     exe="$1/rs/target/release/corral"
-    if [ -x "$exe" ] && "$exe" --version >/dev/null 2>&1; then
+    want=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$1/rs/Cargo.toml" | head -n 1)
+    if [ -x "$exe" ] && "$exe" --version 2>/dev/null | grep -q "^corral $want "; then
         return 0
     fi
     if ! command -v cargo >/dev/null 2>&1; then
