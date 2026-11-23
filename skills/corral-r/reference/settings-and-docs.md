@@ -33,7 +33,7 @@ Read them whenever it helps to answer. Change one only when the user asks, and t
 
 Some settings have an environment variable that wins over them for one process (`CORRAL_LANG`, `CORRAL_IMAGES`, `CORRAL_AGENT`), and some choices exist only as variables (`CORRAL_EDITOR`, `CORRAL_VIEW`, `CORRAL_BROWSER`, `CORRAL_TABLE_VIEWER`…). The Configuration page lists them all. Don't add them to the user's shell files unless they ask.
 
-When something doesn't work, `corral doctor` checks the installation and the running pieces, and the Troubleshooting page has the known problems.
+When something doesn't work, `corral doctor` checks the installation and the running pieces, and the Troubleshooting page has the known problems. When the user asks to update Corral, `corral update --check` says whether there is a newer version and `corral update` installs it; consoles already open keep the old one until they are opened again.
 
 ## R and Python versions
 
