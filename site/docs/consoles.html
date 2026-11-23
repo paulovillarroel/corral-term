@@ -123,6 +123,7 @@
 
     <h2>Restart a console</h2>
     <p>If you quit the console with <code>q()</code> or <code>exit()</code>, its pane is left with a shell. The next <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>ctrl+b</kbd> <kbd>y</kbd> or <code>corral eval</code> starts the console again in the same pane. The variables pane follows the new session.</p>
+    <p>If R crashes instead (it was killed, or failed inside a package), the Ark console starts a new session by itself in the same pane and says so: "R ended unexpectedly; starting a new session". The objects of the old one are gone. An agent whose request was running hears at once that the console ended, instead of waiting out its timeout. If R crashes again right after starting, the console stops and leaves the shell, so a broken R doesn't restart over and over.</p>
     <p>After a restart of the Ark console, the editor's completion reconnects when Fresh starts the language server again: close and open the file, or restart Fresh.</p>
 
     <h2>Help in the browser</h2>
