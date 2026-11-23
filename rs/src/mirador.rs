@@ -337,7 +337,7 @@ fn sessions() -> Vec<Value> {
     for d in dirs {
         let mut meta = env::read_json(&d.join("meta.json"));
         let Some(pid) = meta.get("pid").num() else { continue };
-        if !Path::new(&format!("/proc/{}", pid as i64)).exists() {
+        if !env::pid_alive(pid as i64) {
             let _ = std::fs::remove_dir_all(&d);
             continue;
         }
