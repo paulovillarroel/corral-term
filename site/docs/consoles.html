@@ -93,6 +93,27 @@
     <pre><code><span class="p">$ </span>corral config python_console 'CORRAL=1 uv run --with ipython --with polars ipython --no-banner -i ~/.local/share/corral-term/py/startup.py'</code></pre>
     <p>Keep <code>-i …/py/startup.py</code> at the end: that file switches Corral on inside IPython.</p>
 
+    <h2 id="versions">Choose the R or Python version</h2>
+    <p>If you have several versions of R installed with <a href="https://github.com/r-lib/rig">rig</a>, or several Pythons with <a href="https://docs.astral.sh/uv/">uv</a>, you can choose which one the consoles run without leaving Corral. In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), "Console: R version (rig)" and "Console: Python version (uv)" open a window with the versions you have installed. <kbd>Enter</kbd> uses the one you pick. If that console is open, Corral asks whether to restart it now, which loses its objects, or later.</p>
+
+    <h3>R, with rig</h3>
+    <p>The window lists what <code>rig list</code> shows. Corral runs that version's own R in its consoles, in the editor's language server and in <code>corral doctor</code>. rig's default stays as it is, so RStudio and your other terminals don't change. "rig's default" goes back to the R on your <code>PATH</code>. If the version you pick doesn't have httpgd or jsonlite, the window says so, with the command to install them in it.</p>
+
+    <h3>Python, with uv</h3>
+    <p>The window lists the Pythons uv has installed (<code>uv python list --only-installed</code>), one per minor version. Inside a uv project (a folder with a <code>pyproject.toml</code>), your choice goes to the project's <code>.python-version</code> through <code>uv python pin</code>, so <code>uv run</code> in a terminal uses the same Python. uv then rebuilds the project's <code>.venv</code> with it, and refuses a version outside the project's <code>requires-python</code>. Outside a project, Corral starts the console with <code>uv run --python</code>.</p>
+    <p>The same from a terminal, or for an agent (<code>--json</code>):</p>
+    <pre><code><span class="p">$ </span>corral versions r --list
+<span class="p">$ </span>corral versions r 4.5.2 --restart
+<span class="p">$ </span>corral versions python 3.13
+<span class="p">$ </span>corral versions python default</code></pre>
+
+    <h3>Or directly with rig and uv</h3>
+    <p>The window is a shortcut, so you can do it where you work. rig and uv do the same on their own:</p>
+    <ul>
+      <li><code>rig default 4.5</code> changes the default R for the whole system; in rig's admin mode it asks for <code>sudo</code>. <code>R-4.5</code> starts that version once. When you haven't chosen a version in Corral, Corral follows rig's default.</li>
+      <li><code>uv python pin 3.13</code> in the project, or <code>uv run --python 3.13</code> for one command. Corral's console follows the project's <code>.python-version</code>.</li>
+    </ul>
+
     <h2>Use any pane as the console</h2>
     <p>In a pane where R or IPython runs, <kbd>ctrl+b</kbd> <kbd>m</kbd> marks it as the console and, if R or IPython is already open there, switches Corral on in it. It picks R or Python by what runs in the pane.</p>
     <pre><code><span class="p">$ </span>corral console

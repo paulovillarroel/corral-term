@@ -91,6 +91,18 @@
     <h3>corral console</h3>
     <p>Marks the current pane as the R or Python console, by what runs in it, and switches Corral on if R or IPython is open there (<kbd>ctrl+b</kbd> <kbd>m</kbd>). <code>--lang r|python</code> sets the language and <code>--pane PANE</code> marks another pane.</p>
 
+    <h3 id="corral-versions">corral versions</h3>
+    <p>The R version (from rig) or Python version (from uv) the consoles run. Without a version, it opens a window with the installed ones; the palette has it as "Console: R version (rig)" and "Console: Python version (uv)". See <a href="consoles.html#versions">Choose the R or Python version</a>.</p>
+    <table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td><code>r|python</code></td><td>Which console</td></tr>
+    <tr><td><code>VERSION</code></td><td>Uses that version (<code>4.5.2</code>, <code>3.13</code>); <code>default</code> goes back to rig's or uv's default</td></tr>
+    <tr><td><code>--list</code>, <code>--json</code></td><td>The installed versions, for people or for agents, with the one in use marked</td></tr>
+    <tr><td><code>--restart</code></td><td>Restarts that console so it runs the version now; its objects are lost</td></tr>
+    </tbody>
+    </table>
+
     <h3>corral keys</h3>
     <p>The shortcut palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>).</p>
     <table>
