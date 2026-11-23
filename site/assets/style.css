@@ -216,6 +216,14 @@ footer.foot a:hover { color: var(--fg); }
 .hero-grid .meta { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 28px; font: 500 13px/1.4 var(--sans); }
 .hero-grid .meta a { color: var(--text); text-decoration: none; }
 .hero-grid .meta a:hover { color: var(--fg); }
+/* The repository, as a button at the end of the hero's links, so it is easy to find. */
+.hero-grid .meta { align-items: center; }
+.hero-grid .meta a.gh {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px;
+  border: 1px solid var(--line-2); color: var(--fg); font-weight: 600;
+}
+.hero-grid .meta a.gh svg { flex: none; }
+.hero-grid .meta a.gh:hover { border-color: var(--accent); color: var(--fg); }
 .hero-shot .mock { font-size: 10.4px; line-height: 1.5; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
 .hero-shot .mock .grid { grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
 .hero-shot .mock .grid { min-height: 0; gap: 8px; padding: 8px; }
