@@ -8,7 +8,7 @@ use std::process::{Command, Output};
 const COMMANDS: &[&str] = &[
     "layout", "close", "toggle", "switch", "script", "console", "keys",
     "send", "eval", "audit", "vars", "view", "plots", "mirador", "open",
-    "config", "theme", "ark", "doctor", "install", "uninstall",
+    "config", "theme", "ark", "doctor", "install", "uninstall", "versions",
 ];
 
 fn empty_home(name: &str) -> PathBuf {

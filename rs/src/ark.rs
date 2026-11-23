@@ -98,19 +98,24 @@ impl Kernel {
     }
 }
 
-/// R_HOME and R's library path for Ark, from Corral's kernel spec; the first
-/// time they come from R itself (its startup script sets the library path) and
-/// are kept in that spec, the one jupyter-console would use too.
-fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
+/// R_HOME and R's library path for Ark, from Corral's kernel spec; they come
+/// from R itself (its startup script sets the library path) and are kept in that
+/// spec, the one jupyter-console would use too, with the R they came from. Another
+/// R (`corral versions r`, or `rig default` moving the R on the PATH) asks again.
+pub(crate) fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
+    let r = crate::versions::r_binary()?;
+    let which_r = std::fs::canonicalize(&r).unwrap_or_else(|_| r.clone()).to_string_lossy().to_string();
     let spec_path = env::data_dir().join("jupyter/kernels/ark/kernel.json");
     let spec = env::read_json(&spec_path);
     let e = spec.get("env");
     if let (Some(home), Some(lib)) = (e.get("R_HOME").str(), e.get("LD_LIBRARY_PATH").str()) {
-        if Path::new(home).join("bin").is_dir() {
+        let same_r = spec.get("metadata").get("corral_r").str() == Some(which_r.as_str());
+        let same_ark = spec.get("argv").arr().first().and_then(|a| a.str()) == Some(ark.display().to_string().as_str());
+        if same_r && same_ark && Path::new(home).join("bin").is_dir() {
             return Ok(vec![("R_HOME".into(), home.into()), ("LD_LIBRARY_PATH".into(), lib.into())]);
         }
     }
-    let probe = Command::new("R")
+    let probe = Command::new(&r)
         .args(["--vanilla", "--no-echo", "-e", "cat(R.home(), Sys.getenv(\"LD_LIBRARY_PATH\"), sep = \"\\n\")"])
         .stderr(Stdio::null())
         .output()
@@ -131,6 +136,7 @@ fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
         ("display_name", "R (Ark, Corral)".into()),
         ("language", "R".into()),
         ("env", obj(vec![("R_HOME", home.as_str().into()), ("LD_LIBRARY_PATH", lib.as_str().into())])),
+        ("metadata", obj(vec![("corral_r", which_r.as_str().into())])),
     ]);
     if let Some(dir) = spec_path.parent() {
         let _ = std::fs::create_dir_all(dir);

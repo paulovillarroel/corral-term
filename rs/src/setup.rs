@@ -167,8 +167,13 @@ pub fn cmd_doctor(args: &[String]) -> Result<(), String> {
     }
     check(true, tr("R console", "consola de R"),
           if console::r_flavor(&cfg) == "ark" { "Ark".into() } else { tr("plain R (corral config r_console)", "R normal (corral config r_console)").into() });
-    let rscript = env::which("Rscript");
-    check(rscript.is_some(), "R", rscript.as_ref().map(|p| p.display().to_string()).unwrap_or_else(not_on_path));
+    let rscript = crate::versions::rscript();
+    let r_detail = match (&rscript, cfg.get("r_version").str()) {
+        (Some(p), Some(v)) => trf!("{} (R {v}, corral versions r)", "{} (R {v}, corral versions r)", p.display()),
+        (Some(p), None) => p.display().to_string(),
+        (None, _) => crate::versions::r_binary().err().unwrap_or_else(not_on_path),
+    };
+    check(rscript.is_some(), "R", r_detail);
     if let Some(r) = &rscript {
         let has = r_packages(r, &["httpgd", "jsonlite", "arrow", "nanoparquet"]);
         check(has[0], "R: httpgd", tr("plots", "gráficos").into());

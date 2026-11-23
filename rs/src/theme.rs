@@ -124,7 +124,7 @@ pub fn herdr_theme() -> (String, Value) {
     (name, custom)
 }
 
-fn write_config(cfg: &Value) {
+pub(crate) fn write_config(cfg: &Value) {
     let path = corral_config_file();
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
