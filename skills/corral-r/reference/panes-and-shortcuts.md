@@ -2,7 +2,7 @@
 
 ## Panes
 
-A Corral layout has the agent pane on the left and, on the right, the script pane (Fresh) over the console, with the variables pane below them. The layout focused on code (`corral layout --focus code`; the user opens it with `ctrl+b shift+a`, the default one with `ctrl+b a`) swaps the script and the agent: script on the left, agent over the console. Panes that are not showing (the other language's console, or the pane hidden by expanding) wait in a hidden tab named "corral (hidden)" and keep running.
+A Corral layout has the agent pane on the left and, on the right, the script pane (Fresh) over the console, with the variables pane below them. The layout focused on code (`corral layout --focus code`; the user opens it with `ctrl+b shift+s`, the default one with `ctrl+b a`) swaps the script and the agent: script on the left, agent over the console. Panes that are not showing (the other language's console, or the pane hidden by expanding) wait in a hidden tab named "corral (hidden)" and keep running.
 
 | Command | Effect | Ask first? |
 |---|---|---|
