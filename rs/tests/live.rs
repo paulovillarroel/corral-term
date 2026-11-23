@@ -1041,3 +1041,29 @@ fn a_shell_that_asks_at_startup_still_starts_corral() {
     let screen = live.screen(&vars);
     assert!(!screen.contains("command not found"), "{screen}");
 }
+
+/// Without `corral config agent`, the agent pane runs the first agent installed:
+/// here only opencode is (a stand-in for it), not Claude Code, and the layout
+/// opens opencode.
+#[test]
+#[ignore]
+fn the_agent_pane_runs_the_agent_that_is_installed() {
+    let live = Live::start("agentpick");
+    let fake = live.dir.join("bin/opencode");
+    std::fs::write(&fake, "#!/bin/sh\necho 'opencode is running'\nexec sleep 600\n").unwrap();
+    std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let herdr = String::from_utf8(Command::new("sh").args(["-c", "command -v herdr"]).output().unwrap().stdout).unwrap();
+    let created = live.run("herdr", &["workspace", "create", "--cwd", live.dir.join("proj").to_str().unwrap()]);
+    let ws = field(&created, "workspace_id").expect("no workspace");
+    // A PATH with no agent but the stand-in: no Claude Code, Codex or Gemini CLI.
+    let out = live.command("corral").env_remove("CORRAL_AGENT")
+        .env("PATH", format!("{}:/usr/local/bin:/usr/bin:/bin", live.dir.join("bin").display()))
+        .env("HERDR_BIN_PATH", herdr.trim()).env("HERDR_WORKSPACE_ID", &ws)
+        .args(["layout", "--editor", ""]).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    wait_for(Duration::from_secs(20), "opencode in the agent pane", || {
+        let panes = live.run("herdr", &["pane", "list", "--workspace", &ws]);
+        panes.split("\"pane_id\":\"").skip(1).filter_map(|p| p.split('"').next())
+            .any(|p| live.screen(p).contains("opencode is running"))
+    });
+}

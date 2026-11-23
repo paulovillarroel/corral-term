@@ -357,6 +357,20 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     }
     let places: Vec<&str> = skill_places().iter().map(|(_, shown)| *shown).collect();
     let places = places.join(tr(" and ", " y "));
+    // The agent the layout opens: the one chosen, else the first one installed.
+    let agent = tr("Agent", "Agente");
+    let found: Vec<&str> = env::AGENTS.iter().filter(|(cmd, _)| env::which(cmd).is_some()).map(|(_, name)| *name).collect();
+    match env::config().get("agent").str() {
+        Some("none") => out.push(check("optional", State::Ok, agent, tr("none: the agent pane is a shell (corral config agent)", "ninguno: el panel del agente es una shell (corral config agent)"), &[])),
+        Some(cmd) => out.push(check("optional", State::Ok, agent, &trf!("{}, your choice (corral config agent)", "{}, el que elegiste (corral config agent)", env::agent_name(cmd)), &[])),
+        None if found.is_empty() => out.push(check("optional", State::Warn, agent,
+            tr("none found (Claude Code, Codex, Gemini CLI, opencode): the agent pane will be a shell", "no encontré ninguno (Claude Code, Codex, Gemini CLI, opencode): el panel del agente será una shell"),
+            &[tr("Install one; Corral opens the first it finds, and the palette (Agents: use…) chooses another.", "Instala uno; Corral abre el primero que encuentre, y la paleta (Agentes: usar…) elige otro.")])),
+        None => {
+            let more = if found.len() > 1 { trf!("; also {}: the palette chooses (Agents: use…)", "; también {}: la paleta elige (Agentes: usar…)", found[1..].join(", ")) } else { String::new() };
+            out.push(check("optional", State::Ok, agent, &trf!("{} in the agent pane{more}", "{} en el panel del agente{more}", found[0]), &[]));
+        }
+    }
     out.push(check("optional", State::Ok, tr("Skill for agents", "Skill para agentes"), trf!("goes in {places}", "la dejo en {places}"), &[]));
     let browser = tr("Browser", "Navegador");
     if is_wsl() {

@@ -121,11 +121,19 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         .or_else(|| ctx.get("workspace_cwd").str().map(String::from))
         .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()))
         .unwrap_or_else(|| ".".into());
-    // The agent pane runs any agent: --agent, then CORRAL_AGENT, then `corral config agent`, else Claude Code.
+    // The agent pane runs any agent: --agent, then CORRAL_AGENT, then `corral config
+    // agent` (none for a shell), else the first agent installed, else a shell.
     let agent = a.value("--agent").map(String::from)
         .or_else(|| std::env::var("CORRAL_AGENT").ok())
         .or_else(|| env::config().get("agent").str().map(String::from))
-        .unwrap_or_else(|| "claude".into());
+        .map(|a| if a == "none" { String::new() } else { a })
+        .or_else(|| env::first_agent(|cmd| env::which(cmd).is_some()).map(String::from))
+        .unwrap_or_else(|| {
+            env::notify(tr("No agent found", "No encontré un agente"),
+                        tr("Corral looks for Claude Code, Codex, Gemini CLI and opencode; the agent pane is a shell. Choose one in the palette (Agents: use…) or with corral config agent.",
+                           "Corral busca Claude Code, Codex, Gemini CLI y opencode; el panel del agente es una shell. Elige uno en la paleta (Agentes: usar…) o con corral config agent."));
+            String::new()
+        });
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
     let ratio: Option<f64> = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?;
     // The sizes you left in this layout the last time, else Corral's.
