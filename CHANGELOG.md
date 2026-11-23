@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- `corral update` installs the latest version when there is a newer one, with the same install line as the first time (it checks the package's SHA-256 and its build provenance). `corral update --check` only says whether there is one, and the palette has "Update: install the latest version of Corral", in a popup. A Corral installed from a copy of the repository isn't replaced: it says to `git pull` there and run `sh install.sh`.
+
+### Fixes
+
+- From a copy of the repository, `sh install.sh` after a `git pull` to a new version kept the old `corral`: it only built one when there was none. It now builds when the binary isn't the code's version.
+
 ## 0.1.12
 
 A harness that shows exactly what runs, keeps a sensitive session sensitive after a crash, asks an agent even in a terminal of its own, and records every request; and live tests in CI.
