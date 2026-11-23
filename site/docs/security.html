@@ -152,6 +152,7 @@
     <tr><td><code>sessions/&lt;id&gt;/eval/</code></td><td>Each agent request's code and full output, for when it was clipped or timed out</td><td>A day</td></tr>
     <tr><td><code>run/</code></td><td>Copies of scripts you sent whole to the console</td><td>A day</td></tr>
     <tr><td><code>ark/</code></td><td>Keys to talk to Ark, readable only by you</td><td>Two days</td></tr>
+    <tr><td><code>checkpoints/</code></td><td>A copy of the objects of each R and Python console, to bring them back after a crash</td><td>Until the console closes or they come back; a week at most</td></tr>
     <tr><td><code>ark.log</code>, <code>mirador.log</code></td><td>Ark's and Mirador's messages</td><td>Until they pass 5 MB; then they start over</td></tr>
     <tr><td>The rest (<code>layout.json</code>, <code>sizes.json</code>, <code>mirador.json</code>…)</td><td>Corral's own state: panes, sizes, Mirador's address and token. None of your data</td><td>While you use Corral</td></tr>
     </tbody>
