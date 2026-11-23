@@ -46,7 +46,7 @@
     <p class="intro">Agents run code in your console with <code>corral eval</code>, so their objects, plots and tables land in the session you are looking at. Any agent that can run shell commands learns how from Corral's skill.</p>
 
     <h2 id="your-agent">Your agent</h2>
-    <p>The layout opens your agent in its agent pane: the first one installed of Claude Code, Codex, Gemini CLI and opencode. To choose another, or none and a shell in its place, use the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, "Agents: use … in the agent pane") or <code>corral config agent</code>, which takes any command; the next layout you open runs it. The installer says which agent it found.</p>
+    <p>The layout opens your agent in its agent pane: the first one installed of Claude Code, Codex, Gemini CLI and opencode. To choose another, or none and a shell in its place, use the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, "Agents: use … in the agent pane") or <code>corral config agent</code>, which takes any command; the next layout you open runs it. The installer says which agent it found and, when you have several and haven't chosen, asks you once which one to open.</p>
 
     <h2 id="the-agent-harness">The agent harness</h2>
     <p>Corral is the harness between your agent and your live session: a few commands the agent calls from its own shell, a skill that teaches it when and how to call them, and rules that Corral enforces around every call. The agent gets no hidden channel into your session. Everything it runs is typed into the console you are looking at, it waits its turn, and what it gets back depends on what you allow.</p>
