@@ -379,11 +379,34 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let out_file = edir.join(format!("{rid}.out"));
     let start = Instant::now();
     let end = start + Duration::from_secs_f64(o.timeout);
+    // If R or Python dies on the way (it crashed, or was killed), say so at once
+    // instead of waiting out the timeout for an answer that will never come.
+    let pid = session.get("pid").num().map(|p| p as i64);
+    let (mut checked, mut ended) = (Instant::now(), false);
     while !result_file.exists() && Instant::now() < end {
         let waited = start.elapsed();
         std::thread::sleep(Duration::from_millis(if waited < Duration::from_secs(2) { 5 } else if waited < Duration::from_secs(15) { 25 } else { 100 }));
+        if checked.elapsed() > Duration::from_millis(250) {
+            checked = Instant::now();
+            if pid.is_some_and(|p| !env::pid_alive(p)) && !result_file.exists() {
+                ended = true;
+                break;
+            }
+        }
     }
     let output = std::fs::read(&out_file).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
+    if ended {
+        if output_mode == "full" && !output.trim().is_empty() {
+            println!("{}", clip_output(output.trim_end(), o.max_chars, &out_file));
+        }
+        let mut e = audit_entry(&o, &code, access, output_mode, "ran");
+        e.set("status", "console ended".into());
+        audit::record(e);
+        let lang = console::lang_name(&o.lang);
+        println!("\n{}", trf!("[corral] the {lang} console ended while running this (it crashed or was stopped); its objects are gone, and the next request starts a new session",
+                                "[corral] la consola de {lang} terminó mientras corría esto (se cayó o la detuvieron); sus objetos se perdieron, y la próxima petición abre una sesión nueva"));
+        std::process::exit(1);
+    }
     if !result_file.exists() {
         if output_mode == "full" {
             println!("{}", clip_output(&output, o.max_chars, &out_file));

@@ -356,12 +356,22 @@ pub fn ready(lang: &str) -> Result<String, String> {
     let (pane, started) = show(lang, true)?;
     let label = label(lang);
     let pane = pane.ok_or_else(|| trf!("No {label} pane. Use ctrl+b a", "No hay panel {label}. Usa ctrl+b a"))?;
-    let started = started || ensure_running(&pane, lang);
+    let mut started = started || ensure_running(&pane, lang);
     if started || env::session_for(&pane).is_none() {
         // Just started, or still starting: wait for its Corral session, then an empty prompt.
         // The first Python console can take a while (uv prepares its environment).
-        let end = Instant::now() + Duration::from_secs(if started { 180 } else { 30 });
+        let mut end = Instant::now() + Duration::from_secs(if started { 180 } else { 30 });
+        let mut tried = Instant::now();
         while env::session_for(&pane).is_none() {
+            // A console that just ended (R crashed or quit) gives the pane back to
+            // its shell a moment later: start it again then.
+            if !started && tried.elapsed() > Duration::from_millis(500) {
+                tried = Instant::now();
+                if ensure_running(&pane, lang) {
+                    started = true;
+                    end = Instant::now() + Duration::from_secs(180);
+                }
+            }
             if Instant::now() > end {
                 return Err(trf!("the {label} console ({pane}) does not have Corral active; open one with ctrl+b a or mark it with ctrl+b m",
                                 "la consola {label} ({pane}) no tiene Corral activo; ábrela con ctrl+b a o márcala con ctrl+b m"));

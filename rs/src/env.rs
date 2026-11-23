@@ -176,7 +176,7 @@ pub fn sessions() -> Vec<Value> {
     for dir in dirs.flatten() {
         let mut meta = read_json(&dir.path().join("meta.json"));
         let Some(pid) = meta.get("pid").num() else { continue };
-        if !Path::new(&format!("/proc/{}", pid as i64)).exists() {
+        if !pid_alive(pid as i64) {
             continue;
         }
         if meta.get("lang").is_null() {
@@ -188,6 +188,15 @@ pub fn sessions() -> Vec<Value> {
     out
 }
 
+/// Is the process running? A zombie (ended, not yet collected) counts as ended.
+pub fn pid_alive(pid: i64) -> bool {
+    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        // "pid (name) S ...": the state comes after the name, which may hold spaces.
+        Ok(stat) => stat.rsplit_once(')').and_then(|(_, rest)| rest.trim_start().chars().next()).is_some_and(|s| s != 'Z' && s != 'X'),
+        Err(_) => false,
+    }
+}
+
 /// Folders of sessions whose R or Python has ended go away, with the previews of
 /// variables and the agents' requests they held. A folder without meta.json
 /// waits a day: its console may be starting right now.
@@ -195,7 +204,7 @@ pub fn remove_dead_sessions() {
     let Ok(dirs) = std::fs::read_dir(state_dir().join("sessions")) else { return };
     for dir in dirs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
         let dead = match read_json(&dir.join("meta.json")).get("pid").num() {
-            Some(pid) => !Path::new(&format!("/proc/{}", pid as i64)).exists(),
+            Some(pid) => !pid_alive(pid as i64),
             None => dir.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a.as_secs() > 86400),
         };
         if dead {
