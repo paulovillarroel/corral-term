@@ -61,6 +61,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if lang != "r" && lang != "python" {
         return Err(tr("usage: corral _console r|python", "uso: corral _console r|python").into());
     }
+    env::remove_dead_sessions(); // what consoles that ended left behind
+    env::trim_log(&env::state_dir().join("ark.log"));
     print!("\x1b[H\x1b[2J\x1b[3J"); // the command corral typed goes away
     let _ = std::io::stdout().flush();
     let cfg = env::config();

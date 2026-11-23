@@ -220,7 +220,12 @@ fn scratch_root(project: &str) -> PathBuf {
     if root != home && root != Path::new("/") && env::writable(&root) {
         root.join(".corral")
     } else {
-        temp_scratch_root()
+        // Drafts are your code: the folder that holds them is yours only.
+        let root = temp_scratch_root();
+        if let Some(corral) = root.parent() {
+            env::make_private(corral);
+        }
+        root
     }
 }
 

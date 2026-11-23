@@ -100,6 +100,7 @@ Instalación y ajustes
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let rest = args.get(1..).unwrap_or(&[]);
+    env::keep_state_private(); // what agents ran, your history: yours only
     let result = match args.first().map(String::as_str) {
         Some("send") => send::run(rest, &args),
         Some("eval") => eval::run(rest),
@@ -145,6 +146,7 @@ fn main() {
         }
         Some(other) => Err(trf!("unknown command '{other}'; corral --help lists them", "no conozco el comando '{other}'; corral --help muestra los que hay")),
     };
+    env::keep_state_private(); // also when this command created it
     if let Err(e) = result {
         eprintln!("corral: {e}");
         std::process::exit(1);

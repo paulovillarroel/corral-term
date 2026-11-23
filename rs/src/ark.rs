@@ -712,7 +712,7 @@ impl History {
         }
         self.items.push(code.to_string());
         // Appended line by line, so several consoles can share the file.
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&self.file) {
+        if let Ok(mut f) = env::append_private(&self.file) {
             let _ = f.write_all(format!("{}\n", Value::from(code).to_json()).as_bytes());
         }
     }
