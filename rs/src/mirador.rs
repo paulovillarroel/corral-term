@@ -55,7 +55,8 @@ fn tables_file() -> PathBuf {
 }
 
 fn session_dir(sid: &str) -> Result<PathBuf, String> {
-    if sid.is_empty() || !sid.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
+    // A name, never a way out of the sessions folder ("..").
+    if sid.is_empty() || sid.chars().all(|c| c == '.') || !sid.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
         return Err(tr("invalid session", "sesión inválida").into());
     }
     Ok(sessions_dir().join(sid))
