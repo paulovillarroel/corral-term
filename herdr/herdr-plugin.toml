@@ -29,6 +29,13 @@ title = "Corral: layout, notebook (script over the console)"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "layout", "--focus", "notebook"]
 
+# Each layout keeps the sizes you leave; this goes back to Corral's.
+[[actions]]
+id = "layout-sizes"
+title = "Corral: layout, back to Corral's sizes"
+contexts = ["global", "workspace"]
+command = ["../rs/target/release/corral", "layout", "--default-sizes"]
+
 [[actions]]
 id = "send"
 title = "Corral: send the selection to the console (R or Python)"

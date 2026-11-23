@@ -9,6 +9,7 @@ use crate::env;
 use crate::herdr;
 use crate::i18n::tr;
 use crate::json::{obj, Value};
+use std::path::PathBuf;
 
 /// The hidden tab's name in each language; a new one gets the user's.
 const PARKING_TABS: [&str; 2] = ["corral (hidden)", "corral (oculto)"];
@@ -126,6 +127,143 @@ pub fn default_width(kind: &str) -> f64 {
     if kind == "agent" { 0.516 } else { 0.62 }
 }
 
+/// The share of the panes over the variables.
+const VARS_SHARE: f64 = 0.73;
+
+/// What a layout's sizes measure: the left column's width, the share of the
+/// panes over the variables, and the share of the pane over the console.
+const SIZES: [&str; 3] = ["width", "over_vars", "over_console"];
+
+/// The sizes you left in each layout ("agent", "code", "notebook"), for every
+/// workspace, so a layout you resized by hand opens the same way next time.
+fn sizes_file() -> PathBuf {
+    env::state_dir().join("sizes.json")
+}
+
+fn usable(r: f64) -> bool {
+    (0.15..=0.85).contains(&r)
+}
+
+/// Corral's sizes for a layout, in the order of `SIZES`.
+fn corral_sizes(kind: &str) -> [f64; 3] {
+    [default_width(kind), VARS_SHARE, SCRIPT_SHARE]
+}
+
+/// A layout's sizes, in the order of `SIZES`: the ones you left, else Corral's.
+pub fn sizes(kind: &str) -> [f64; 3] {
+    let saved = env::read_json(&sizes_file());
+    let mut out = corral_sizes(kind);
+    for (i, name) in SIZES.iter().enumerate() {
+        if let Some(r) = saved.get(kind).get(name).num().filter(|r| usable(*r)) {
+            out[i] = r;
+        }
+    }
+    out
+}
+
+/// The panes of the layout open in a workspace (only those in its tab).
+struct Open {
+    tab: String,
+    agent: Option<String>,
+    script: Option<String>,
+    console: Option<String>,
+    vars: Option<String>,
+    lang: String,
+}
+
+fn open_panes(ws: &str, panes: &[Value], state: &Value) -> Option<Open> {
+    let tab = crate::send::main_tab(panes)?;
+    let in_tab = |p: &&Value| herdr::tab_id(p) == tab;
+    let id = |label: &str| herdr::labeled(panes, label).filter(in_tab).map(|p| herdr::pane_id(p).to_string());
+    let lang = env::active_lang(Some(ws), panes);
+    // The agent: as the layout saved it, else the one pane of the tab that isn't
+    // Corral's (one herdr sees an agent in, if there are several).
+    let agent = agent_pane(state).filter(|_| layout_kind(state) != "agent")
+        .filter(|id| panes.iter().any(|p| herdr::pane_id(p) == *id)).map(String::from)
+        .or_else(|| {
+            let free: Vec<&Value> = panes.iter().filter(in_tab)
+                .filter(|p| !p.get("label").str().is_some_and(|l| l.starts_with("corral:"))).collect();
+            free.iter().find(|p| p.get("agent").str().is_some()).or(free.first()).map(|p| herdr::pane_id(p).to_string())
+        });
+    Some(Open { script: id("corral:script"), console: id(&console::label(&lang)), vars: id("corral:vars"), agent, lang, tab })
+}
+
+/// For each size, the two panes whose split holds it: the first one's share.
+fn size_pairs<'a>(kind: &str, o: &'a Open) -> [Option<(&'a str, &'a str)>; 3] {
+    let (a, s, c, v) = (o.agent.as_deref(), o.script.as_deref(), o.console.as_deref(), o.vars.as_deref());
+    let (left, right) = if kind == "agent" { (a, s.or(c)) } else { (s, a) };
+    let over_vars = if kind == "agent" { s.or(c) } else { a };
+    let over_console = if kind == "code" { a } else { s };
+    [left.zip(right), over_vars.zip(v), over_console.zip(c)]
+}
+
+/// Keep the sizes the layout has now, which you may have changed by hand. Only
+/// the ones that differ from Corral's are written down.
+fn remember_sizes(kind: &str, o: &Open) {
+    let path = sizes_file();
+    let mut saved = env::read_json(&path);
+    let mut mine = saved.get(kind).clone();
+    for ((name, pair), corral) in SIZES.iter().zip(size_pairs(kind, o)).zip(corral_sizes(kind)) {
+        match pair.and_then(|(x, y)| pane_split(x, y)).map(|s| s.3).filter(|r| usable(*r)) {
+            Some(r) if (r - corral).abs() < 0.005 => mine.remove(name),
+            Some(r) => mine.set(name, ((r * 1000.0).round() / 1000.0).into()),
+            None => {}
+        }
+    }
+    if mine != *saved.get(kind) {
+        match &mine {
+            Value::Obj(items) if items.is_empty() => saved.remove(kind),
+            _ => saved.set(kind, mine),
+        }
+        env::write_json(&path, &saved);
+    }
+}
+
+/// Give the layout its sizes; `width`, when given, instead of the saved one.
+fn apply_sizes(kind: &str, o: &Open, width: Option<f64>) -> Result<(), String> {
+    let mut want = sizes(kind);
+    if let Some(w) = width {
+        want[0] = w;
+    }
+    for (pair, w) in size_pairs(kind, o).into_iter().zip(want) {
+        if let Some((tab, path, first, _)) = pair.and_then(|(x, y)| pane_split(x, y)) {
+            set_ratio(&tab, &path, if first { w } else { 1.0 - w })?;
+        }
+    }
+    Ok(())
+}
+
+fn read_open(ws: &str) -> Result<(Vec<Value>, Value), String> {
+    let panes = herdr::panes(Some(ws))?;
+    let state = env::read_json(&env::layout_file()).get(&env::ws_key(Some(ws))).clone();
+    Ok((panes, state))
+}
+
+/// Keep the sizes of the layout open in `ws`, when all its panes are in view
+/// (ctrl+b t hides one). Corral does it before it changes the layout or closes it.
+pub fn remember_open(ws: Option<&str>) {
+    let Some(ws) = ws else { return };
+    let Ok((panes, state)) = read_open(ws) else { return };
+    if state.get("parked").str().is_none() {
+        if let Some(open) = open_panes(ws, &panes, &state) {
+            remember_sizes(layout_kind(&state), &open);
+        }
+    }
+}
+
+/// Forget the sizes you left in every layout, and give the open one Corral's.
+pub fn forget_sizes(ws: Option<&str>) -> Result<(), String> {
+    let _ = std::fs::remove_file(sizes_file());
+    if let Some(ws) = ws {
+        let (panes, state) = read_open(ws)?;
+        if let Some(open) = open_panes(ws, &panes, &state) {
+            apply_sizes(layout_kind(&state), &open, None)?;
+        }
+    }
+    env::notify("Corral", tr("Layout: Corral's sizes", "Layout: tamaños de Corral"));
+    Ok(())
+}
+
 fn set_ratio(tab: &str, path: &[bool], ratio: f64) -> Result<(), String> {
     let path = Value::Arr(path.iter().map(|b| Value::Bool(*b)).collect());
     herdr::call("layout.set_split_ratio", obj(vec![("tab_id", tab.into()), ("path", path), ("ratio", ratio.into())]))?;
@@ -168,57 +306,47 @@ fn kind_label(kind: &str) -> &'static str {
 ///   notebook      script over console | agent over variables
 /// so the agent and the script swap places, and the console moves under the
 /// script or under the agent. A pane hidden with ctrl+b t comes back first.
-/// The left column takes the width it had the last time in that layout, or
-/// `default_width`. None when the workspace has no layout yet. `announce` says it in a notice.
+/// The layout you leave keeps its sizes for the next time, and the next one
+/// gets the sizes you left in it, else Corral's. None when the workspace has no
+/// layout yet. `announce` says it in a notice.
 pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, String> {
-    let read = || -> Result<(Vec<Value>, Value), String> {
-        let panes = herdr::panes(Some(ws))?;
-        let state = env::read_json(&env::layout_file()).get(&env::ws_key(Some(ws))).clone();
-        Ok((panes, state))
-    };
-    let (mut panes, mut state) = read()?;
+    rearrange(ws, to, announce, true, None)
+}
+
+/// A new layout that starts as code first and becomes `to` (the notebook), with
+/// `width` (`--ratio`) for its left column when given.
+pub fn arrange_new(ws: &str, to: &str, width: Option<f64>) -> Result<(), String> {
+    rearrange(ws, to, false, false, width).map(|_| ())
+}
+
+fn rearrange(ws: &str, to: &str, announce: bool, learn: bool, width: Option<f64>) -> Result<Option<Value>, String> {
+    let (mut panes, mut state) = read_open(ws)?;
     if crate::send::main_tab(&panes).is_none() {
         return Ok(None);
     }
     if state.get("parked").str().is_some() {
         toggle(&["both".to_string()])?;
-        (panes, state) = read()?;
+        (panes, state) = read_open(ws)?;
     }
-    let Some(tab) = crate::send::main_tab(&panes) else { return Ok(None) };
     let from = layout_kind(&state);
-    let in_tab = |p: &&Value| herdr::tab_id(p) == tab;
-    let script = herdr::labeled(&panes, "corral:script").filter(in_tab).map(|p| herdr::pane_id(p).to_string());
-    let lang = env::active_lang(Some(ws), &panes);
-    let console = herdr::labeled(&panes, &console::label(&lang)).filter(in_tab).map(|p| herdr::pane_id(p).to_string());
-    // The agent: as the layout saved it, else the one pane of the tab that isn't
-    // Corral's (one herdr sees an agent in, if there are several).
-    let agent = agent_pane(&state).filter(|_| from != "agent").filter(|id| panes.iter().any(|p| herdr::pane_id(p) == *id)).map(String::from)
-        .or_else(|| {
-            let free: Vec<&Value> = panes.iter().filter(in_tab)
-                .filter(|p| !p.get("label").str().is_some_and(|l| l.starts_with("corral:"))).collect();
-            free.iter().find(|p| p.get("agent").str().is_some()).or(free.first()).map(|p| herdr::pane_id(p).to_string())
-        });
+    let Some(open) = open_panes(ws, &panes, &state) else { return Ok(None) };
+    if learn {
+        remember_sizes(from, &open);
+    }
+    let Open { tab, agent, script, console, lang, .. } = &open;
     if to != from {
-        let (Some(s), Some(a)) = (&script, &agent) else {
+        let (Some(s), Some(a)) = (script, agent) else {
             return Err(if script.is_none() {
                 trf!("{} needs the script pane; corral script adds it", "{} necesita el panel de script; corral script lo agrega", kind_label(to))
             } else {
                 tr("couldn't tell which pane is the agent's", "no pude saber cuál es el panel del agente").into()
             });
         };
-        // Each layout keeps its own width for the left column: remember this one's
-        // (the user may have resized it) and give the next one the width it had.
-        let left_right = |kind: &str| if kind == "agent" { (a.as_str(), s.as_str()) } else { (s.as_str(), a.as_str()) };
-        let mut widths = state.get("widths").clone();
-        let (l, r) = left_right(from);
-        if let Some(w) = pane_split(l, r).map(|x| x.3).filter(|w| (0.15..=0.85).contains(w)) {
-            widths.set(from, w.into());
-        }
         let swap = || herdr::call("pane.swap", obj(vec![("source_pane_id", a.as_str().into()), ("target_pane_id", s.as_str().into())])).map(|_| ());
         // herdr leaves a move within the same tab unchanged, so the console goes
         // through the hidden tab, as ctrl+b t does, and comes back under `target`.
-        let console_under = |target: &str| match &console {
-            Some(c) => park(c, Some(ws)).and_then(|_| move_next_to(c, &tab, target, SCRIPT_SHARE)),
+        let console_under = |target: &str| match console {
+            Some(c) => park(c, Some(ws)).and_then(|_| move_next_to(c, tab, target, SCRIPT_SHARE)),
             None => Ok(()), // no console in the tab: nothing to move
         };
         match (from, to) {
@@ -235,23 +363,18 @@ pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, Stri
                 swap()?;
             }
         }
-        let want = widths.get(to).num().unwrap_or_else(|| default_width(to));
-        let (l, r) = left_right(to);
-        if let Some((tab, path, l_first, _)) = pane_split(l, r) {
-            set_ratio(&tab, &path, if l_first { want } else { 1.0 - want })?;
-        }
+        apply_sizes(to, &open, width)?;
         let path = env::layout_file();
         let mut saved = env::read_json(&path);
         let key = env::ws_key(Some(ws));
         let mut st = saved.get(&key).clone();
-        for k in ["focus", "foco", "agent", "agente"] {
+        for k in ["focus", "foco", "agent", "agente", "widths"] {
             st.remove(k);
         }
         if to != "agent" {
             st.set("focus", to.into());
             st.set("agent", a.as_str().into());
         }
-        st.set("widths", widths);
         saved.set(&key, st);
         env::write_json(&path, &saved);
     }
@@ -264,9 +387,10 @@ pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, Stri
         env::notify("Corral", &trf!("{}; same session", "{}; misma sesión", kind_label(to)));
     }
     let id_of = |l: &str| herdr::labeled(&panes, l).map(|p| Value::from(herdr::pane_id(p))).unwrap_or(Value::Null);
+    let or_null = |p: &Option<String>| p.as_deref().map(Value::from).unwrap_or(Value::Null);
     Ok(Some(obj(vec![
-        ("tab", tab.as_str().into()), ("agent", agent.map(Value::from).unwrap_or(Value::Null)),
-        ("console", console.map(Value::from).unwrap_or(Value::Null)), ("script", script.map(Value::from).unwrap_or(Value::Null)),
+        ("tab", tab.as_str().into()), ("agent", or_null(agent)),
+        ("console", or_null(console)), ("script", or_null(script)),
         ("vars", id_of("corral:vars")), ("focus", to.into()),
         ("lang", lang.as_str().into()), ("kept", true.into()),
     ])))
@@ -333,6 +457,9 @@ pub fn toggle(args: &[String]) -> Result<(), String> {
         });
         (if parked == console { upper_mode } else { "console" }, Some(parked))
     };
+    if parked.is_none() {
+        remember_open(ws.as_deref()); // every pane is in view: keep the sizes you left
+    }
     let focused = env::current_pane();
     let mode = wanted.unwrap_or_else(|| {
         if current != "both" {
