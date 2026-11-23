@@ -36,7 +36,7 @@ const HELP: &str = "corral: R and Python consoles, tables and plots next to your
 Usage: corral COMMAND [OPTIONS]   (corral COMMAND --help for its options)
 
 Workspace
-  layout       opens the workspace (ctrl+b a; --focus code, ctrl+b shift+s)
+  layout       opens the workspace (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
   close        closes the script, the console and the variables; keeps the agent (ctrl+b shift+q)
   toggle       expands the script (or the agent) or the console (ctrl+b t)
   switch       switches the console between R and Python (ctrl+b y)
@@ -69,7 +69,7 @@ const HELP_ES: &str = "corral: consolas de R y Python, tablas y gráficos junto 
 Uso: corral COMANDO [OPCIONES]   (corral COMANDO --help para sus opciones)
 
 Espacio de trabajo
-  layout       abre el espacio de trabajo (ctrl+b a; --focus code, ctrl+b shift+s)
+  layout       abre el espacio de trabajo (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
   close        cierra el script, la consola y las variables; deja al agente (ctrl+b shift+q)
   toggle       expande el script (o el agente) o la consola (ctrl+b t)
   switch       la consola pasa a R o a Python (ctrl+b y)
