@@ -513,6 +513,11 @@ class Checkpoints:
             closed = self.dir / "closed"
             if closed.exists():
                 return
+            # A sensitive session's objects come back sensitive. corral_sensitive() sets
+            # and lifts this mark at once; here it is only ever added, so a race can only
+            # leave it on.
+            if (self.session.dir / "sensitive").exists():
+                (self.dir / "sensitive").write_text("1\n")
             index_path = self.dir / "index.json"
             try:
                 old = json.loads(index_path.read_text(encoding="utf-8"))
@@ -572,11 +577,12 @@ class Checkpoints:
         shutil.rmtree(self.dir, ignore_errors=True)
 
     @staticmethod
-    def restore(shell) -> None:
+    def restore(shell) -> bool:
         """At startup: the newest checkpoint of a Python in this project that ended
-        without being closed comes back, modules first."""
+        without being closed comes back, modules first. True when that session was
+        marked sensitive: the new one must be too."""
         if setting("checkpoints") == "off" or not CHECKPOINTS.is_dir():
-            return
+            return False
         best = None
         for d in CHECKPOINTS.iterdir():
             if (d / "closed").exists():
@@ -596,8 +602,9 @@ class Checkpoints:
             if best is None or idx["updated"] > best[1]["updated"]:
                 best = (d, idx)
         if best is None:
-            return
+            return False
         d, idx = best
+        sensitive = (d / "sensitive").exists()
         import importlib
         import pickle
         ns = shell.user_ns
@@ -623,6 +630,10 @@ class Checkpoints:
             mb = int(_checkpoint_max_bytes() / 2**20)
             why = lambda r: tr(f"over {mb} MB", f"de más de {mb} MB") if r == "size" else r
             print(tr("[corral] Not kept: ", "[corral] No se conservaron: ") + ", ".join(f"{n} ({why(r)})" for n, r in left.items()) + ".")
+        if sensitive:
+            print(tr("[corral] That session was marked sensitive, and so is this one: agents need your approval and only see the structure of results.",
+                     "[corral] Esa sesión estaba marcada como sensible, y esta también: los agentes necesitan tu aprobación y solo ven la estructura de los resultados."))
+        return sensitive
 
 
 class Session:
@@ -819,16 +830,21 @@ class Session:
 def corral_sensitive(on: bool = True) -> None:
     """Mark this session sensitive: every request from an agent waits for your approval,
     and the agent sees only whether it worked and the shape of the objects, never values.
-    It lasts until this Python ends; corral_sensitive(False) lifts it."""
+    It lasts until this Python ends, or comes back with the objects after a crash;
+    corral_sensitive(False) lifts it."""
     session = _require()
     flag = session.dir / "sensitive"
+    mark = session.checkpoints.dir / "sensitive"
     if on:
         session.dir.mkdir(parents=True, exist_ok=True)
         flag.write_text("1\n")
+        if session.checkpoints.dir.is_dir():
+            mark.write_text("1\n")
         print(tr("Sensitive session: agents need your approval for each request and only see the structure of results, not values.",
                  "Sesión sensible: los agentes necesitan tu aprobación en cada petición y solo ven la estructura de los resultados, no los valores."))
     else:
         flag.unlink(missing_ok=True)
+        mark.unlink(missing_ok=True)
         print(tr("This session is no longer marked sensitive.", "Esta sesión ya no está marcada como sensible."))
 
 
@@ -1026,8 +1042,10 @@ def activate(shell=None) -> None:
     if "matplotlib.pyplot" in sys.modules:
         sys.modules["matplotlib.pyplot"].switch_backend("module://corral_mpl")
 
-    Checkpoints.restore(shell)
+    sensitive = Checkpoints.restore(shell)
     _session = Session(shell)
+    if sensitive:
+        (_session.dir / "sensitive").write_text("1\n")
     shell.events.register("pre_run_cell", _session.before_cell)
     shell.events.register("post_run_cell", _session.after_cell)
 
