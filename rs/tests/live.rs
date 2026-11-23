@@ -1,6 +1,7 @@
 //! Live tests: a real herdr (headless), R with Ark, and Corral's console, used
-//! the way agents use them. They need herdr, R, Ark (`corral ark --install`) and
-//! R's jsonlite, so they are ignored unless you ask for them:
+//! the way agents use them. They need herdr, R, Ark (`corral ark --install`),
+//! R's jsonlite and rlang, and uv for Python, so they are ignored unless you ask
+//! for them (the Live tests workflow, .github/workflows/live.yml, sets all that up):
 //!
 //!     cargo test --release --test live -- --ignored --test-threads 1
 //!

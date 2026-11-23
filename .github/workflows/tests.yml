@@ -1,6 +1,7 @@
 # Corral's tests on every pull request and every push to main. The live tests
-# (rs/tests/live.rs) need herdr, R and Ark, so they are #[ignore]d here; run them
-# on a machine that has those with `cargo test -- --ignored`.
+# (rs/tests/live.rs) need herdr, R, Ark and uv, so they are #[ignore]d here; the
+# Live tests workflow (live.yml) runs them, or `cargo test -- --ignored` on a
+# machine that has those.
 name: Tests
 
 on:
