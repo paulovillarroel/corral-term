@@ -45,12 +45,39 @@
     <h1>Install</h1>
     <p class="intro">Before you start you need a Linux system (or Windows with WSL), herdr, and R with two packages. The installer brings everything else, and it checks all of it before it changes anything: if something is missing, it tells you what to run and stops.</p>
 
+    <h2 id="windows">On Windows: set up WSL first</h2>
+    <p>Corral runs on Linux. On Windows it runs inside WSL (Windows Subsystem for Linux), which gives you a real Ubuntu next to Windows, with no virtual machine to manage. You set it up once, in about ten minutes, and you don't need to know Linux for it: copy each command, paste it, and press <kbd>Enter</kbd>. On Linux, skip to <a href="#before-you-install">Before you install</a>.</p>
+    <ol>
+    <li><p><strong>Check your Windows.</strong> You need Windows 11, or Windows 10 version 2004 or later. To see yours, press <kbd>Win</kbd>+<kbd>R</kbd>, type <code>winver</code> and press <kbd>Enter</kbd>.</p></li>
+    <li><p><strong>Install WSL with Ubuntu.</strong> In the Start menu, type <code>PowerShell</code>, right-click it and choose <em>Run as administrator</em>. Paste this and press <kbd>Enter</kbd>:</p>
+    <pre><code><span class="p">PS&gt; </span>wsl --install</code></pre>
+    <p>It turns on WSL 2 and installs Ubuntu. Restart the computer when it finishes.</p></li>
+    <li><p><strong>Create your Linux user.</strong> After the restart, open <strong>Ubuntu</strong> from the Start menu. The first time, it asks for a username and a password for Linux; they don't have to match your Windows ones. While you type the password, nothing appears on the screen: that's normal, keep typing and press <kbd>Enter</kbd>. Keep it: Ubuntu asks for it when a command starts with <code>sudo</code>.</p></li>
+    <li><p><strong>Bring Ubuntu up to date.</strong> In the Ubuntu window:</p>
+    <pre><code><span class="p">$ </span>sudo apt update &amp;&amp; sudo apt upgrade -y</code></pre></li>
+    <li><p><strong>Install R with <a href="https://github.com/r-lib/rig">rig</a>.</strong> rig installs R in your home folder and sets up ready-built packages, so nothing has to be compiled:</p>
+    <pre><code><span class="p">$ </span>curl -LsSf https://r-lib.github.io/rig/install.sh | sh
+<span class="p">$ </span>rig add release</code></pre>
+    <p>Close Ubuntu and open it again, so it finds R. Then add the two packages Corral needs:</p>
+    <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"))'</code></pre></li>
+    <li><p><strong>Install <a href="https://herdr.dev/tui/">herdr</a></strong>, the terminal workspace Corral lives in:</p>
+    <pre><code><span class="p">$ </span>curl -fsSL https://herdr.dev/install.sh | sh</code></pre></li>
+    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first and tells you if anything is still missing, with the command to fix it.</p></li>
+    </ol>
+
+    <h3>Working in WSL</h3>
+    <ul>
+    <li><strong>Where to open it.</strong> Ubuntu is in the Start menu. Windows Terminal (it comes with Windows 11; on Windows 10, get it from the Microsoft Store) opens it in a tab: choose Ubuntu from the menu next to the tabs. Then type <code>herdr</code> and press <kbd>Enter</kbd>.</li>
+    <li><strong>Keep your projects in Ubuntu.</strong> Work in your Linux home folder, <code>~</code> (for example <code>~/projects/sales</code>), not under <code>/mnt/c/…</code>, where your Windows C: drive shows up: Microsoft recommends it because it's much faster. <code>explorer.exe .</code> opens the folder you're in in Windows' File Explorer, and <code>\\wsl$</code> in its address bar shows all of Ubuntu's files.</li>
+    <li><strong>Your Windows browser does the rest.</strong> Mirador and R's help pages open in it.</li>
+    </ul>
+
     <h2 id="before-you-install">Before you install</h2>
     <p>Have these ready. You don't need to check them by hand: the installer does, and shows the command for anything missing.</p>
     <table>
     <thead><tr><th>You need</th><th>How to get it</th></tr></thead>
     <tbody>
-    <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it. The macOS version is in development.</td></tr>
+    <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it: <a href="#windows">step by step</a>. The macOS version is in development.</td></tr>
     <tr><td><code>curl</code> and <code>tar</code></td><td>Ubuntu has them. If not: <code>sudo apt install curl tar</code>.</td></tr>
     <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. Install it from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>; <code>herdr update</code> updates it.</td></tr>
     <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). Then the packages: httpgd draws the plots and jsonlite carries the variables.</td></tr>
