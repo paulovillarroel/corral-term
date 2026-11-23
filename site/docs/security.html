@@ -131,7 +131,7 @@
     <h3>Audit log</h3>
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
-    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, R or Python, the access level and output mode, whether it ran, was refused, blocked or left unanswered, its status, how much it printed and returned, how many plots it shared, and the code itself. The log stays on your machine.</p>
+    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, R or Python, the access level and output mode, whether it ran, was refused, blocked or left unanswered, its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
 
     <h3>Limits that are always on</h3>
     <ul>
@@ -140,6 +140,23 @@
       <li>Output is clipped to <code>--max-chars</code> (20,000 by default); the full output stays in a file on your machine.</li>
       <li>Code only runs in a console with Corral active, and it is typed where you can see it: if that console is in a hidden tab, or not started yet, Corral brings it into view (or starts it) first. If you are running something there yourself, the request waits for the prompt (<code>--wait-idle</code>, 20 s) and otherwise tells the agent the console is busy; it never types over a half-written line.</li>
     </ul>
+
+    <h2 id="on-disk">What stays on your disk</h2>
+    <p>Corral keeps what it writes about your work in <code>~/.local/state/corral/</code>. Only you can open that folder: Corral keeps it at <code>700</code>, fixes it if something opened it up (taking group's and others' access away from everything inside too), and <code>corral doctor</code> checks it. This matters on a shared server, where other users could otherwise read your history or your variables.</p>
+    <table>
+    <thead><tr><th>What</th><th>What it holds</th><th>How long</th></tr></thead>
+    <tbody>
+    <tr><td><code>audit.jsonl</code></td><td>Each agent request: the code, its outcome and how much it printed, not what it printed</td><td>90 days (<code>audit_days</code>)</td></tr>
+    <tr><td><code>history-r.jsonl</code></td><td>What you typed in the R console</td><td>The last 2,000 entries</td></tr>
+    <tr><td><code>sessions/&lt;id&gt;/</code></td><td>One folder per R or Python session: previews of your variables, plots</td><td>Until the session ends; the next console that starts deletes it</td></tr>
+    <tr><td><code>sessions/&lt;id&gt;/eval/</code></td><td>Each agent request's code and full output, for when it was clipped or timed out</td><td>A day</td></tr>
+    <tr><td><code>run/</code></td><td>Copies of scripts you sent whole to the console</td><td>A day</td></tr>
+    <tr><td><code>ark/</code></td><td>Keys to talk to Ark, readable only by you</td><td>Two days</td></tr>
+    <tr><td><code>ark.log</code>, <code>mirador.log</code></td><td>Ark's and Mirador's messages</td><td>Until they pass 5 MB; then they start over</td></tr>
+    <tr><td>The rest (<code>layout.json</code>, <code>sizes.json</code>, <code>mirador.json</code>…)</td><td>Corral's own state: panes, sizes, Mirador's address and token. None of your data</td><td>While you use Corral</td></tr>
+    </tbody>
+    </table>
+    <p>Script drafts go in <code>.corral/</code> inside your project, which git ignores, or in a private temporary folder when there is no project. A draft no editor has open is deleted, and so are folders older than two days. Uninstalling leaves <code>~/.local/state/corral</code> in place; delete it if you won't come back.</p>
 
     <h2>What Corral doesn't do</h2>
     <ul>
