@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.13
+
+`corral update`, from a terminal or the palette, and a clone that builds itself again after a `git pull`.
 
 - `corral update` installs the latest version when there is a newer one, with the same install line as the first time (it checks the package's SHA-256 and its build provenance). `corral update --check` only says whether there is one, and the palette has "Update: install the latest version of Corral", in a popup. A Corral installed from a copy of the repository isn't replaced: it says to `git pull` there and run `sh install.sh`.
 
