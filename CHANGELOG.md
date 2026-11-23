@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Every command prints its usage with `-h` or `--help` and stops there, without touching herdr or your files. Before, only some did: `corral config --help` printed `null`, `corral keys --help` opened the palette, and `close`, `doctor`, `theme` and others simply ran.
+
+### Fixes
+
+- `corral uninstall --help` uninstalled Corral. Now it prints the usage, and `uninstall`, `close`, `doctor` and `theme` refuse any argument they don't know, so a typo like `-help` doesn't run them.
+
 ## 0.1.9
 
 Agents know Corral's settings and docs, and the docs say where Corral runs.
