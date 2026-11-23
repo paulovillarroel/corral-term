@@ -158,7 +158,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         let c = herdr::split(&right, "down", Some(over_console), Some(&cwd))?;
         herdr::rename(&script_pane, "corral:script")?;
         let draft = scratch_script(Some(&ws), &cwd, lang)?;
-        herdr::run(&script_pane, &editor_command(&editor_cmd, &draft, true))?;
+        herdr::start(&script_pane, &editor_command(&editor_cmd, &draft, true))?;
         c
     } else {
         right.clone()
@@ -174,7 +174,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     herdr::rename(&console_pane, &console::label(lang))?;
     let env_console = if lang == "r" { std::env::var("CORRAL_R").ok() } else { None };
     let console_cmd = a.value("--console").map(String::from).or(env_console).unwrap_or_else(|| console::command(lang));
-    herdr::run(&console_pane, &console_cmd)?;
+    herdr::start(&console_pane, &console_cmd)?;
     if focus == "notebook" {
         layout::arrange_new(&ws, "notebook", ratio)?; // the console goes under the script
     }
@@ -184,7 +184,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         herdr::rename(&shell, "corral:shell")?;
     }
     if !agent.is_empty() {
-        herdr::run(&agent_pane, &agent)?;
+        herdr::start(&agent_pane, &agent)?;
     }
     println!("{}", obj(vec![
         ("tab", tab.get("tab").get("tab_id").clone()), ("agent", agent_pane.as_str().into()),
@@ -499,7 +499,7 @@ pub fn script(args: &[String]) -> Result<(), String> {
             scratch_script(ws.as_deref(), &project, &lang)?
         }
     };
-    herdr::run(&new, &editor_command(&editor_cmd, &target, file.is_none()))
+    herdr::start(&new, &editor_command(&editor_cmd, &target, file.is_none()))
 }
 
 // ----------------------------------------------------------------------- close

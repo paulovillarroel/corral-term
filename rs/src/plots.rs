@@ -564,7 +564,7 @@ pub fn cmd_view(args: &[String]) -> Result<(), String> {
         herdr::rename(&new, &trf!("table: {title}", "tabla: {title}"))?;
         let viewer = format!("CORRAL_TITLE={} CORRAL_SESSION={} {} _table {}; exit", env::sh_quote(&title),
                              env::sh_quote(session.as_deref().unwrap_or("")), console::program(), env::sh_quote(&shown));
-        return herdr::run(&new, &viewer);
+        return herdr::start(&new, &viewer);
     }
     std::env::set_var("CORRAL_TITLE", &title);
     if let Some(s) = &session {
