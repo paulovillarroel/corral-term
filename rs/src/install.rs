@@ -598,8 +598,9 @@ fn herdr_keys(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
     let taken: Vec<&str> = mine.iter().filter_map(|k| k.get("key").str()).collect();
     let bound: Vec<&str> = mine.iter().filter_map(|k| k.get("command").str()).collect();
     let wanted = std::fs::read_to_string(&example).ok().and_then(|t| toml::parse(&t).ok()).unwrap_or(Value::Null);
-    let wanted: Vec<Value> = wanted.get("keys").get("command").arr().iter()
-        .filter(|k| !bound.contains(&k.get("command").str().unwrap_or(""))).cloned().collect();
+    // Corral's shortcuts with the keys you changed (corral keys, Tab in the palette).
+    let wanted: Vec<Value> = crate::shortcuts::apply_herdr(wanted.get("keys").get("command").arr().to_vec(), &crate::shortcuts::own_keys())
+        .into_iter().filter(|k| !bound.contains(&k.get("command").str().unwrap_or(""))).collect();
     let skipped: Vec<String> = wanted.iter().filter_map(|k| k.get("key").str()).filter(|k| taken.contains(k)).map(String::from).collect();
     let adding: Vec<&Value> = wanted.iter().filter(|k| !taken.contains(&k.get("key").str().unwrap_or(""))).collect();
     let new_text = if adding.is_empty() {
@@ -721,9 +722,12 @@ fn add_unique(done: &mut Value, key: &str, items: impl IntoIterator<Item = Value
 
 fn fresh(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
     let cfg = fresh_dir().join("config.json");
-    let Some(ours) = std::fs::read_to_string(dest.join("fresh/config.json")).ok().and_then(|t| json::parse(&t).ok()) else {
+    let Some(mut ours) = std::fs::read_to_string(dest.join("fresh/config.json")).ok().and_then(|t| json::parse(&t).ok()) else {
         return step(tr("couldn't find Corral's editor configuration", "no encontré la configuración del editor de Corral"), State::Warn);
     };
+    // With the keys you changed (corral keys, Tab in the palette).
+    let keys = crate::shortcuts::apply_editor(ours.get("keybindings").arr().to_vec(), &crate::shortcuts::own_keys());
+    ours.set("keybindings", Value::Arr(keys));
     if cfg.exists() {
         match std::fs::read_to_string(&cfg).ok().and_then(|t| json::parse(&t).ok()) {
             Some(user @ Value::Obj(_)) => {
