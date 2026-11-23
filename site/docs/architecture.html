@@ -85,7 +85,7 @@
     <table>
       <thead><tr><th>Modules</th><th>What they do</th></tr></thead>
       <tbody>
-        <tr><td><code>ark</code>, <code>zmtp</code>, <code>sha256</code></td><td>The R console in front of Ark: ZeroMQ, Jupyter messages and their signatures, a line editor with history and completion.</td></tr>
+        <tr><td><code>ark</code>, <code>zmtp</code>, <code>sha256</code></td><td>The R console in front of Ark: ZeroMQ, Jupyter messages and their signatures, a line editor with history and completion. Every message from Ark must carry its HMAC-SHA256 signature or it is dropped; a channel that drops while Ark runs is opened again, and a crashed R starts again in the same console.</td></tr>
         <tr><td><code>lsp</code></td><td>Connects the editor to Ark's language server, inside your live R session.</td></tr>
         <tr><td><code>console</code>, <code>workspace</code>, <code>layout</code></td><td>The layouts, which pane gets the space, and finding, starting or bringing in a console.</td></tr>
         <tr><td><code>send</code>, <code>eval</code></td><td>Code from the editor (<kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>) and from agents into the console.</td></tr>
