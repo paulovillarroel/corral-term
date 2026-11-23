@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.15
+
+The layout opens the agent you have, the installer asks which one when you have several, and a shell that asks something as it starts no longer swallows Corral's commands.
 
 - The layout opens the agent you have. It opened Claude Code unless you set another, so with opencode, Codex or Gemini CLI the agent pane said command not found. Now it opens the first one installed of Claude Code, Codex, Gemini CLI and opencode, or a shell when there is none, with a notice saying how to choose. The palette chooses one ("Agents: use … in the agent pane", or none), `corral config agent` takes any command, and the installer says which agent it found. With several and none chosen, the installer asks once which one to open, in a terminal; Enter leaves it to Corral.
 - Gemini CLI finds Corral's skill: the installer also puts it in `~/.gemini/skills` when Gemini CLI is installed.
