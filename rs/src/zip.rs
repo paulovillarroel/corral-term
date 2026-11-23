@@ -292,3 +292,210 @@ pub fn tar_member(tar: &[u8], name: &str) -> Option<Vec<u8>> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn unhex(h: &str) -> Vec<u8> {
+        (0..h.len()).step_by(2).map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap()).collect()
+    }
+
+    /// Made with Python's zipfile: "bin/" (a folder), "bin/ark" (stored),
+    /// "share/doc/README" (deflated), and three that try to get out of the
+    /// target: "../evil", "/abs" and "bin/../../evil2".
+    const ZIP: &str = concat!(
+    "504b0304140000000000000021000000000000000000000000000400000062696e2f504b0304140000000000000021000db8",
+    "728813000000130000000700000062696e2f61726b23212f62696e2f73680a6563686f2061726b0a504b0304140000000800",
+    "000021005af9e04b09000000a00000001000000073686172652f646f632f524541444d45732cca56701cc41800504b030414",
+    "0000000000000021005b0cf8920700000007000000070000002e2e2f6576696c65736361706564504b030414000000000000",
+    "0021005676dfa60800000008000000040000002f6162736162736f6c757465504b0304140000000000000021001553943a0b",
+    "0000000b0000000f00000062696e2f2e2e2f2e2e2f6576696c326573636170656420746f6f504b0102140314000000000000",
+    "00210000000000000000000000000004000000000000000000000080010000000062696e2f504b0102140314000000000000",
+    "0021000db87288130000001300000007000000000000000000000080012200000062696e2f61726b504b0102140314000000",
+    "0800000021005af9e04b09000000a000000010000000000000000000000080015a00000073686172652f646f632f52454144",
+    "4d45504b01021403140000000000000021005b0cf89207000000070000000700000000000000000000008001910000002e2e",
+    "2f6576696c504b01021403140000000000000021005676dfa608000000080000000400000000000000000000008001bd0000",
+    "002f616273504b01021403140000000000000021001553943a0b0000000b0000000f00000000000000000000008001e70000",
+    "0062696e2f2e2e2f2e2e2f6576696c32504b05060000000006000600490100001f0100000000",
+    );
+
+    /// Raw deflate from zlib: a stored block, a fixed-Huffman block, and a
+    /// dynamic-Huffman one (of `lcg_text(400)`).
+    const STORED: &str = "010c00f3ff73746f72656420626c6f636b";
+    const FIXED: &str = "cb48cdc9c957c8402701";
+    const DYNAMIC: &str = concat!(
+    "2d90c11544210803ef56616b04837efb2f6013dc130f0843600e20588b83e48952041931072e4f760caaceefc6a99a8e8cc5",
+    "04b672d55f4cdc2d3df3a378e2409c2c0c708b87fcdcb78eaecfaed772f41ef595a77ca87e6ac13e4e73badffc28e9f07c52",
+    "fc130b496cfb333fd2fe106ffef13517a13bb2f5f1ee94af94ce3cf96ceee0955e7c5ef3f17c6a9edebbc4d55bf4272ddefd",
+    "97f6b7cce17faf740595fb4fc3b93814ef717457287eef2fe684ffd7feff77e4fa01",
+    );
+
+    /// gzip with a file name (FNAME) of "gzip payload " ten times.
+    const GZIP: &str = concat!(
+    "1f8b08080000000002ff636f7272616c2e746172004bafca2c502848acccc94f4c51481f080e00eb9eda0382000000",
+    );
+
+    /// The text DYNAMIC holds: letters picked by a small LCG, so they repeat unevenly.
+    fn lcg_text(n: usize) -> Vec<u8> {
+        let alphabet = b"aaaabbbccdeeeeeeffghij \n";
+        let mut x: u64 = 12345;
+        (0..n).map(|_| {
+            x = (x * 1103515245 + 12345) & 0x7fff_ffff;
+            alphabet[(x % 24) as usize]
+        }).collect()
+    }
+
+    /// An empty folder of its own, with `out/` inside as the target.
+    fn scratch(name: &str) -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!("corral-zip-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let out = base.join("out");
+        (base, out)
+    }
+
+    #[test]
+    fn extracts_stored_deflated_and_folders() {
+        let (base, out) = scratch("ok");
+        let names = extract(&unhex(ZIP), &out).unwrap();
+        assert_eq!(names, ["bin/ark", "share/doc/README"]);
+        assert_eq!(std::fs::read(out.join("bin/ark")).unwrap(), b"#!/bin/sh\necho ark\n");
+        assert_eq!(std::fs::read(out.join("share/doc/README")).unwrap(), b"Ark ".repeat(40));
+        assert!(out.join("bin").is_dir());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn never_writes_outside_the_target() {
+        let (base, out) = scratch("escape");
+        extract(&unhex(ZIP), &out).unwrap();
+        assert!(!base.join("evil").exists());
+        assert!(!base.join("evil2").exists());
+        assert!(!out.join("abs").exists());
+        let mut everything = Vec::new();
+        let mut stack = vec![base.clone()];
+        while let Some(dir) = stack.pop() {
+            for e in std::fs::read_dir(&dir).unwrap().flatten() {
+                let p = e.path();
+                everything.push(p.strip_prefix(&base).unwrap().to_string_lossy().into_owned());
+                if p.is_dir() {
+                    stack.push(p);
+                }
+            }
+        }
+        everything.sort();
+        assert_eq!(everything, ["out", "out/bin", "out/bin/ark", "out/share", "out/share/doc", "out/share/doc/README"]);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_damaged_file_is_refused() {
+        let (base, out) = scratch("crc");
+        let mut zip = unhex(ZIP);
+        let at = zip.windows(8).position(|w| w == b"echo ark").unwrap();
+        zip[at] = b'E';
+        let e = extract(&zip, &out).unwrap_err();
+        assert!(e.contains("CRC"), "{e}");
+        assert!(!out.join("bin/ark").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn unknown_methods_and_broken_archives_are_errors() {
+        let (base, out) = scratch("bad");
+        // The central directory says method 12 (bzip2) for README.
+        let mut zip = unhex(ZIP);
+        let name = b"share/doc/README";
+        let entry = zip.windows(4).enumerate()
+            .filter(|(_, w)| *w == [0x50, 0x4b, 0x01, 0x02])
+            .map(|(i, _)| i)
+            .find(|&i| zip[i + 46..].starts_with(name)).unwrap();
+        zip[entry + 10] = 12;
+        assert!(extract(&zip, &out).unwrap_err().contains("12"));
+        let good = unhex(ZIP);
+        assert!(extract(&good[..good.len() - 30], &out).is_err(), "cut before the index");
+        assert!(extract(&good[..100], &out).is_err(), "no index at all");
+        assert!(extract(b"not a zip", &out).is_err());
+        assert!(extract(b"", &out).is_err());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn inflates_the_three_block_kinds() {
+        assert_eq!(inflate(&unhex(STORED), 0).unwrap(), b"stored block");
+        assert_eq!(inflate(&unhex(FIXED), 0).unwrap(), b"hello hello hello hello");
+        assert_eq!(inflate(&unhex(DYNAMIC), 400).unwrap(), lcg_text(400));
+    }
+
+    #[test]
+    fn broken_deflate_is_an_error_not_a_panic() {
+        let dynamic = unhex(DYNAMIC);
+        for cut in [1, 2, 10, dynamic.len() / 2, dynamic.len() - 1] {
+            assert!(inflate(&dynamic[..cut], 0).is_err(), "cut at {cut}");
+        }
+        assert!(inflate(&[], 0).is_err());
+        assert!(inflate(&[0x07], 0).is_err(), "block type 3 doesn't exist");
+        assert!(inflate(&[0x01, 0x05, 0x00, 0x00, 0x00], 0).is_err(), "stored LEN without its complement");
+        // Random bytes: whatever they decode to, inflate has to return.
+        let mut garbage = 0x9e3779b9u32;
+        for _ in 0..200 {
+            let data: Vec<u8> = (0..64).map(|_| {
+                garbage ^= garbage << 13;
+                garbage ^= garbage >> 17;
+                garbage ^= garbage << 5;
+                garbage as u8
+            }).collect();
+            let _ = inflate(&data, 0); // must return, whatever it says
+        }
+    }
+
+    #[test]
+    fn gunzip_reads_one_member() {
+        let gz = unhex(GZIP);
+        assert_eq!(gz[3] & 8, 8, "the fixture carries a file name");
+        assert_eq!(gunzip(&gz).unwrap(), b"gzip payload ".repeat(10));
+        let mut damaged = gz.clone();
+        let n = damaged.len();
+        damaged[n - 8] ^= 1; // the CRC
+        assert!(gunzip(&damaged).is_err());
+        assert!(gunzip(&gz[..17]).is_err(), "too short");
+        assert!(gunzip(b"PK\x03\x04 not gzip at all").is_err());
+    }
+
+    /// A tar header block (ustar) for a file or a folder.
+    fn tar_header(name: &str, prefix: &str, size: usize, kind: u8) -> Vec<u8> {
+        let mut h = vec![0u8; 512];
+        h[..name.len()].copy_from_slice(name.as_bytes());
+        let size = format!("{size:011o}");
+        h[124..135].copy_from_slice(size.as_bytes());
+        h[156] = kind;
+        h[257..262].copy_from_slice(b"ustar");
+        h[345..345 + prefix.len()].copy_from_slice(prefix.as_bytes());
+        h
+    }
+
+    fn tar_file(name: &str, prefix: &str, body: &[u8]) -> Vec<u8> {
+        let mut t = tar_header(name, prefix, body.len(), b'0');
+        t.extend_from_slice(body);
+        t.resize(t.len().div_ceil(512) * 512, 0);
+        t
+    }
+
+    #[test]
+    fn tar_member_finds_a_file_by_name() {
+        let mut tar = tar_file("README", "corral-term", b"hello");
+        tar.extend(tar_header("fresh", "pkg", 0, b'5')); // a folder named like a file we want
+        tar.extend(tar_file("fresh", "fresh-editor-0.5.9/bin", &[7u8; 600]));
+        tar.extend(vec![0u8; 1024]);
+        assert_eq!(tar_member(&tar, "README").unwrap(), b"hello");
+        assert_eq!(tar_member(&tar, "fresh").unwrap(), vec![7u8; 600]);
+        assert!(tar_member(&tar, "missing").is_none());
+        // A header that claims more than there is.
+        let mut short = tar_header("big", "", 10_000, b'0');
+        short.extend_from_slice(&[1u8; 100]);
+        assert!(tar_member(&short, "big").is_none());
+        assert!(tar_member(&[], "README").is_none());
+    }
+}

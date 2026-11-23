@@ -7,6 +7,9 @@ use crate::sha256::hmac_hex;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 
+/// How long a kernel has to answer the ZMTP handshake.
+const HANDSHAKE: std::time::Duration = std::time::Duration::from_secs(10);
+
 pub struct Socket {
     stream: TcpStream,
 }
@@ -20,8 +23,15 @@ impl Socket {
     /// shell and stdin sockets share one, so the kernel can ask for input
     /// (`readline()`) on the stdin channel of whoever sent the request.
     pub fn connect_as(addr: &str, socket_type: &str, identity: Option<&[u8]>) -> io::Result<Socket> {
+        Socket::connect_within(addr, socket_type, identity, HANDSHAKE)
+    }
+
+    /// The handshake has `limit` to finish: a kernel that stalls in the middle
+    /// of it is an error, not a console that waits forever.
+    fn connect_within(addr: &str, socket_type: &str, identity: Option<&[u8]>, limit: std::time::Duration) -> io::Result<Socket> {
         let mut stream = TcpStream::connect(addr)?;
         stream.set_nodelay(true)?;
+        stream.set_read_timeout(Some(limit))?;
         // Greeting: signature, version 3.0, mechanism NULL, as-server 0, filler.
         let mut greeting = [0u8; 64];
         greeting[0] = 0xFF;
@@ -55,6 +65,7 @@ impl Socket {
                 break; // the peer's READY command
             }
         }
+        sock.stream.set_read_timeout(None)?; // from here, the caller decides how long to wait
         Ok(sock)
     }
 
@@ -85,8 +96,13 @@ impl Socket {
             self.stream.read_exact(&mut n)?;
             n[0] as usize
         };
-        let mut body = vec![0u8; len];
-        self.stream.read_exact(&mut body)?;
+        // Grown as the bytes arrive: a damaged length must not reserve memory
+        // it will never fill (a huge one would abort the process).
+        let mut body = Vec::with_capacity(len.min(1 << 20));
+        (&mut self.stream).take(len as u64).read_to_end(&mut body)?;
+        if body.len() < len {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
         Ok((flags[0], body))
     }
 
@@ -215,4 +231,339 @@ fn iso_now() -> String {
     let year = yoe + era * 400 + (month <= 2) as i64;
     format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:06}Z",
             rem / 3600, rem % 3600 / 60, rem % 60, d.subsec_micros())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::Duration;
+
+    // A broken exchange fails the test instead of hanging it.
+    const WAIT: Option<Duration> = Some(Duration::from_secs(5));
+
+    fn listen() -> (TcpListener, String) {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap().to_string();
+        (l, addr)
+    }
+
+    /// One frame as the peer reads it, decoded on its own (RFC 23).
+    fn frame(s: &mut TcpStream) -> (u8, Vec<u8>) {
+        let mut flags = [0u8; 1];
+        s.read_exact(&mut flags).unwrap();
+        let len = if flags[0] & 0x02 != 0 {
+            let mut n = [0u8; 8];
+            s.read_exact(&mut n).unwrap();
+            u64::from_be_bytes(n) as usize
+        } else {
+            let mut n = [0u8; 1];
+            s.read_exact(&mut n).unwrap();
+            n[0] as usize
+        };
+        let mut body = vec![0u8; len];
+        s.read_exact(&mut body).unwrap();
+        (flags[0], body)
+    }
+
+    fn put(s: &mut TcpStream, flags: u8, body: &[u8]) {
+        s.write_all(&[flags]).unwrap();
+        if flags & 0x02 != 0 {
+            s.write_all(&(body.len() as u64).to_be_bytes()).unwrap();
+        } else {
+            s.write_all(&[body.len() as u8]).unwrap();
+        }
+        s.write_all(body).unwrap();
+    }
+
+    /// A message's frames, as the peer reads them, until one without MORE.
+    fn message(s: &mut TcpStream) -> Vec<(u8, Vec<u8>)> {
+        let mut out = vec![frame(s)];
+        while out.last().unwrap().0 & 0x01 != 0 {
+            out.push(frame(s));
+        }
+        out
+    }
+
+    /// The properties of a READY command: (name, value) in order.
+    fn properties(ready: &[u8]) -> Vec<(String, Vec<u8>)> {
+        let skip = 1 + ready[0] as usize;
+        let mut p = &ready[skip..];
+        let mut out = Vec::new();
+        while !p.is_empty() {
+            let n = p[0] as usize;
+            let name = String::from_utf8(p[1..1 + n].to_vec()).unwrap();
+            let len = u32::from_be_bytes(p[1 + n..5 + n].try_into().unwrap()) as usize;
+            out.push((name, p[5 + n..5 + n + len].to_vec()));
+            p = &p[5 + n + len..];
+        }
+        out
+    }
+
+    /// The kernel's side of the handshake: returns our greeting and READY.
+    fn handshake(s: &mut TcpStream) -> ([u8; 64], Vec<u8>) {
+        s.set_read_timeout(WAIT).unwrap();
+        let mut theirs = [0u8; 64];
+        s.read_exact(&mut theirs).unwrap();
+        let mut ours = [0u8; 64];
+        ours[0] = 0xFF;
+        ours[9] = 0x7F;
+        ours[10] = 3;
+        ours[11] = 1;
+        ours[12..16].copy_from_slice(b"NULL");
+        ours[32] = 1; // as-server
+        s.write_all(&ours).unwrap();
+        let (flags, ready) = frame(s);
+        assert_eq!(flags, 0x04, "READY goes as a command frame");
+        let mut answer = vec![5u8];
+        answer.extend_from_slice(b"READY");
+        answer.push(11);
+        answer.extend_from_slice(b"Socket-Type");
+        answer.extend_from_slice(&6u32.to_be_bytes());
+        answer.extend_from_slice(b"ROUTER");
+        put(s, 0x04, &answer);
+        (theirs, ready)
+    }
+
+    /// Run `kernel` as the peer and connect to it.
+    fn with_kernel<T: Send + 'static>(identity: Option<&[u8]>, kernel: impl FnOnce(&mut TcpStream) -> T + Send + 'static)
+        -> (io::Result<Socket>, thread::JoinHandle<T>) {
+        let (l, addr) = listen();
+        let peer = thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            kernel(&mut s)
+        });
+        let sock = Socket::connect_as(&addr, "DEALER", identity);
+        if let Ok(sock) = &sock {
+            sock.stream.set_read_timeout(WAIT).unwrap();
+        }
+        (sock, peer)
+    }
+
+    #[test]
+    fn greeting_and_ready_follow_zmtp_3() {
+        let (sock, peer) = with_kernel(Some(b"corral-shell"), |s| handshake(s));
+        sock.unwrap();
+        let (greeting, ready) = peer.join().unwrap();
+        assert_eq!(greeting[0], 0xFF);
+        assert_eq!(&greeting[1..9], &[0u8; 8]);
+        assert_eq!(greeting[9], 0x7F);
+        assert_eq!(greeting[10], 3);
+        assert_eq!(&greeting[12..16], b"NULL");
+        assert!(greeting[16..32].iter().all(|&b| b == 0), "mechanism padded with zeros");
+        assert_eq!(greeting[32], 0, "we are the client");
+        assert!(greeting[33..].iter().all(|&b| b == 0), "filler");
+        assert_eq!(&ready[..6], b"\x05READY");
+        assert_eq!(properties(&ready), [("Socket-Type".to_string(), b"DEALER".to_vec()),
+                                        ("Identity".to_string(), b"corral-shell".to_vec())]);
+    }
+
+    #[test]
+    fn no_identity_sends_only_the_socket_type() {
+        let (sock, peer) = with_kernel(None, |s| handshake(s).1);
+        sock.unwrap();
+        assert_eq!(properties(&peer.join().unwrap()), [("Socket-Type".to_string(), b"DEALER".to_vec())]);
+    }
+
+    #[test]
+    fn refuses_a_peer_that_isnt_zmtp() {
+        let (sock, peer) = with_kernel(None, |s| {
+            let mut ours = [0u8; 64];
+            s.read_exact(&mut ours).unwrap();
+            let mut http = [b' '; 64];
+            http[..17].copy_from_slice(b"HTTP/1.1 200 OK\r\n");
+            s.write_all(&http).unwrap();
+        });
+        assert_eq!(sock.err().map(|e| e.kind()), Some(io::ErrorKind::InvalidData));
+        peer.join().unwrap();
+    }
+
+    #[test]
+    fn short_long_and_multipart_frames() {
+        let long = vec![b'x'; 300];
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            let got = message(s);
+            // The answer, with a heartbeat command between its frames.
+            put(s, 0x01, b"one");
+            put(s, 0x04, b"\x04PING\x00\x00");
+            put(s, 0x02, &vec![7u8; 70_000]);
+            got
+        });
+        let mut sock = sock.unwrap();
+        sock.send(&[b"a", &long, b"", &[9u8; 255]]).unwrap();
+        let parts = sock.recv().unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], b"one");
+        assert_eq!(parts[1], vec![7u8; 70_000]);
+        let got = peer.join().unwrap();
+        assert_eq!(got[0], (0x01, b"a".to_vec()));
+        assert_eq!(got[1], (0x03, long), "past 255 bytes: LONG, 8-byte length");
+        assert_eq!(got[2], (0x01, Vec::new()));
+        assert_eq!(got[3], (0x00, vec![9u8; 255]), "255 bytes still fit a short frame");
+    }
+
+    #[test]
+    fn subscribe_all_is_one_frame() {
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            message(s)
+        });
+        sock.unwrap().subscribe_all().unwrap();
+        assert_eq!(peer.join().unwrap(), [(0x00, vec![1u8])]);
+    }
+
+    #[test]
+    fn a_kernel_that_goes_away_is_an_error() {
+        // Gone between messages.
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+        });
+        let mut sock = sock.unwrap();
+        peer.join().unwrap();
+        assert!(sock.recv().is_err());
+        // Gone halfway through one.
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            put(s, 0x01, b"first of two");
+        });
+        let mut sock = sock.unwrap();
+        peer.join().unwrap();
+        assert!(sock.recv().is_err());
+    }
+
+    #[test]
+    fn a_damaged_length_is_an_error_not_a_crash() {
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            s.write_all(&[0x02]).unwrap();
+            s.write_all(&(1u64 << 40).to_be_bytes()).unwrap(); // a terabyte
+            s.write_all(b"only this").unwrap();
+        });
+        let mut sock = sock.unwrap();
+        peer.join().unwrap();
+        assert_eq!(sock.recv().err().map(|e| e.kind()), Some(io::ErrorKind::UnexpectedEof));
+    }
+
+    #[test]
+    fn messages_are_signed_over_the_four_parts() {
+        let key = b"8e5f6d1c-key".to_vec();
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            message(s)
+        });
+        let mut sock = sock.unwrap();
+        let content = obj(vec![("code", "1 + 1".into())]);
+        let parent = obj(vec![("msg_id", "parent-1".into())]);
+        let id = send_reply(&mut sock, &key, "session-1", "execute_request", &content, &parent).unwrap();
+        let frames = peer.join().unwrap();
+        let flags: Vec<u8> = frames.iter().map(|f| f.0).collect();
+        assert_eq!(flags, [1, 1, 1, 1, 1, 0]);
+        let f: Vec<&[u8]> = frames.iter().map(|f| f.1.as_slice()).collect();
+        assert_eq!(f[0], b"<IDS|MSG>");
+        // HMAC-SHA256 over header, parent header, metadata and content, in hex.
+        let expected = hmac_hex(&key, &[&[f[2], f[3], f[4], f[5]].concat()]);
+        assert_eq!(f[1], expected.as_bytes());
+        let header = json::parse(std::str::from_utf8(f[2]).unwrap()).unwrap();
+        assert_eq!(header.get("msg_id").str(), Some(id.as_str()));
+        assert_eq!(header.get("session").str(), Some("session-1"));
+        assert_eq!(header.get("msg_type").str(), Some("execute_request"));
+        assert_eq!(header.get("version").str(), Some("5.3"));
+        assert!(header.get("username").str().is_some());
+        assert!(header.get("date").str().is_some_and(|d| d.ends_with('Z')));
+        assert_eq!(json::parse(std::str::from_utf8(f[3]).unwrap()).unwrap(), parent);
+        assert_eq!(f[4], b"{}");
+        assert_eq!(json::parse(std::str::from_utf8(f[5]).unwrap()).unwrap(), content);
+    }
+
+    #[test]
+    fn without_a_key_the_signature_is_empty() {
+        let (sock, peer) = with_kernel(None, |s| {
+            handshake(s);
+            message(s)
+        });
+        send_message(&mut sock.unwrap(), b"", "s", "kernel_info_request", &Value::obj()).unwrap();
+        let frames = peer.join().unwrap();
+        assert_eq!(frames.len(), 6);
+        assert!(frames[1].1.is_empty());
+    }
+
+    #[test]
+    fn parse_full_finds_the_delimiter() {
+        let parts: Vec<Vec<u8>> = [&b"route-1"[..], b"route-2", b"<IDS|MSG>", b"sig", br#"{"msg_type":"stream"}"#,
+                                   br#"{"msg_id":"p"}"#, b"{}", br#"{"text":"hi"}"#, b"buffer"]
+            .iter().map(|p| p.to_vec()).collect();
+        let (header, parent, content) = parse_full(&parts).unwrap();
+        assert_eq!(header.get("msg_type").str(), Some("stream"));
+        assert_eq!(parent.get("msg_id").str(), Some("p"));
+        assert_eq!(content.get("text").str(), Some("hi"));
+        // A broken parent header doesn't lose the message.
+        let mut broken = parts.clone();
+        broken[5] = b"not json".to_vec();
+        assert!(parse_full(&broken).unwrap().1.get("msg_id").is_null());
+        assert!(parse_full(&parts[3..]).is_none(), "no delimiter");
+        assert!(parse_full(&parts[..6]).is_none(), "no content");
+        let mut bad = parts.clone();
+        bad[4] = b"{".to_vec();
+        assert!(parse_full(&bad).is_none(), "a header that isn't JSON");
+    }
+
+    #[test]
+    fn uuid_and_date_shapes() {
+        let u = uuid();
+        let groups: Vec<&str> = u.split('-').collect();
+        assert_eq!(groups.iter().map(|g| g.len()).collect::<Vec<_>>(), [8, 4, 4, 4, 12]);
+        assert!(u.chars().all(|c| c == '-' || c.is_ascii_hexdigit()));
+        assert!(groups[2].starts_with('4') && groups[3].starts_with('a'), "{u}");
+        assert_ne!(uuid(), u);
+        let d = iso_now(); // 2026-11-23T10:15:00.123456Z
+        assert_eq!(d.len(), 27, "{d}");
+        assert_eq!((&d[4..5], &d[7..8], &d[10..11], &d[13..14], &d[16..17], &d[19..20], &d[26..]), ("-", "-", "T", ":", ":", ".", "Z"));
+        assert!(d[..4].parse::<u32>().unwrap() >= 2024);
+    }
+
+    #[test]
+    fn reads_a_connection_file() {
+        let path = std::env::temp_dir().join(format!("corral-zmtp-test-{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"ip":"127.0.0.1","key":"abc","shell_port":5001,"iopub_port":5002,
+                                  "stdin_port":5003,"control_port":5004,"hb_port":5005,"signature_scheme":"hmac-sha256"}"#).unwrap();
+        let c = Connection::read(path.to_str().unwrap()).unwrap();
+        assert_eq!((c.ip.as_str(), c.key.as_slice()), ("127.0.0.1", &b"abc"[..]));
+        assert_eq!((c.shell, c.iopub, c.stdin, c.control), (5001, 5002, 5003, 5004));
+        assert_eq!(c.addr(c.shell), "127.0.0.1:5001");
+        std::fs::write(&path, r#"{"ip":"127.0.0.1","iopub_port":5002}"#).unwrap();
+        assert!(Connection::read(path.to_str().unwrap()).is_err(), "no shell port");
+        let _ = std::fs::remove_file(&path);
+        assert!(Connection::read(path.to_str().unwrap()).is_err(), "no file");
+    }
+}
+
+#[cfg(test)]
+mod handshake_tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::time::{Duration, Instant};
+
+    /// A peer that sends its greeting and then says nothing more.
+    #[test]
+    fn a_kernel_stalling_in_the_handshake_is_an_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let peer = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut greeting = [0u8; 64];
+            greeting[0] = 0xFF;
+            greeting[9] = 0x7F;
+            greeting[10] = 3;
+            greeting[12..16].copy_from_slice(b"NULL");
+            s.write_all(&greeting).unwrap();
+            std::thread::sleep(Duration::from_secs(1)); // no READY
+        });
+        let started = Instant::now();
+        let result = Socket::connect_within(&addr, "DEALER", None, Duration::from_millis(300));
+        assert!(result.is_err(), "the handshake finished without READY");
+        assert!(started.elapsed() < Duration::from_millis(900), "it waited {:?}", started.elapsed());
+        peer.join().unwrap();
+    }
 }

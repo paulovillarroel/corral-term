@@ -149,4 +149,53 @@ mod tests {
         assert_eq!(hmac_hex(b"Jefe", &[b"what do ya want ", b"for nothing?"]),
                    "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
     }
+
+    #[test]
+    fn hmac_rfc4231_more_cases() {
+        // 3: key and data of repeated bytes.
+        assert_eq!(hmac_hex(&[0xaa; 20], &[&[0xdd; 50]]),
+                   "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe");
+        // 4: a 25-byte key 0x01..0x19.
+        let key: Vec<u8> = (1..=25).collect();
+        assert_eq!(hmac_hex(&key, &[&[0xcd; 50]]),
+                   "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b");
+        // 6 and 7: a key longer than the block is hashed first.
+        assert_eq!(hmac_hex(&[0xaa; 131], &[b"Test Using Larger Than Block-Size Key - Hash Key First"]),
+                   "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54");
+        let data = b"This is a test using a larger than block-size key and a larger than block-size data. \
+The key needs to be hashed before being used by the HMAC algorithm.";
+        assert_eq!(hmac_hex(&[0xaa; 131], &[data]),
+                   "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2");
+        // A 64-byte key is used as it is (the boundary between the two paths).
+        assert_eq!(hmac_hex(&[0x0b; 64], &[b"x"]), hmac_hex(&[0x0b; 64], &[b"", b"x", b""]));
+    }
+
+    #[test]
+    fn padding_boundaries() {
+        // Lengths around the 56-byte mark, where the length field spills into a second block.
+        for (n, hex) in [
+            (55, "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"),
+            (56, "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a"),
+            (63, "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34"),
+            (64, "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb"),
+            (65, "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0"),
+            (119, "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb"),
+            (120, "2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c"),
+        ] {
+            assert_eq!(sha256_hex(&vec![b'a'; n]), hex, "{n} bytes");
+        }
+    }
+
+    #[test]
+    fn pieces_hash_like_the_whole() {
+        let data: Vec<u8> = (0..1000u32).map(|i| (i * 31 % 251) as u8).collect();
+        let whole = sha256(&data);
+        for size in [1, 3, 63, 64, 65, 200] {
+            let mut h = Sha256::new();
+            for piece in data.chunks(size) {
+                h.update(piece);
+            }
+            assert_eq!(h.finish(), whole, "pieces of {size}");
+        }
+    }
 }
