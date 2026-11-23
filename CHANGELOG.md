@@ -4,12 +4,14 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- Change a shortcut from the palette: Tab on it, then press the new key; Backspace puts back Corral's. herdr takes it at once. From a terminal, `corral keys --reset ID` gives a shortcut back Corral's key.
 - Choose the R version (with rig) or the Python version (with uv) from the palette: "Console: R version (rig)" and "Console: Python version (uv)" open a window with the installed versions, and Enter uses one; if that console is open, Corral asks whether to restart it. Corral runs the chosen R without changing rig's default, so the rest of the system keeps it. Inside a uv project the Python goes to the project's `.python-version` (`uv python pin`); outside one, to `uv run --python`. From a terminal or an agent: `corral versions r|python [VERSION] [--list|--json] [--restart]`.
 - Easier keys to remember: `ctrl+b shift+s` (S for script) opens or switches to the layout focused on the code, instead of `ctrl+b shift+a`, and `ctrl+b shift+q` (Q for quit) closes Corral, instead of `ctrl+b shift+c`. `ctrl+b a` stays. Without shift, `ctrl+b s` and `ctrl+b q` are still herdr's own (settings and detach). The installer updates the shortcuts when you update Corral.
 - Every command prints its usage with `-h` or `--help` and stops there, without touching herdr or your files. Before, only some did: `corral config --help` printed `null`, `corral keys --help` opened the palette, and `close`, `doctor`, `theme` and others simply ran.
 
 ### Fixes
 
+- A shortcut changed with `corral keys --change` went back to Corral's key the next time Corral updated (herdr's), or got Corral's keys back next to yours (the editor's). Corral now keeps your keys in its config, under `keys`, and the installer puts them back.
 - Switching between "agent first" and "code first" (ctrl+b a, ctrl+b shift+s) opened a whole new layout: a new R or Python session, an empty draft and a new agent, while the old ones were left running unlabeled in another tab. With a layout open, they now swap the agent and the script in place, and the console's objects, the draft and the agent stay; only closing Corral ends them.
 - With rig, after `rig default` moved to another R, Corral's R console kept starting the previous one, while the editor and `corral doctor` used the new one. The console now follows it too.
 - `corral uninstall --help` uninstalled Corral. Now it prints the usage, and `uninstall`, `close`, `doctor` and `theme` refuse any argument they don't know, so a typo like `-help` doesn't run them.
