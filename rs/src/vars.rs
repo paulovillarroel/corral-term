@@ -652,7 +652,7 @@ pub fn split_pane() -> Result<String, String> {
 pub fn split_under(pane: &str, ratio: f64) -> Result<String, String> {
     let new = herdr::split(pane, "down", Some(ratio), None)?;
     herdr::rename(&new, "corral:vars")?;
-    herdr::run(&new, &format!("{} vars --pane", console::program()))?;
+    herdr::start(&new, &format!("{} vars --pane", console::program()))?;
     Ok(new)
 }
 

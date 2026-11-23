@@ -273,7 +273,7 @@ fn start_pane(lang: &str, ws: Option<&str>, cwd: &str, near: Option<&str>) -> Re
             .ok_or(tr("herdr did not create the tab", "herdr no creó la pestaña"))?
     };
     herdr::rename(&pane, &label(lang))?;
-    herdr::run(&pane, &command(lang))?;
+    herdr::start(&pane, &command(lang))?;
     Ok(pane)
 }
 
@@ -351,7 +351,7 @@ pub fn ensure_running(pane: &str, lang: &str) -> bool {
         // (the terminal's answer to a question it had asked): Ctrl+U clears it first,
         // or the shell would read it with the command and refuse both.
         let _ = herdr::send_text(pane, "\x15");
-        return herdr::run(pane, &command(lang)).is_ok();
+        return herdr::start(pane, &command(lang)).is_ok();
     }
     false
 }

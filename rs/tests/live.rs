@@ -1017,3 +1017,27 @@ fn update_from_the_palette_runs_in_a_popup() {
     live.run("herdr", &["plugin", "action", "invoke", "update", "--plugin", "corral"]);
     wait_for(Duration::from_secs(20), "the update popup", running);
 }
+
+/// A shell that asks something as it starts (zsh's compinit does, about insecure
+/// folders) takes the first key typed as its answer. Corral's commands still start
+/// whole in every pane: the console, and the variables.
+#[test]
+#[ignore]
+fn a_shell_that_asks_at_startup_still_starts_corral() {
+    let ask = std::env::temp_dir().join(format!("corral-asking-shell-{}", std::process::id()));
+    std::fs::write(&ask, "#!/bin/bash\nread -r -n 1 -p 'Ignore insecure directories and continue [y] or abort compinit [n]? ' answer\necho\nexec bash --norc --noprofile \"$@\"\n").unwrap();
+    std::fs::set_permissions(&ask, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let live = Live::start_with("asks", &[("SHELL", ask.to_str().unwrap())]);
+    let _ = std::fs::remove_file(&ask);
+    let (code, text) = live.eval(&[r#"cat("works\n")"#]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("works"), "{text}");
+    let panes = live.run("herdr", &["pane", "list"]);
+    let vars = panes.split("\"pane_id\":\"").skip(1).find(|p| p.contains("corral:vars"))
+        .and_then(|p| p.split('"').next()).unwrap_or_else(|| panic!("no variables pane in {panes}")).to_string();
+    wait_for(Duration::from_secs(10), "the variables pane", || {
+        live.run("herdr", &["pane", "process-info", "--pane", &vars]).contains("corral")
+    });
+    let screen = live.screen(&vars);
+    assert!(!screen.contains("command not found"), "{screen}");
+}

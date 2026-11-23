@@ -89,6 +89,15 @@ pub fn run(pane: &str, command: &str) -> Result<(), String> {
     cli(&["pane", "run", pane, command]).map(|_| ())
 }
 
+/// Start a command in a pane's shell: typed after a space, then Enter. A shell can
+/// ask something as it starts (zsh's compinit about insecure folders, an update
+/// check) and take the first key typed as its answer; the space answers it, as no,
+/// instead of the command's first letter. Shells set to skip commands that start
+/// with a space also leave it out of their history.
+pub fn start(pane: &str, command: &str) -> Result<(), String> {
+    run(pane, &format!(" {command}"))
+}
+
 pub fn rename(pane: &str, label: &str) -> Result<(), String> {
     cli(&["pane", "rename", pane, label]).map(|_| ())
 }
