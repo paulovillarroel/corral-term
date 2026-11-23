@@ -851,6 +851,26 @@ fn ask_agent(before: &Value, done: &mut Value) {
     }
 }
 
+/// The Python console's packages (IPython, cloudpickle, pyarrow) into uv's cache, so
+/// the first Python console starts at once instead of downloading them then.
+fn python_ready() {
+    let Some(uv) = which("uv") else { return };
+    println!("  {}", tr("… preparing the Python console (uv downloads IPython and pyarrow once)",
+                        "… preparo la consola de Python (uv descarga IPython y pyarrow una vez)"));
+    let mut c = Command::new(uv);
+    c.args(["run", "--no-project"]);
+    for p in crate::console::PYTHON_PACKAGES {
+        c.args(["--with", p]);
+    }
+    let ok = c.args(["python", "-c", "import IPython, cloudpickle, pyarrow"])
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+    if ok {
+        step(tr("Python console ready: IPython, cloudpickle and pyarrow in uv's cache", "consola de Python lista: IPython, cloudpickle y pyarrow en la caché de uv"), State::Ok);
+    } else {
+        step(tr("couldn't prepare the Python console; its first start downloads what it needs", "no pude preparar la consola de Python; su primer arranque descarga lo que necesita"), State::Warn);
+    }
+}
+
 /// The system's release name (noble, jammy, bookworm…), from /etc/os-release.
 fn linux_codename() -> Option<String> {
     let text = std::fs::read_to_string("/etc/os-release").ok()?;
@@ -930,6 +950,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     }
     ark();
     r_nanoparquet();
+    python_ready();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
     rprofile_step(&dest, &mut done, &mut saved);
