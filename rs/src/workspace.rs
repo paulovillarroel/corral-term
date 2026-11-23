@@ -545,8 +545,14 @@ pub fn close(args: &[String]) -> Result<(), String> {
         env::notify("Corral", tr("no Corral panes in this tab", "no hay paneles de Corral en esta pestaña"));
         return Ok(());
     }
+    // Closed on purpose: their checkpoints must not come back in the next console.
+    let closed: Vec<Value> = env::sessions().into_iter()
+        .filter(|s| s.get("pane_id").str().is_some_and(|p| targets.iter().any(|t| t == p))).collect();
     for p in &targets {
         let _ = herdr::cli(&["pane", "close", p]);
+    }
+    for s in &closed {
+        env::close_checkpoint(s);
     }
     if had_state {
         saved.remove(&key);

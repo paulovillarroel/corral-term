@@ -65,6 +65,7 @@ local({
   }
   # The text in the user's language.
   tr <- function(en, es) if (identical(corral_lang(), "es")) es else en
+  trf <- function(en, es, ...) sprintf(tr(en, es), ...)
 
   # Attach right above utils so our functions mask utils ones (View). During
   # .Rprofile only base is attached, so wait for utils when needed.
@@ -227,12 +228,13 @@ local({
     names <- sort(ls(genv))
     if (is.null(address_of)) {
       vars <- lapply(names, function(n) describe(n, get(n, envir = genv)))
-      return(write_json_atomic(list(updated = as.numeric(Sys.time()), vars = vars),
-                               file.path(session_dir, "vars.json")))
+      write_json_atomic(list(updated = as.numeric(Sys.time()), vars = vars), file.path(session_dir, "vars.json"))
+      return(checkpoint(NULL))
     }
     sigs <- lapply(names, function(n) signature_of(get(n, envir = genv)))
     names(sigs) <- names
-    if (identical(sigs, last_signature)) return(invisible())
+    # The variables pane first; then the checkpoint, which may fork.
+    if (identical(sigs, last_signature)) return(checkpoint(sigs))
     parts <- character(length(names))
     for (i in seq_along(names)) {
       hit <- described[[names[i]]]
@@ -252,7 +254,7 @@ local({
                       paste(parts, collapse = ","), "]}"), tmp, useBytes = TRUE)
     file.rename(tmp, path)
     last_signature <<- sigs
-    invisible()
+    checkpoint(sigs)
   }
 
   # The httpgd device (it shows up as "unigd" in dev.list() since httpgd 2).
@@ -293,14 +295,208 @@ local({
     write_json_atomic(drawn, f)
   }
 
+  # ---- checkpoints: objects that outlive a crash
+  #
+  # After a command that changed an object, a forked copy of this R writes the
+  # objects that changed to <state>/checkpoints/r-<session>/, one .rds each,
+  # while you keep working: the prompt only waits for the fork (5 to 25 ms, more
+  # with more memory in use), and a command that changed nothing costs nothing.
+  # Once a minute the copy also hashes every object, for changes made in place.
+  # One copy at a time; each one is collected after the next command. When R
+  # ends because you closed it (q(), Ctrl+D, corral close) the checkpoint goes.
+  # If it ends any other way (a crash, herdr or WSL closed), the next R in this
+  # project attaches the packages again and loads the objects back.
+  checkpoint_root <- file.path(state_dir, "checkpoints")
+  checkpoint_dir <- file.path(checkpoint_root, paste0("r-", session_id))
+  r_pid <- Sys.getpid()
+  can_hash <- requireNamespace("rlang", quietly = TRUE)
+  ck <- new.env(parent = emptyenv())
+  ck$job <- NULL
+  ck$sigs <- NULL
+  ck$full_at <- as.numeric(Sys.time())
+
+  # Corral's settings (config.json), read again only when the file changes.
+  settings <- new.env(parent = emptyenv())
+  corral_setting <- function(key) {
+    home <- Sys.getenv("XDG_CONFIG_HOME")
+    if (!nzchar(home)) home <- file.path(path.expand("~"), ".config")
+    f <- file.path(home, "corral", "config.json")
+    mtime <- suppressWarnings(file.mtime(f))
+    if (!identical(settings$mtime, mtime)) {
+      settings$text <- if (is.na(mtime)) "" else
+        tryCatch(paste(readLines(f, warn = FALSE, encoding = "UTF-8"), collapse = "\n"), error = function(e) "")
+      settings$mtime <- mtime
+    }
+    m <- regmatches(settings$text, regexec(sprintf('"%s"[[:space:]]*:[[:space:]]*"?([^",}]*)', key), settings$text))[[1]]
+    if (length(m) == 2L) trimws(m[2]) else NA_character_
+  }
+  checkpoints_on <- function() !identical(corral_setting("checkpoints"), "off")
+  checkpoint_max_mb <- function() {
+    v <- suppressWarnings(as.numeric(corral_setting("checkpoint_max_mb")))
+    if (is.na(v) || v <= 0) 1024 else v
+  }
+  checkpoint_every <- function() {
+    v <- suppressWarnings(as.numeric(Sys.getenv("CORRAL_CHECKPOINT_EVERY")))
+    if (is.na(v) || v <= 0) 60 else v
+  }
+  pid_alive <- function(pid) {
+    stat <- tryCatch(readLines(sprintf("/proc/%d/stat", as.integer(pid)), warn = FALSE), error = function(e) "")
+    length(stat) > 0L && nzchar(stat[1]) && !sub("^.*\\) ([A-Za-z]).*$", "\\1", stat[1]) %in% c("Z", "X")
+  }
+
+  # In the forked copy: write the objects in `changed` (all of them when `full`)
+  # whose hash differs from the one written last, then the index. Nothing is
+  # printed: this copy has no console.
+  write_checkpoint <- function(changed, full) {
+    suppressWarnings(suppressMessages(tryCatch({
+      dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE, mode = "0700")
+      closed <- file.path(checkpoint_dir, "closed")
+      if (file.exists(closed)) return(FALSE)
+      index_file <- file.path(checkpoint_dir, "index.json")
+      old <- if (file.exists(index_file)) tryCatch(jsonlite::read_json(index_file), error = function(e) list()) else list()
+      objects <- if (is.list(old$objects)) old$objects else list()
+      skipped <- if (is.list(old$skipped)) old$skipped else list()
+      genv <- globalenv()
+      here <- ls(genv)
+      drop <- function(n) {
+        if (!is.null(objects[[n]])) unlink(file.path(checkpoint_dir, objects[[n]]$file))
+        objects[[n]] <<- NULL
+      }
+      for (n in setdiff(names(objects), here)) drop(n)
+      skipped <- skipped[intersect(names(skipped), here)]
+      numbers <- suppressWarnings(as.integer(gsub("[^0-9]", "", vapply(objects, function(o) o$file, ""))))
+      last <- max(c(0L, numbers), na.rm = TRUE)
+      max_bytes <- checkpoint_max_mb() * 2^20
+      for (n in here) {
+        if (!full && !(n %in% changed) && (!is.null(objects[[n]]) || !is.null(skipped[[n]]))) next
+        x <- get(n, envir = genv)
+        size <- tryCatch(as.numeric(utils::object.size(x)), error = function(e) NA_real_)
+        if (!is.na(size) && size > max_bytes) {
+          drop(n)
+          skipped[[n]] <- "size"
+          next
+        }
+        h <- if (can_hash) tryCatch(rlang::hash(x), error = function(e) NA_character_) else NA_character_
+        if (!is.na(h) && identical(objects[[n]]$hash, h)) next
+        file <- objects[[n]]$file
+        if (is.null(file)) {
+          last <- last + 1L
+          file <- sprintf("o%05d.rds", last)
+        }
+        path <- file.path(checkpoint_dir, file)
+        # A connection or a model held outside R (an external pointer) can't come back.
+        pointer <- FALSE
+        ok <- tryCatch({
+          saveRDS(x, paste0(path, ".tmp"), compress = FALSE,
+                  refhook = function(r) { if (typeof(r) == "externalptr") pointer <<- TRUE; NULL })
+          TRUE
+        }, error = function(e) FALSE)
+        if (!ok || pointer) {
+          unlink(paste0(path, ".tmp"))
+          drop(n)
+          skipped[[n]] <- if (pointer) "pointer" else "error"
+          next
+        }
+        file.rename(paste0(path, ".tmp"), path)
+        objects[[n]] <- list(file = file, hash = h)
+        skipped[[n]] <- NULL
+      }
+      if (file.exists(closed)) return(unlink(checkpoint_dir, recursive = TRUE))
+      write_json_atomic(list(lang = "r", pid = r_pid, session = session_id, cwd = getwd(),
+                             updated = as.numeric(Sys.time()), packages = .packages(),
+                             objects = objects, skipped = skipped), index_file)
+      TRUE
+    }, error = function(e) FALSE)))
+  }
+
+  # After each command: start a copy when something changed (or a minute went
+  # by), unless the last one is still writing; then it waits for the next command.
+  checkpoint <- function(sigs) {
+    if (!checkpoints_on()) return(invisible())
+    if (!is.null(ck$job)) {
+      if (is.null(parallel::mccollect(ck$job, wait = FALSE))) return(invisible())
+      ck$job <- NULL
+    }
+    now <- as.numeric(Sys.time())
+    full <- can_hash && now - ck$full_at > checkpoint_every()
+    changed <- names(sigs)[!vapply(names(sigs), function(n) identical(sigs[[n]], ck$sigs[[n]]), TRUE)]
+    gone <- setdiff(names(ck$sigs), names(sigs))
+    if (!full && !length(changed) && !length(gone) && !is.null(ck$sigs)) return(invisible())
+    if (full) ck$full_at <- now
+    ck$sigs <- sigs
+    ck$job <- parallel::mcparallel(write_checkpoint(changed, full), silent = TRUE)
+    invisible()
+  }
+
+  # At startup: the newest checkpoint of an R in this project that ended
+  # without being closed comes back, packages first.
+  restore_checkpoint <- function() {
+    if (!checkpoints_on() || !dir.exists(checkpoint_root)) return(invisible())
+    best <- NULL
+    for (d in list.dirs(checkpoint_root, recursive = FALSE)) {
+      if (file.exists(file.path(d, "closed"))) {
+        unlink(d, recursive = TRUE)
+        next
+      }
+      idx <- tryCatch(jsonlite::read_json(file.path(d, "index.json")), error = function(e) NULL)
+      if (is.null(idx) || is.null(idx$pid) || pid_alive(idx$pid)) next
+      if (as.numeric(Sys.time()) - as.numeric(idx$updated) > 7 * 86400) {
+        unlink(d, recursive = TRUE) # a week old: nobody is coming back for it
+        next
+      }
+      if (!identical(idx$lang, "r") || !identical(idx$cwd, getwd())) next
+      if (is.null(best) || idx$updated > best$idx$updated) best <- list(dir = d, idx = idx)
+    }
+    if (is.null(best)) return(invisible())
+    idx <- best$idx
+    for (p in rev(unlist(idx$packages))) {
+      if (!p %in% .packages()) try(suppressPackageStartupMessages(library(p, character.only = TRUE)), silent = TRUE)
+    }
+    back <- character()
+    for (n in names(idx$objects)) {
+      ok <- tryCatch({
+        assign(n, readRDS(file.path(best$dir, idx$objects[[n]]$file)), envir = globalenv())
+        TRUE
+      }, error = function(e) FALSE)
+      if (ok) back <- c(back, n)
+    }
+    unlink(best$dir, recursive = TRUE)
+    left <- names(idx$skipped)
+    why <- vapply(left, function(n) switch(idx$skipped[[n]],
+      pointer = tr("a connection", "una conexi\u00f3n"),
+      size = trf("over %d MB", "de m\u00e1s de %d MB", checkpoint_max_mb()),
+      tr("couldn't be saved", "no se pudo guardar")), "")
+    when <- format(as.POSIXct(as.numeric(idx$updated), origin = "1970-01-01"), "%Y-%m-%d %H:%M")
+    shown <- function(x) if (length(x) > 8) paste(c(x[1:8], "\u2026"), collapse = ", ") else paste(x, collapse = ", ")
+    lines <- trf("[corral] Restored %d objects from the R that ended without being closed (%s): %s.",
+                 "[corral] Restaur\u00e9 %d objetos del R que termin\u00f3 sin que lo cerraran (%s): %s.",
+                 length(back), when, shown(back))
+    if (length(left)) {
+      lines <- c(lines, trf("[corral] Not kept: %s.", "[corral] No se conservaron: %s.",
+                            paste(sprintf("%s (%s)", left, why), collapse = ", ")))
+    }
+    # Under Ark, what R prints while starting doesn't reach the console: Corral's
+    # console shows this file instead.
+    notice <- Sys.getenv("CORRAL_NOTICE")
+    if (nzchar(notice)) writeLines(lines, notice) else message(paste(lines, collapse = "\n"))
+    invisible()
+  }
+
   if (has_json && !isFALSE(getOption("corral.vars"))) {
+    try(restore_checkpoint(), silent = TRUE)
     try(snapshot(), silent = TRUE)
+    # CORRAL_TIMING=<file>: how long Corral's work after each command keeps the
+    # prompt waiting, in ms, one line per command (for measuring Corral itself).
+    timing <- Sys.getenv("CORRAL_TIMING")
     addTaskCallback(function(expr, value, ok, visible) {
+      t0 <- Sys.time()
       try(remember_plot(value, ok), silent = TRUE)
       try(snapshot(), silent = TRUE)
+      if (nzchar(timing)) cat(sprintf("%.3f\n", 1000 * as.numeric(Sys.time() - t0, units = "secs")), file = timing, append = TRUE)
       TRUE
     }, name = "corral")
-    reg.finalizer(env, function(e) unlink(session_dir, recursive = TRUE), onexit = TRUE)
+    # R closed on purpose: the session and its checkpoint go (a crash skips this).
+    reg.finalizer(env, function(e) unlink(c(session_dir, checkpoint_dir), recursive = TRUE), onexit = TRUE)
   }
 
   # ---- corral eval: an agent runs code in this session and reads the result

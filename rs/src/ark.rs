@@ -204,6 +204,7 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
         .envs(r_env(ark)?)
         .env("CORRAL", "1")
         .env("CORRAL_ARK_CONNECTION", conn_path) // corral.R announces it, for the editor's language server
+        .env("CORRAL_NOTICE", conn_path.with_extension("notice")) // what R says while starting
         .stdin(Stdio::null())
         .spawn()
         .map_err(|e| trf!("could not start Ark: {e}", "no pude iniciar Ark: {e}"))?;
@@ -1160,8 +1161,13 @@ impl Console {
             Some(sig) => trf!("signal {sig}", "señal {sig}"),
             None => trf!("code {}", "código {}", status.code().unwrap_or(-1)),
         };
-        out(&format!("{}\n", trf!("[corral] R ended unexpectedly ({why}); starting a new session. Its objects are gone.",
-                                    "[corral] R terminó inesperadamente ({why}); inicio una sesión nueva. Sus objetos se perdieron.")));
+        let gone = if env::config().get("checkpoints").str() == Some("off") {
+            tr(" Its objects are gone (checkpoints are off).", " Sus objetos se perdieron (los respaldos están desactivados).")
+        } else {
+            ""
+        };
+        out(&format!("{}{gone}\n", trf!("[corral] R ended unexpectedly ({why}); starting a new session.",
+                                          "[corral] R terminó inesperadamente ({why}); inicio una sesión nueva.")));
         let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(_))).collect();
         while let Ok(ev) = self.rx.try_recv() {
             if matches!(ev, Event::Bytes(_)) {
@@ -1185,6 +1191,15 @@ impl Console {
         self.at_line_start = true;
         self.ed.render();
         Ok(())
+    }
+
+    /// What R wrote while starting (objects restored after a crash), shown once.
+    fn show_notice(&mut self) {
+        let file = self.conn_path.with_extension("notice");
+        if let Ok(text) = std::fs::read_to_string(&file) {
+            let _ = std::fs::remove_file(&file);
+            self.print(&format!("{}\n", text.trim_end()));
+        }
     }
 
     fn run(&mut self) -> i32 {
@@ -1217,6 +1232,7 @@ impl Console {
             }
             if checked.elapsed() > Duration::from_millis(200) {
                 checked = Instant::now();
+                self.show_notice();
                 if let Ok(Some(status)) = self.k.child.try_wait() {
                     if !self.at_line_start {
                         out("\n");
