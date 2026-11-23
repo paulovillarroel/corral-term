@@ -8,6 +8,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ### Fixes
 
+- Switching between "agent first" and "code first" (ctrl+b a, ctrl+b shift+a) opened a whole new layout: a new R or Python session, an empty draft and a new agent, while the old ones were left running unlabeled in another tab. With a layout open, they now swap the agent and the script in place, and the console's objects, the draft and the agent stay; only closing Corral ends them.
 - `corral uninstall --help` uninstalled Corral. Now it prints the usage, and `uninstall`, `close`, `doctor` and `theme` refuse any argument they don't know, so a typo like `-help` doesn't run them.
 
 ## 0.1.9
