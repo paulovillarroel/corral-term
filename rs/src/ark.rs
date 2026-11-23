@@ -49,11 +49,20 @@ enum Event {
     Reply(String, String, Value),
     /// The kernel asks for input (readline, menu, browser): header, content
     Input(Value, Value),
+    /// The shell or stdin connection was opened again: send on this one from now on.
+    Swap(Channel, Socket),
     Gone,
+}
+
+enum Channel {
+    Shell,
+    Stdin,
 }
 
 struct Kernel {
     child: Child,
+    /// When it started: a kernel that crashes right after starting isn't started again.
+    started: Instant,
     key: Vec<u8>,
     session: String,
     shell: Socket,
@@ -209,44 +218,70 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
     let stdin = connect(&mut child, &c.addr(c.stdin), "DEALER", Some(&identity), end)?;
     let control = connect(&mut child, &c.addr(c.control), "DEALER", None, end)?;
 
-    // Readers: each channel and the terminal feed one queue.
-    let (t, s) = (tx.clone(), session.clone());
+    // Readers: each channel feeds one queue. Messages must carry the kernel's
+    // signature; a connection that drops while Ark runs is opened again.
+    let pid = child.id() as i64;
+    let alive = move || env::pid_alive(pid);
+    let k = key.clone().into_bytes();
+    let (t, s, addr) = (tx.clone(), session.clone(), c.addr(c.iopub));
     std::thread::spawn(move || {
-        while let Ok(parts) = iopub.recv() {
-            let Some((h, p, content)) = zmtp::parse_full(&parts) else { continue };
+        zmtp::read_channel(iopub, alive, || reopen(pid, &addr, "SUB", None, true), |parts| {
+            let Some((h, p, content)) = zmtp::parse_signed(&parts, &k) else { return true };
             if p.get("session").str() != Some(s.as_str()) {
-                continue; // other clients' messages (the editor's language server)
+                return true; // other clients' messages (the editor's language server)
             }
             let kind = h.get("msg_type").str().unwrap_or("").to_string();
             let parent = p.get("msg_id").str().unwrap_or("").to_string();
-            if t.send(Event::IoPub(kind, parent, content)).is_err() {
-                break;
-            }
-        }
+            t.send(Event::IoPub(kind, parent, content)).is_ok()
+        });
     });
-    let mut replies = shell.try_clone().map_err(|e| e.to_string())?;
-    let t = tx.clone();
+    let replies = shell.try_clone().map_err(|e| e.to_string())?;
+    let (k, t, id, addr) = (key.clone().into_bytes(), tx.clone(), identity.clone(), c.addr(c.shell));
     std::thread::spawn(move || {
-        while let Ok(parts) = replies.recv() {
-            let Some((h, p, content)) = zmtp::parse_full(&parts) else { continue };
+        let swap = t.clone();
+        zmtp::read_channel(replies, alive, || {
+            let new = reopen(pid, &addr, "DEALER", Some(&id), false)?;
+            swap.send(Event::Swap(Channel::Shell, new.try_clone().ok()?)).ok()?;
+            Some(new)
+        }, |parts| {
+            let Some((h, p, content)) = zmtp::parse_signed(&parts, &k) else { return true };
             let kind = h.get("msg_type").str().unwrap_or("").to_string();
             let parent = p.get("msg_id").str().unwrap_or("").to_string();
-            if t.send(Event::Reply(kind, parent, content)).is_err() {
-                break;
-            }
-        }
+            t.send(Event::Reply(kind, parent, content)).is_ok()
+        });
     });
-    let mut requests = stdin.try_clone().map_err(|e| e.to_string())?;
-    let t = tx.clone();
+    let requests = stdin.try_clone().map_err(|e| e.to_string())?;
+    let (k, t, id, addr) = (key.clone().into_bytes(), tx.clone(), identity, c.addr(c.stdin));
     std::thread::spawn(move || {
-        while let Ok(parts) = requests.recv() {
-            let Some((h, _, content)) = zmtp::parse_full(&parts) else { continue };
-            if h.get("msg_type").str() == Some("input_request") && t.send(Event::Input(h, content)).is_err() {
-                break;
+        let swap = t.clone();
+        zmtp::read_channel(requests, alive, || {
+            let new = reopen(pid, &addr, "DEALER", Some(&id), false)?;
+            swap.send(Event::Swap(Channel::Stdin, new.try_clone().ok()?)).ok()?;
+            Some(new)
+        }, |parts| {
+            let Some((h, _, content)) = zmtp::parse_signed(&parts, &k) else { return true };
+            h.get("msg_type").str() != Some("input_request") || t.send(Event::Input(h, content)).is_ok()
+        });
+    });
+    Ok(Kernel { child, started: Instant::now(), key: key.into_bytes(), session, shell, stdin, control })
+}
+
+/// Open a channel again while the kernel runs: a few seconds of tries.
+fn reopen(pid: i64, addr: &str, kind: &str, identity: Option<&[u8]>, subscribe: bool) -> Option<Socket> {
+    let end = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < end && env::pid_alive(pid) {
+        if let Ok(mut sock) = Socket::connect_as(addr, kind, identity) {
+            if !subscribe || sock.subscribe_all().is_ok() {
+                return Some(sock);
             }
         }
-    });
-    let t = tx.clone();
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    None
+}
+
+/// The terminal's bytes feed the same queue, from one thread for the console's life.
+fn read_terminal(tx: Sender<Event>) {
     std::thread::spawn(move || {
         // SAFETY: fd 0 stays open; ManuallyDrop keeps File from closing it.
         let mut tty = ManuallyDrop::new(unsafe { File::from_raw_fd(0) });
@@ -254,18 +289,17 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
         loop {
             match tty.read(&mut buf) {
                 Ok(n) if n > 0 => {
-                    if t.send(Event::Bytes(buf[..n].to_vec())).is_err() {
+                    if tx.send(Event::Bytes(buf[..n].to_vec())).is_err() {
                         break;
                     }
                 }
                 _ => {
-                    let _ = t.send(Event::Gone);
+                    let _ = tx.send(Event::Gone);
                     break;
                 }
             }
         }
     });
-    Ok(Kernel { child, key: key.into_bytes(), session, shell, stdin, control })
 }
 
 // --------------------------------------------------------------------------- keys
@@ -755,6 +789,10 @@ enum Mode {
 
 struct Console {
     k: Kernel,
+    /// To start Ark again after a crash: its binary, connection file and queue.
+    ark: PathBuf,
+    conn_path: PathBuf,
+    tx: Sender<Event>,
     rx: Receiver<Event>,
     backlog: VecDeque<Event>,
     keys: VecDeque<Key>,
@@ -1114,6 +1152,41 @@ impl Console {
         }
     }
 
+    /// R ended without being asked to: say so and start a new session in this
+    /// console. Keys typed meanwhile stay; what the old kernel left doesn't.
+    fn restart(&mut self, status: &std::process::ExitStatus) -> Result<(), String> {
+        use std::os::unix::process::ExitStatusExt;
+        let why = match status.signal() {
+            Some(sig) => trf!("signal {sig}", "señal {sig}"),
+            None => trf!("code {}", "código {}", status.code().unwrap_or(-1)),
+        };
+        out(&format!("{}\n", trf!("[corral] R ended unexpectedly ({why}); starting a new session. Its objects are gone.",
+                                    "[corral] R terminó inesperadamente ({why}); inicio una sesión nueva. Sus objetos se perdieron.")));
+        let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(_))).collect();
+        while let Ok(ev) = self.rx.try_recv() {
+            if matches!(ev, Event::Bytes(_)) {
+                kept.push_back(ev);
+            }
+        }
+        let _ = std::fs::remove_file(&self.conn_path);
+        self.conn_path = self.conn_path.with_file_name(format!("kernel-{}.json", env::random_hex(4)));
+        self.k = start(&self.ark, &self.conn_path, &self.tx)?;
+        let id = self.k.request("kernel_info_request", Value::obj());
+        if self.wait_reply(&id, Duration::from_secs(60)).is_none() {
+            let log = log_file();
+            let log = log.display();
+            return Err(trf!("Ark did not answer; see {log}", "Ark no respondió; revisa {log}"));
+        }
+        self.backlog.retain(|e| matches!(e, Event::Bytes(_)));
+        self.backlog.extend(kept);
+        self.mode = Mode::Edit;
+        self.count = 1;
+        self.ed = Editor::new(Prompt::In(1));
+        self.at_line_start = true;
+        self.ed.render();
+        Ok(())
+    }
+
     fn run(&mut self) -> i32 {
         let mut checked = Instant::now();
         loop {
@@ -1133,6 +1206,8 @@ impl Console {
                 Some(Event::IoPub(kind, parent, content)) => self.on_iopub(&kind, &parent, &content),
                 Some(Event::Reply(kind, parent, content)) => self.on_reply(&kind, &parent, &content),
                 Some(Event::Input(header, content)) => self.on_input(header, &content),
+                Some(Event::Swap(Channel::Shell, sock)) => self.k.shell = sock,
+                Some(Event::Swap(Channel::Stdin, sock)) => self.k.stdin = sock,
                 Some(Event::Gone) => return 0,
                 None => self.dec.flush(),
             }
@@ -1143,9 +1218,21 @@ impl Console {
             if checked.elapsed() > Duration::from_millis(200) {
                 checked = Instant::now();
                 if let Ok(Some(status)) = self.k.child.try_wait() {
-                    // R quit (q()): the console ends with it.
                     if !self.at_line_start {
                         out("\n");
+                    }
+                    // R quit (q()): the console ends with it. A crash (a signal, an
+                    // error code) starts R again here, unless it crashed on starting.
+                    use std::os::unix::process::ExitStatusExt;
+                    let crashed = status.signal().is_some() || status.code().is_some_and(|c| c != 0);
+                    if crashed && self.k.started.elapsed() > Duration::from_secs(5) {
+                        match self.restart(&status) {
+                            Ok(()) => continue,
+                            Err(e) => {
+                                out(&format!("{e}\n"));
+                                return 1;
+                            }
+                        }
                     }
                     return status.code().unwrap_or(0);
                 }
@@ -1163,10 +1250,14 @@ pub fn run() -> Result<(), String> {
     let conn_path = folder.join(format!("kernel-{}.json", env::random_hex(4)));
     let (tx, rx) = mpsc::channel();
     let kernel = start(&ark, &conn_path, &tx)?;
+    read_terminal(tx.clone());
     let raw = Raw::enter();
     out("\x1b[?2004h"); // pasted text comes marked, so it is not run line by line
     let mut c = Console {
         k: kernel,
+        ark: ark.clone(),
+        conn_path: conn_path.clone(),
+        tx,
         rx,
         backlog: VecDeque::new(),
         keys: VecDeque::new(),
@@ -1190,7 +1281,7 @@ pub fn run() -> Result<(), String> {
     c.k.shutdown();
     out("\x1b[?2004l");
     drop(raw);
-    let _ = std::fs::remove_file(&conn_path);
+    let _ = std::fs::remove_file(&c.conn_path);
     std::process::exit(code)
 }
 
