@@ -481,7 +481,11 @@ pub fn script(args: &[String]) -> Result<(), String> {
 /// `corral close` (ctrl+b shift+c): Corral's panes (script, console, variables)
 /// go; everything else, the agent included, stays.
 pub fn close(args: &[String]) -> Result<(), String> {
-    Args::parse(args, &[], &[], tr("usage: corral close", "uso: corral close"))?;
+    let usage = tr("usage: corral close", "uso: corral close");
+    // It takes nothing else: a typo like -help must not close the panes.
+    if let Some(bad) = Args::parse(args, &[], &[], usage)?.rest.first() {
+        return Err(trf!("unknown option {bad}\n{usage}", "opción desconocida {bad}\n{usage}"));
+    }
     let ws = env::current_workspace();
     let pane = env::current_pane();
     let mut tab = env::plugin_context().get("tab_id").str().map(String::from)
