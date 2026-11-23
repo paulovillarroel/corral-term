@@ -959,3 +959,23 @@ fn an_agent_in_a_terminal_still_asks() {
     live.run("herdr", &["pane", "run", &mine, "corral config agents on"]);
     wait_for(Duration::from_secs(10), "the change", || settings().contains(r#""agents":"on""#));
 }
+
+/// A request that never gets to run is in the audit log too, with why: here a
+/// second agent gives up waiting for its turn.
+#[test]
+#[ignore]
+fn requests_that_never_run_are_audited() {
+    let live = Live::start("audit");
+    let (first, second) = std::thread::scope(|s| {
+        let first = s.spawn(|| live.eval(&["Sys.sleep(3); cat('first\\n')"]));
+        std::thread::sleep(Duration::from_millis(300));
+        let second = live.eval(&["--timeout", "0.5", "--wait-idle", "0.5", "cat('second\\n')"]);
+        (first.join().unwrap(), second)
+    });
+    assert_eq!(first.0, 0, "{}", first.1);
+    assert_eq!(second.0, 2, "{}", second.1);
+    assert!(second.1.contains("another request is still running"), "{}", second.1);
+    let audit = std::fs::read_to_string(live.dir.join("state/corral/audit.jsonl")).unwrap();
+    let line = audit.lines().find(|l| l.contains("second")).unwrap_or_else(|| panic!("not in the audit log:\n{audit}"));
+    assert!(line.contains(r#""decision":"not run""#) && line.contains(r#""status":"queue timeout""#), "{line}");
+}
