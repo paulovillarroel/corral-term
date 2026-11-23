@@ -76,7 +76,7 @@ a { color: var(--fg); text-decoration-color: var(--line-2); text-underline-offse
 a:hover { text-decoration-color: var(--accent); }
 img { max-width: 100%; height: auto; }
 code, kbd, pre, .mono { font-family: var(--mono); }
-code, kbd, pre, .mono, .mock, .card, .install, .stats, .meta { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+code, kbd, pre, .mono, .card, .install, .stats, .meta { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* ---------------------------------------------------------------- header */
@@ -101,7 +101,6 @@ code, kbd, pre, .mono, .mock, .card, .install, .stats, .meta { font-variant-liga
 .theme-switch { display: inline-flex; border: 1px solid var(--line-2); }
 .theme-switch button { padding: 8px 10px; font-size: 11px; color: var(--muted); }
 .theme-switch button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
-.hero-shot .mock-img { display: none; width: 100%; height: auto; border: 1px solid var(--line-2); }
 .btn {
   display: inline-flex; align-items: center; gap: 8px;
   border: 1px solid var(--line-2); padding: 9px 14px; color: var(--fg) !important;
@@ -152,25 +151,9 @@ code, kbd, pre, .mono, .mock, .card, .install, .stats, .meta { font-variant-liga
 .section-label { display: flex; justify-content: space-between; margin: 104px 0 20px; font: 500 12px/1 var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); }
 .section-label span:last-child { color: var(--muted); }
 
-/* the layout mock */
-.mock { border: 1px solid var(--line-2); background: var(--canvas); font: 12.5px/1.55 var(--mono); color: var(--text); }
-.mock .tabs { display: flex; gap: 1px; padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--chrome); }
-.mock .tabs span { padding: 5px 12px; color: var(--muted); }
-.mock .tabs .on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-.mock .grid { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr); gap: 10px; padding: 10px; min-height: 520px; }
-.mock .col { display: grid; grid-template-rows: 1.25fr 0.95fr 0.8fr; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
-.mock .pane { min-width: 0; }
-.pane { position: relative; border: 1px solid var(--line-2); padding: 14px 12px 10px; white-space: pre; overflow: visible; clip-path: inset(-14px -1px -1px -1px); }
-.pane.focus { border-color: var(--accent); }
-.pane .title { position: absolute; top: -9px; left: 10px; padding: 0 6px; background: var(--canvas); color: var(--muted); font-size: 11.5px; }
-.pane.focus .title { color: var(--accent); }
 .c-acc { color: var(--accent); } .c-mut { color: var(--muted); } .c-dim { color: var(--dim); } .c-fg { color: var(--fg); }
 .c-1 { color: var(--a1); } .c-2 { color: var(--a2); } .c-3 { color: var(--a3); } .c-4 { color: var(--a4); } .c-5 { color: var(--a5); } .c-6 { color: var(--a6); }
-.claude-logo, .critter { color: #d97757; }
-.critter { position: absolute; left: 12px; top: 15px; width: 9ch; height: 3em; }
-.hero-shot .critter { left: 9px; top: 12px; }
-.mock-caption { margin: 14px 0 64px; color: var(--muted); font-size: 15px; }
-.mock-caption b { color: var(--fg); font-weight: 500; }
+.claude-logo { color: #d97757; }
 
 /* numbered features */
 .feature { display: grid; grid-template-columns: 140px 1fr 520px; gap: 40px; padding: 60px 0; border-top: 1px solid var(--line); align-items: start; }
@@ -187,6 +170,10 @@ code, kbd, pre, .mono, .mock, .card, .install, .stats, .meta { font-variant-liga
 .compare h2, .cta h2 { margin: 0 0 14px; color: var(--fg); font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; }
 .compare p { max-width: 720px; }
 .compare picture img { display: block; margin-top: 26px; border: 1px solid var(--line); }
+.compare .day-label { margin: 56px 0 0; }
+.day-stats { margin-top: 18px; border-top: 1px solid var(--line); }
+.day-stats div { padding: 32px 28px 8px; }
+.day-stats b { font-size: 34px; }
 .cta { padding: 72px 0 80px; border-top: 1px solid var(--line); }
 
 footer.foot { border-top: 1px solid var(--line); padding: 28px 32px; display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; font: 12px/1.6 var(--mono); color: var(--muted); }
@@ -226,15 +213,9 @@ footer.foot a:hover { color: var(--fg); }
 }
 .hero-grid .meta a.gh svg { flex: none; }
 .hero-grid .meta a.gh:hover { border-color: var(--accent); color: var(--fg); }
-.hero-shot .mock { font-size: 10.4px; line-height: 1.5; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
-.hero-shot .mock .grid { grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
-.hero-shot .mock .grid { min-height: 0; gap: 8px; padding: 8px; }
-.hero-shot .pane { padding: 11px 9px 7px; }
-.hero-shot .pane .title { font-size: 10.4px; top: -8px; }
 .shot-caption { margin: 18px 0 0; font-size: 13px; color: var(--muted); }
 @media (max-width: 1100px) {
   .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-  .hero-shot .mock { font-size: 11px; }
 }
 
 /* ---------------------------------------------------------------- docs */
@@ -304,9 +285,6 @@ kbd {
   .nav .hide-sm, .logo .tag { display: none; }
   .nav { gap: 14px; }
   .theme-switch button { padding: 6px 7px; font-size: 10px; letter-spacing: 0.06em; }
-  /* The layout keeps its real shape on a phone: the same view as a picture, scaled down. */
-  .hero-shot .mock { display: none; }
-  .hero-shot .mock-img { display: block; }
   .wrap { padding: 0 16px; }
   .hero { padding: 48px 0 44px; }
   .eyebrow { letter-spacing: 0.16em; gap: 10px; }
@@ -320,10 +298,6 @@ kbd {
   .stats div:nth-last-child(-n+2) { border-bottom: 0; }
   .section-label { margin-top: 64px; }
   .stats b { font-size: 30px; }
-  .mock .grid { grid-template-columns: 1fr; min-height: 0; }
-  .mock .grid > .pane { min-height: 220px; }
-  .mock .col { grid-template-rows: auto auto auto; }
-  .pane { font-size: 11px; }
   .feature { grid-template-columns: 1fr; gap: 14px; padding: 34px 0; }
   .feature .card { grid-column: 1; }
   .feature .n { font-size: 34px; }
@@ -342,8 +316,6 @@ kbd {
   .content { padding: 30px 16px 70px; }
   .content h1 { font-size: 34px; }
   .content table { display: block; overflow-x: auto; }
-  .hero-shot .mock .grid { grid-template-columns: minmax(0, 1fr); }
-  .hero-shot .mock { font-size: 10px; }
   footer.foot { padding: 22px 16px; }
   footer.foot a { margin: 0 14px 0 0; }
 }
@@ -392,11 +364,10 @@ kbd {
 #lay-agent:checked ~ .layout-shot .lay-agent, #lay-code:checked ~ .layout-shot .lay-code, #lay-notebook:checked ~ .layout-shot .lay-notebook { opacity: 1; visibility: visible; transition: opacity .3s ease; }
 @media (prefers-reduced-motion: reduce) { .layout-frames img, .layout-switch label, .layout-switch b { transition: none; } }
 @media (max-width: 1180px) { .layouts { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
-/* The palette: its text above, the screenshot below at full width, so it reads. */
-.palette-head { align-items: start; }
-.palette-head p + p { margin-top: 14px; }
-.palette-head .card { margin-top: 24px; max-width: 520px; }
-.palette-shot { margin: 40px 0 0; }
+/* The palette: text beside the screenshot, like Mirador. */
+.palette-shot { margin: 0; }
+/* The hero: a screenshot of a real session. */
+.hero-real { margin: 0; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
 .points { list-style: none; margin: 28px 0 0; padding: 0; }
 .points li { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .points li:first-child { border-top: 1px solid var(--line); }
@@ -483,7 +454,7 @@ kbd {
 
 /* Code shows what you type: no programming ligatures (JetBrains Mono turns <- and |> into arrows).
    Last in the file, because the `font` shorthand above resets font-variant-ligatures. */
-code, kbd, pre, .mono, .mock, .mock *, .card, .install code, .stats, .meta,
+code, kbd, pre, .mono, .card, .install code, .stats, .meta,
 .tui-shot *, .tui-bar, .browser-bar, .points b, .arch text {
   font-variant-ligatures: none;
   font-feature-settings: "liga" 0, "calt" 0;
