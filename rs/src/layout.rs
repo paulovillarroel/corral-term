@@ -131,6 +131,77 @@ fn label_of(mode: &str, code: bool) -> &'static str {
     }
 }
 
+/// Switch the layout already open in workspace `ws` to agent first or code first
+/// (`code`) in place: the two differ only in where the agent and the script sit,
+/// so they swap places and every pane keeps running: the console's session, the
+/// draft and the agent. A pane hidden with ctrl+b t comes back first. None when
+/// the workspace has no layout yet.
+pub fn refocus(ws: &str, code: bool) -> Result<Option<Value>, String> {
+    let read = || -> Result<(Vec<Value>, Value), String> {
+        let panes = herdr::panes(Some(ws))?;
+        let state = env::read_json(&env::layout_file()).get(&env::ws_key(Some(ws))).clone();
+        Ok((panes, state))
+    };
+    let (mut panes, mut state) = read()?;
+    if crate::send::main_tab(&panes).is_none() {
+        return Ok(None);
+    }
+    if state.get("parked").str().is_some() {
+        toggle(&["both".to_string()])?;
+        (panes, state) = read()?;
+    }
+    let Some(tab) = crate::send::main_tab(&panes) else { return Ok(None) };
+    let was_code = code_focus(&state);
+    let in_tab = |p: &&Value| herdr::tab_id(p) == tab;
+    let script = herdr::labeled(&panes, "corral:script").filter(in_tab).map(|p| herdr::pane_id(p).to_string());
+    // The agent: as the layout focused on code saved it, else the one pane of the
+    // tab that isn't Corral's (one herdr sees an agent in, if there are several).
+    let agent = agent_pane(&state).filter(|_| was_code).filter(|id| panes.iter().any(|p| herdr::pane_id(p) == *id)).map(String::from)
+        .or_else(|| {
+            let free: Vec<&Value> = panes.iter().filter(in_tab)
+                .filter(|p| !p.get("label").str().is_some_and(|l| l.starts_with("corral:"))).collect();
+            free.iter().find(|p| p.get("agent").str().is_some()).or(free.first()).map(|p| herdr::pane_id(p).to_string())
+        });
+    if code != was_code {
+        let (Some(s), Some(a)) = (&script, &agent) else {
+            return Err(if script.is_none() {
+                tr("the code-first layout needs the script pane; corral script adds it", "el layout con foco en el código necesita el panel de script; corral script lo agrega")
+            } else {
+                tr("couldn't tell which pane is the agent's", "no pude saber cuál es el panel del agente")
+            }.into());
+        };
+        herdr::call("pane.swap", obj(vec![("source_pane_id", a.as_str().into()), ("target_pane_id", s.as_str().into())]))?;
+        let path = env::layout_file();
+        let mut saved = env::read_json(&path);
+        let key = env::ws_key(Some(ws));
+        let mut st = saved.get(&key).clone();
+        for k in ["focus", "foco", "agent", "agente"] {
+            st.remove(k);
+        }
+        if code {
+            st.set("focus", "code".into());
+            st.set("agent", a.as_str().into());
+        }
+        saved.set(&key, st);
+        env::write_json(&path, &saved);
+    }
+    // Where you work in each one: the script on the left, or the agent.
+    let keep = if code { script.as_ref() } else { agent.as_ref().or(script.as_ref()) };
+    if let Some(p) = keep {
+        herdr::focus(p)?;
+    }
+    let label = if code { tr("Layout: code first", "Layout: foco en el código") } else { tr("Layout: agent first", "Layout: foco en el agente") };
+    env::notify("Corral", &trf!("{label}; same session", "{label}; misma sesión"));
+    let lang = env::active_lang(Some(ws), &panes);
+    let id_of = |l: &str| herdr::labeled(&panes, l).map(|p| Value::from(herdr::pane_id(p))).unwrap_or(Value::Null);
+    Ok(Some(obj(vec![
+        ("tab", tab.as_str().into()), ("agent", agent.map(Value::from).unwrap_or(Value::Null)),
+        ("console", id_of(&console::label(&lang))), ("script", script.map(Value::from).unwrap_or(Value::Null)),
+        ("vars", id_of("corral:vars")), ("focus", if code { "code" } else { "agent" }.into()),
+        ("lang", lang.as_str().into()), ("kept", true.into()),
+    ])))
+}
+
 fn toggle_usage() -> &'static str {
     tr("usage: corral toggle [both|script|agent|console]", "uso: corral toggle [both|script|agent|console]")
 }

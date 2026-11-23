@@ -99,6 +99,16 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         other => return Err(trf!("--focus takes agent or code, not {other}", "--focus acepta agent o code, no {other}")),
     };
     let ws = env::current_workspace().ok_or(tr("no herdr workspace found", "no encontré un workspace de herdr"))?;
+    // A layout already open here is rearranged, never replaced: its console, draft
+    // and agent keep running until Corral closes (ctrl+b shift+c).
+    if let Some(kept) = layout::refocus(&ws, code)? {
+        let active = kept.get("lang").str().unwrap_or("r").to_string();
+        if let Some(l) = a.value("--lang").filter(|l| *l != active) {
+            layout::switch(&[l.to_string()])?;
+        }
+        println!("{}", kept.to_json());
+        return Ok(());
+    }
     let ctx = env::plugin_context();
     let cwd = a.value("--cwd").map(String::from)
         .or_else(|| ctx.get("focused_pane_cwd").str().map(String::from))
