@@ -178,6 +178,17 @@
     <p>Over the 1,000 more, R's memory went 792, 815, 693, 701, 724 and 788 MB every 200 commands: it goes up and down as R hands memory back, with no new highs. The checkpoint took 170 MB on disk, the same as the objects serialized, and no copy was ever left uncollected. The 90th percentile is the one command in five that changes the table.</p>
     <p>After a crash, R was back with its objects 1.2 seconds after it was killed, both with 250 MB of objects (10 million rows, one column of text) and with about 800 MB (40 million rows of numbers).</p>
 
+    <h3 id="checkpoints-evidence">What the tests check</h3>
+    <p>The live tests kill R or Python with <code>kill -9</code>, the way a crash ends them, and then look at what came back:</p>
+    <ul>
+      <li>R: a table of a million rows (its sums compared before and after), a function, an <code>lm()</code> model and a change made in place (<code>v[1] &lt;- 5</code>) come back the same; a package attached with <code>library()</code> is attached again; a file connection is reported as not kept, and the console shows the message.</li>
+      <li>Python: a dictionary, a function and an instance of a class defined in the session, and <code>json</code> imported as <code>js</code>, come back; a <code>threading.Lock</code> is reported as not kept; the crashed Python leaves no temporary folder behind.</li>
+      <li>Closing on purpose, with <code>q()</code> or <code>corral close</code>, starts the next console empty.</li>
+    </ul>
+    <p>To run them, and the measurements on this page, from a copy of the repository on a machine with herdr, R, Ark and uv:</p>
+    <pre><code><span class="p">$ </span>cargo test --release --manifest-path rs/Cargo.toml --test live -- --ignored --test-threads 1
+<span class="p">$ </span>cargo test --release --manifest-path rs/Cargo.toml --test live -- --ignored --nocapture checkpoints_cost_report python_checkpoints_cost_report restore_time_report</code></pre>
+
     <h2>Corral in Rust</h2>
     <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="all"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
     <p>The engines were already in Rust: herdr, Fresh, Ark, Air, Ruff and uv. Now all of Corral is one Rust binary, built from <code>rs/</code> with no dependencies. The only parts that aren't Rust run inside your own sessions: <code>r/corral.R</code> in R and <code>py/</code> in IPython.</p>
