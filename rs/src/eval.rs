@@ -130,6 +130,15 @@ fn fail(code: i32, msg: &str) -> ! {
     std::process::exit(code)
 }
 
+/// A request that ends before its code runs: the audit log keeps it, with why,
+/// and the agent hears the reason.
+fn not_run(o: &Opts, code: &str, access: &str, output: &str, why: &str, exit: i32, msg: &str) -> ! {
+    let mut e = audit_entry(o, code, access, output, "not run");
+    e.set("status", why.into());
+    audit::record(e);
+    fail(exit, msg)
+}
+
 /// off, ask (the default) or on: `corral config agents`. Anything but an explicit
 /// `on` asks, so a missing or mistyped setting never runs code unseen.
 fn access_mode() -> &'static str {
@@ -335,15 +344,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     // The console has to be there, running, and in view: the usual case needs nothing;
     // otherwise it is brought into view, or started, first.
-    let panes = herdr::panes(ws.as_deref())?;
+    let panes = herdr::panes(ws.as_deref()).unwrap_or_else(|e| not_run(&o, &code, access, "-", "herdr not reachable", 1, &e));
     let current = env::active_lang(ws.as_deref(), &panes);
     let found = herdr::labeled(&panes, &console::label(&o.lang)).map(|t| herdr::pane_id(t).to_string());
     let pane = match found {
         Some(p) if o.lang == current && env::session_for(&p).is_some() => p,
-        _ => console::ready(&o.lang).unwrap_or_else(|e| fail(1, &e)),
+        _ => console::ready(&o.lang).unwrap_or_else(|e| not_run(&o, &code, access, "-", "no console", 1, &e)),
     };
     let session = env::session_for(&pane).unwrap_or_else(|| {
-        fail(1, &console::session(&o.lang, ws.as_deref()).err()
+        not_run(&o, &code, access, "-", "no console", 1, &console::session(&o.lang, ws.as_deref()).err()
             .unwrap_or_else(|| tr("the console does not have Corral active", "la consola no tiene Corral activo").into()))
     });
     let sdir = PathBuf::from(session.get("dir").str().unwrap_or(""));
@@ -358,7 +367,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // SAFETY: flock on a file we keep open; released when the process ends.
     while unsafe { flock(lock.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
         if Instant::now() > give_up {
-            fail(2, tr("another request is still running in this console", "otra petición sigue corriendo en esta consola"));
+            not_run(&o, &code, access, "-", "queue timeout", 2,
+                    tr("another request is still running in this console", "otra petición sigue corriendo en esta consola"));
         }
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -391,7 +401,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     if let Err(e) = console::wait_for_prompt(&pane, o.wait_idle, &o.lang, Some(&edir)) {
-        fail(2, &e);
+        not_run(&o, &code, access, output_mode, "console busy", 2, &e);
     }
     let ext = if o.lang == "python" { "py" } else { "R" };
     let body = if code.ends_with('\n') { code.clone() } else { format!("{code}\n") };
@@ -408,7 +418,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let before = plots_json(&sid, "state");
     let started = SystemTime::now();
     let call = if o.lang == "python" { format!("_corral_eval(\"{rid}\")") } else { format!(".corral_eval(\"{rid}\")") };
-    herdr::send_text(&pane, &format!("{call}\r"))?;
+    herdr::send_text(&pane, &format!("{call}\r"))
+        .unwrap_or_else(|e| not_run(&o, &code, access, output_mode, "couldn't type in the console", 1, &e));
 
     // Wait for the outcome: often a few milliseconds, so look often at first.
     let result_file = edir.join(format!("{rid}.json"));
