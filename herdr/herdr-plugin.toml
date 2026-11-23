@@ -288,6 +288,15 @@ width = "84%"
 height = "76%"
 command = ["../rs/target/release/corral", "_approve"]
 
+# An agent's shell asks to loosen the harness (corral config agents on): the user decides.
+[[panes]]
+id = "setting"
+title = "Corral: an agent wants to change a setting"
+placement = "popup"
+width = "64%"
+height = "40%"
+command = ["../rs/target/release/corral", "_approve"]
+
 # `corral view` (View() in R) opens this one with CORRAL_FILE set.
 [[panes]]
 id = "table"
