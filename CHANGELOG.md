@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.12
+
+A harness that shows exactly what runs, keeps a sensitive session sensitive after a crash, asks an agent even in a terminal of its own, and records every request; and live tests in CI.
 
 - The approval popup shows exactly what runs. Control and invisible characters in an agent's code, which a terminal acts on or draws as nothing, show as `␛`, `␍` or `<U+202E>` under a warning, and long lines wrap instead of being cut. Before, an escape in a comment could make the popup show other code than the code that ran. The console prints such code written out too, before its echo, and the review popup shows a result's text without its colors.
 - A sensitive session comes back sensitive after a crash: its objects return into a session marked like the one that crashed, before anything is loaded, and the console says so.
