@@ -531,6 +531,10 @@ fn python_objects_survive_a_crash() {
     assert!(text.contains("same: [1, 2, 3] 42 7 1 False"), "{text}");
     let screen = live.screen(&pane);
     assert!(screen.contains("Restored") && screen.contains("lk (lock)"), "the console shows:\n{screen}");
+    // The crashed Python's temporary folder went when the new one started.
+    let left: Vec<_> = std::fs::read_dir(std::env::temp_dir()).unwrap().flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with(&format!("corral-py-{pid}-"))).collect();
+    assert!(left.is_empty(), "the crashed Python's temporary folder is still there");
 }
 
 /// Closing on purpose starts clean: q() in R, and corral close.

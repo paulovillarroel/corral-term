@@ -410,6 +410,24 @@ class PlotServer:
 # --------------------------------------------------------------------------- session
 
 
+def _clean_temp() -> None:
+    """Temporary folders (View() tables) of Python consoles that ended without
+    closing, a crash for instance, go away; the name says whose they were."""
+    for d in Path(tempfile.gettempdir()).glob("corral-py-*"):
+        parts = d.name.split("-")
+        try:
+            if d.stat().st_uid != os.getuid():
+                continue
+            if len(parts) > 3 and parts[2].isdigit():
+                if pid_alive(parts[2]):
+                    continue
+            elif time.time() - d.stat().st_mtime < 2 * 86400:
+                continue  # named before the process was in it: only once it's two days old
+            shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
 # --------------------------------------------------------------------------- checkpoints
 #
 # Objects that outlive a crash. After a cell that changed an object, a forked
@@ -617,7 +635,8 @@ class Session:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.started = time.time()
         self.cwd = ""
-        self.tmp = Path(tempfile.mkdtemp(prefix="corral-py-"))
+        _clean_temp()
+        self.tmp = Path(tempfile.mkdtemp(prefix=f"corral-py-{os.getpid()}-"))
         self.rendered: dict[int, str] = {}  # figures sent during this cell: id(figure) -> plot id
         self.pages_before = 0
         self.described: dict[str, tuple] = {}  # name -> (object, state_of, description)
