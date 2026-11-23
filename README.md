@@ -31,7 +31,7 @@ Written in Rust. DuckDB for your data.</p>
 | [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. `herdr update` updates it. |
 | R, with the `httpgd` and `jsonlite` packages | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig), then `Rscript -e 'install.packages(c("httpgd", "jsonlite"))'`. |
 
-Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console, and the R packages `nanoparquet` and `rlang`.
+Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console, and the R package `rlang`.
 
 ### One line
 
@@ -41,7 +41,7 @@ curl -LsSf https://corral-term.dev/install.sh | sh
 
 The installer downloads the latest published version, says which, and checks its SHA-256 before opening it and, if you have the GitHub CLI, its [build provenance attestation](https://corral-term.dev/docs/install.html#how-the-download-is-checked); it never falls back to unreleased code. It prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
 
-- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, each checked against a SHA-256 written into Corral's code;
+- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, each checked against a SHA-256 written into Corral's code; installs the R package nanoparquet in your R library, and with uv puts the Python console's packages (IPython, cloudpickle, pyarrow) in uv's cache;
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
