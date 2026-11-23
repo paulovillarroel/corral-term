@@ -52,6 +52,19 @@ title = "Corral: R or Python console"
 contexts = ["global", "workspace", "pane"]
 command = ["../rs/target/release/corral", "switch"]
 
+# Which R (from rig) and which Python (from uv) the consoles run, in a popup.
+[[actions]]
+id = "r-version"
+title = "Corral: R version (rig)"
+contexts = ["global", "workspace", "pane"]
+command = ["../rs/target/release/corral", "versions", "r"]
+
+[[actions]]
+id = "python-version"
+title = "Corral: Python version (uv)"
+contexts = ["global", "workspace", "pane"]
+command = ["../rs/target/release/corral", "versions", "python"]
+
 [[actions]]
 id = "script"
 title = "Corral: add the script editor above the console"
@@ -191,6 +204,23 @@ placement = "popup"
 width = "70%"
 height = "80%"
 command = ["../rs/target/release/corral", "_keys"]
+
+# The installed R (rig) or Python (uv) versions; Enter uses one.
+[[panes]]
+id = "versions-r"
+title = "Corral: R version"
+placement = "popup"
+width = "64%"
+height = "50%"
+command = ["../rs/target/release/corral", "_versions", "r"]
+
+[[panes]]
+id = "versions-python"
+title = "Corral: Python version"
+placement = "popup"
+width = "64%"
+height = "50%"
+command = ["../rs/target/release/corral", "_versions", "python"]
 
 # Before an agent's code runs, when you asked to approve it (corral config agents ask,
 # or a session marked with corral_sensitive()). Enter runs it; n or Esc refuses.

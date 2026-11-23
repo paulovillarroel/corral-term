@@ -185,6 +185,8 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("script", Group::Layout, "Layout: add the script editor above the console", "Layout: agregar el editor de scripts sobre la consola"),
     ("close", Group::Layout, "Layout: close (keeps the agent and the rest of the tab)", "Layout: cerrar (deja al agente y el resto de la pestaña)"),
     ("switch", Group::Console, "Console: R or Python", "Consola: R o Python"),
+    ("r-version", Group::Console, "Console: R version (rig)", "Consola: versión de R (rig)"),
+    ("python-version", Group::Console, "Console: Python version (uv)", "Consola: versión de Python (uv)"),
     ("send", Group::Console, "Console: send the selection (R or Python)", "Consola: enviar la selección (R o Python)"),
     ("console", Group::Console, "Console: use this pane as the console", "Consola: usar este panel como consola"),
     ("vars", Group::Vars, "Variables: open them over the terminal", "Variables: abrirlas sobre la terminal"),

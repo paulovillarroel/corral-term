@@ -288,7 +288,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                            if v.is_empty() { tr("unknown version", "versión desconocida").into() } else { v }, if ok { &[] } else { &update }));
         }
     }
-    match which("Rscript") {
+    match crate::versions::rscript().or_else(|| which("Rscript")) {
         None => out.push(check("required", State::Missing, "R", tr("not installed", "no está instalado"),
                                &[tr("Install R from https://cran.r-project.org (on Ubuntu: sudo apt install r-base).",
                                     "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")])),

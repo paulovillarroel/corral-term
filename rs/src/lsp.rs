@@ -53,7 +53,8 @@ fn languageserver() -> ! {
         let file = env::repo().join("lib/corral.lintr").to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
         code = format!("options(lintr.linter_file = \"{file}\"); {code}");
     }
-    let err = Command::new("R").args(["--no-echo", "--no-restore", "-e", &code]).exec();
+    let r = crate::versions::r_binary().unwrap_or_else(|_| "R".into());
+    let err = Command::new(r).args(["--no-echo", "--no-restore", "-e", &code]).exec();
     eprintln!("corral: {}", trf!("could not start R's language server: {err}", "no pude iniciar el servidor de lenguaje de R: {err}"));
     std::process::exit(1)
 }

@@ -354,6 +354,11 @@ pub fn kill(pid: i32, sig: i32) -> bool {
     pid > 0 && unsafe { c_kill(pid, sig) == 0 }
 }
 
+/// Send a signal to a whole process group (a job, like a console and its children).
+pub fn kill_group(pgid: i32, sig: i32) -> bool {
+    pgid > 1 && unsafe { c_kill(-pgid, sig) == 0 }
+}
+
 /// Split a command line into words like a shell (quotes and backslashes), like Python's shlex.split.
 pub fn sh_split(s: &str) -> Vec<String> {
     let (mut words, mut cur, mut has) = (Vec::new(), String::new(), false);

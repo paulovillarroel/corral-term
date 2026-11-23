@@ -26,6 +26,7 @@ mod term;
 mod theme;
 mod toml;
 mod vars;
+mod versions;
 mod workspace;
 mod zip;
 mod zmtp;
@@ -41,6 +42,7 @@ Workspace
   switch       switches the console between R and Python (ctrl+b y)
   script       adds the editor, or reads, saves or writes the draft
   console      marks a pane as the R or Python console (ctrl+b m)
+  versions     the R version (rig) or Python version (uv) the consoles run
   keys         the shortcut palette (ctrl+b space); --list, --json, --change
 
 Code and data
@@ -73,6 +75,7 @@ Espacio de trabajo
   switch       la consola pasa a R o a Python (ctrl+b y)
   script       agrega el editor, o lee, guarda o escribe el borrador
   console      marca un panel como consola de R o Python (ctrl+b m)
+  versions     la versión de R (rig) o de Python (uv) de las consolas
   keys         la paleta de atajos (ctrl+b space); --list, --json, --change
 
 Código y datos
@@ -118,6 +121,8 @@ fn main() {
         Some("close") => workspace::close(rest),
         Some("script") => workspace::script(rest),
         Some("console") => workspace::mark_console(rest),
+        Some("versions") => versions::run(rest, false),
+        Some("_versions") => versions::run(rest, true),
         Some("plots") => plots::cmd_plots(rest),
         Some("_plots") => plots::cmd_plots_tui(rest),
         Some("_plot-ready") => plots::cmd_plot_ready(rest),

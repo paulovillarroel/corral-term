@@ -49,7 +49,7 @@ pub fn jupyter_frontend(cfg: &Value) -> bool {
 pub fn r_flavor(cfg: &Value) -> &'static str {
     let choice = cfg.get("r_console").str().unwrap_or("ark");
     let frontend = !jupyter_frontend(cfg) || env::which("jupyter-console").is_some();
-    if choice == "ark" && frontend && ark_binary(cfg).is_some() && env::which("R").is_some() {
+    if choice == "ark" && frontend && ark_binary(cfg).is_some() && crate::versions::r_binary().is_ok() {
         "ark"
     } else {
         "r"
@@ -69,8 +69,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         match cfg.get("python_console").str() {
             Some(custom) => shell(custom),
             None => {
+                let here = std::env::current_dir().unwrap_or_else(|_| env::home());
                 let mut c = Command::new("uv");
-                c.args(["run", "--with", "ipython", "ipython", "--no-banner", "-i"]).arg(env::repo().join("py/startup.py"));
+                c.arg("run").args(crate::versions::uv_python_args(&here))
+                    .args(["--with", "ipython", "ipython", "--no-banner", "-i"]).arg(env::repo().join("py/startup.py"));
                 c
             }
         }
@@ -95,7 +97,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 c
             }
             _ => {
-                let mut c = Command::new("R");
+                let mut c = Command::new(crate::versions::r_binary()?);
                 c.args(["--quiet", "--no-save"]);
                 c
             }
@@ -115,22 +117,8 @@ fn shell(command: &str) -> Command {
 /// library path as the R script sets them. Your Jupyter setup stays as it is.
 pub fn kernelspec(cfg: &Value) -> Result<PathBuf, String> {
     let ark = ark_binary(cfg).ok_or(tr("Ark is not installed (corral ark --install)", "Ark no está instalado (corral ark --install)"))?;
-    let probe = Command::new("R").args(["--vanilla", "--no-echo", "-e", r#"cat(R.home(), Sys.getenv("LD_LIBRARY_PATH"), sep = "\n")"#])
-        .output().map_err(|e| trf!("could not run R: {e}", "no pude ejecutar R: {e}"))?;
-    let text = String::from_utf8_lossy(&probe.stdout);
-    let mut lines = text.trim().splitn(2, '\n');
-    let r_home = lines.next().unwrap_or("").trim().to_string();
-    let ld = lines.next().unwrap_or("").trim().to_string();
-    let ld = if ld.is_empty() { format!("{r_home}/lib") } else { ld };
-    let argv: Vec<Value> = [ark.to_string_lossy().to_string(), "--connection_file".into(), "{connection_file}".into(),
-                            "--session-mode".into(), "console".into(), "--default-repos".into(), "none".into(),
-                            "--log".into(), env::state_dir().join("ark.log").to_string_lossy().to_string()]
-        .into_iter().map(Value::from).collect();
-    let spec = obj(vec![("argv", Value::Arr(argv)), ("display_name", "R (Ark, Corral)".into()), ("language", "R".into()),
-                        ("env", obj(vec![("R_HOME", r_home.into()), ("LD_LIBRARY_PATH", ld.into())]))]);
-    let jupyter = env::data_dir().join("jupyter");
-    env::write_json(&jupyter.join("kernels/ark/kernel.json"), &spec);
-    Ok(jupyter)
+    crate::ark::r_env(&ark)?; // writes the spec, for the R Corral runs
+    Ok(env::data_dir().join("jupyter"))
 }
 
 /// How to call this program from a pane: `corral` when that is this binary
