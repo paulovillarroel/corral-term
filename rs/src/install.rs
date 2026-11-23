@@ -133,15 +133,22 @@ fn claude_dir() -> PathBuf {
 }
 
 /// Where Corral's skill goes. It follows the open Agent Skills standard
-/// (agentskills.io): ~/.agents/skills is the shared place (Codex and others read
-/// it), and Claude Code reads its own folder.
+/// (agentskills.io): ~/.agents/skills is the shared place (Codex, opencode and
+/// others read it), and Claude Code and Gemini CLI read their own folders.
 fn skill_places() -> Vec<(PathBuf, &'static str)> {
     let mut places = vec![(env::home().join(".agents/skills/corral-r"),
-                           tr("~/.agents/skills (Codex and other agents)", "~/.agents/skills (Codex y otros agentes)"))];
+                           tr("~/.agents/skills (Codex, opencode and other agents)", "~/.agents/skills (Codex, opencode y otros agentes)"))];
     if which("claude").is_some() || claude_dir().is_dir() {
         places.push((claude_dir().join("skills/corral-r"), "~/.claude/skills (Claude Code)"));
     }
+    if which("gemini").is_some() || gemini_dir().is_dir() {
+        places.push((gemini_dir().join("skills/corral-r"), "~/.gemini/skills (Gemini CLI)"));
+    }
     places
+}
+
+fn gemini_dir() -> PathBuf {
+    env::home().join(".gemini")
 }
 
 // ----------------------------------------------------------------------- output
@@ -356,7 +363,10 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                                  "  curl -LsSf https://astral.sh/uv/install.sh | sh"])),
     }
     let places: Vec<&str> = skill_places().iter().map(|(_, shown)| *shown).collect();
-    let places = places.join(tr(" and ", " y "));
+    let places = match places.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{}{}{last}", rest.join(", "), tr(" and ", " y ")),
+        _ => places.join(""),
+    };
     // The agent the layout opens: the one chosen, else the first one installed.
     let agent = tr("Agent", "Agente");
     let found: Vec<&str> = env::AGENTS.iter().filter(|(cmd, _)| env::which(cmd).is_some()).map(|(_, name)| *name).collect();
@@ -1165,7 +1175,7 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
     }
     let _ = std::fs::remove_file(fresh_dir().join("themes/corral.json"));
     for at in [bin().join("corral"), fresh_dir().join("plugins/corral.ts"), claude_dir().join("skills/corral-r"),
-               env::home().join(".agents/skills/corral-r")] {
+               env::home().join(".agents/skills/corral-r"), gemini_dir().join("skills/corral-r")] {
         if points_into(&at, &dest) && std::fs::remove_file(&at).is_ok() {
             step(&short(&at), State::Ok);
         }
