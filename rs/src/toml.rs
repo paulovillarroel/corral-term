@@ -247,8 +247,8 @@ impl P<'_> {
     fn basic_string(&mut self) -> Result<String, String> {
         let multi = self.s[self.i..].starts_with(b"\"\"\"");
         self.i += if multi { 3 } else { 1 };
-        if multi && self.peek() == b'\n' {
-            self.i += 1;
+        if multi {
+            self.skip_first_newline();
         }
         let mut out: Vec<u8> = Vec::new();
         loop {
@@ -256,18 +256,26 @@ impl P<'_> {
                 return Err(self.err(tr("unclosed string", "texto sin cerrar")));
             }
             if multi && self.s[self.i..].starts_with(b"\"\"\"") {
-                self.i += 3;
+                // Up to two quotes right before the closing ones belong to the text.
+                let extra = self.closing_run(b'"');
+                out.resize(out.len() + extra, b'"');
+                self.i += 3 + extra;
                 break;
             }
             let b = self.peek();
             self.i += 1;
             match b {
                 b'"' if !multi => break,
-                b'\n' if !multi => return Err(self.err(tr("unclosed string", "texto sin cerrar"))),
+                b'\n' if !multi => {
+                    self.i -= 1; // the error is on this line, not the next
+                    return Err(self.err(tr("unclosed string", "texto sin cerrar")));
+                }
                 b'\\' => {
                     let e = self.peek();
                     self.i += 1;
                     match e {
+                        b'b' => out.push(0x08),
+                        b'f' => out.push(0x0c),
                         b'n' => out.push(b'\n'),
                         b't' => out.push(b'\t'),
                         b'r' => out.push(b'\r'),
@@ -280,7 +288,8 @@ impl P<'_> {
                             let c = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).unwrap_or('\u{fffd}');
                             out.extend(c.to_string().as_bytes());
                         }
-                        b'\n' if multi => {
+                        // A backslash ending the line (spaces and CRLF too) joins it to the next.
+                        b' ' | b'\t' | b'\r' | b'\n' if multi => {
                             while matches!(self.peek(), b' ' | b'\t' | b'\n' | b'\r') {
                                 self.i += 1;
                             }
@@ -294,11 +303,26 @@ impl P<'_> {
         Ok(String::from_utf8_lossy(&out).into_owned())
     }
 
+    /// A multi-line string's first newline (LF or CRLF) is trimmed.
+    fn skip_first_newline(&mut self) {
+        if self.s[self.i..].starts_with(b"\r\n") {
+            self.i += 2;
+        } else if self.peek() == b'\n' {
+            self.i += 1;
+        }
+    }
+
+    /// At a run of 3 to 5 quotes that closes a multi-line string: how many of
+    /// them (0 to 2) are text before the closing three.
+    fn closing_run(&self, quote: u8) -> usize {
+        self.s[self.i..].iter().take(5).take_while(|&&b| b == quote).count().saturating_sub(3)
+    }
+
     fn literal_string(&mut self) -> Result<String, String> {
         let multi = self.s[self.i..].starts_with(b"'''");
         self.i += if multi { 3 } else { 1 };
-        if multi && self.peek() == b'\n' {
-            self.i += 1;
+        if multi {
+            self.skip_first_newline();
         }
         let start = self.i;
         loop {
@@ -306,8 +330,9 @@ impl P<'_> {
                 return Err(self.err(tr("unclosed string", "texto sin cerrar")));
             }
             if multi && self.s[self.i..].starts_with(b"'''") {
-                let text = String::from_utf8_lossy(&self.s[start..self.i]).into_owned();
-                self.i += 3;
+                let extra = self.closing_run(b'\'');
+                let text = String::from_utf8_lossy(&self.s[start..self.i + extra]).into_owned();
+                self.i += 3 + extra;
                 return Ok(text);
             }
             if !multi && self.peek() == b'\'' {
@@ -317,5 +342,158 @@ impl P<'_> {
             }
             self.i += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn keys(v: &Value) -> Vec<&str> {
+        match v {
+            Value::Obj(items) => items.iter().map(|(k, _)| k.as_str()).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// A config.toml shaped like the ones Corral meets: comments everywhere,
+    /// plain and dotted tables, quoted keys, arrays of tables, inline values.
+    const CONFIG: &str = r##"# herdr settings
+onboarding = false   # a comment after a value
+
+[theme]
+name = "catppuccin"
+
+[theme.custom]
+accent = "#ffc799"          # the '#' inside the string is not a comment
+"panel.border" = '#2a2a2a'
+
+[keys]
+prefix = "ctrl+b"
+
+[[keys.command]]
+key = "prefix+t"
+type = "plugin_action"
+command = "corral.toggle"
+
+[[keys.command]]
+key = "prefix+shift+s"
+command = "corral.layout-code"
+description = "Corral: code first"
+
+[ui]
+sidebar.width = 1_000
+ratio = 0.516
+negative = -3.5e-1
+on = true
+started = 2026-11-23T10:00:00Z
+dirs = [
+  "~/work",   # trailing comment
+  'C:\Users\me',
+]
+inline = { a = 1, b.c = "x" }
+"##;
+
+    #[test]
+    fn reads_a_herdr_config() {
+        let v = parse(CONFIG).unwrap();
+        assert_eq!(v.get("onboarding"), &Value::Bool(false));
+        assert_eq!(v.get("theme").get("name").str(), Some("catppuccin"));
+        assert_eq!(v.get("theme").get("custom").get("accent").str(), Some("#ffc799"));
+        assert_eq!(v.get("theme").get("custom").get("panel.border").str(), Some("#2a2a2a"));
+        assert_eq!(v.get("keys").get("prefix").str(), Some("ctrl+b"));
+        let cmds = v.get("keys").get("command").arr();
+        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds[0].get("command").str(), Some("corral.toggle"));
+        assert_eq!(keys(&cmds[1]), ["key", "command", "description"]);
+        let ui = v.get("ui");
+        assert_eq!(ui.get("sidebar").get("width").num(), Some(1000.0));
+        assert_eq!(ui.get("ratio").num(), Some(0.516));
+        assert_eq!(ui.get("negative").num(), Some(-0.35));
+        assert_eq!(ui.get("on"), &Value::Bool(true));
+        assert_eq!(ui.get("started").str(), Some("2026-11-23T10:00:00Z")); // dates stay text
+        let dirs: Vec<&str> = ui.get("dirs").arr().iter().filter_map(|d| d.str()).collect();
+        assert_eq!(dirs, ["~/work", r"C:\Users\me"]);
+        assert_eq!(ui.get("inline").get("a").num(), Some(1.0));
+        assert_eq!(ui.get("inline").get("b").get("c").str(), Some("x"));
+    }
+
+    #[test]
+    fn crlf_reads_the_same() {
+        let crlf = CONFIG.replace('\n', "\r\n");
+        assert_eq!(parse(&crlf).unwrap(), parse(CONFIG).unwrap());
+    }
+
+    #[test]
+    fn reads_corrals_own_keys_file() {
+        let v = parse(include_str!("../../herdr/keys.example.toml")).unwrap();
+        let cmds = v.get("keys").get("command").arr();
+        assert!(cmds.len() >= 10, "only {} shortcuts", cmds.len());
+        for c in cmds {
+            assert!(c.get("key").str().is_some_and(|k| k.starts_with("prefix+")), "{}", c.to_json());
+            assert_eq!(c.get("type").str(), Some("plugin_action"));
+            assert!(c.get("command").str().is_some_and(|k| k.starts_with("corral.")), "{}", c.to_json());
+        }
+    }
+
+    #[test]
+    fn basic_string_escapes() {
+        let v = parse(r#"s = "tab\t nl\n quote\" back\\ e\u00e9 smile\U0001F600 bs\b ff\f""#).unwrap();
+        assert_eq!(v.get("s").str(), Some("tab\t nl\n quote\" back\\ e\u{e9} smile\u{1F600} bs\u{8} ff\u{c}"));
+    }
+
+    #[test]
+    fn multi_line_strings() {
+        let text = concat!(
+            "a = \"\"\"\nfirst\nsecond\"\"\"\n",
+            "b = \"\"\"one \\\n    two \\   \n  three\"\"\"\n",
+            "c = \"\"\"\r\nwindows \\\r\n  joined\"\"\"\r\n",
+            "d = \"\"\"say \"hi\"\"\"\"\n",
+            "e = '''\nC:\\raw\\path\n'''\n",
+            "f = '''it's'''\n",
+            "g = '''quoted ''''\n",
+        );
+        let v = parse(text).unwrap();
+        assert_eq!(v.get("a").str(), Some("first\nsecond"));
+        assert_eq!(v.get("b").str(), Some("one two three"));
+        assert_eq!(v.get("c").str(), Some("windows joined"));
+        assert_eq!(v.get("d").str(), Some("say \"hi\""));
+        assert_eq!(v.get("e").str(), Some("C:\\raw\\path\n"));
+        assert_eq!(v.get("f").str(), Some("it's"));
+        assert_eq!(v.get("g").str(), Some("quoted '"));
+    }
+
+    #[test]
+    fn arrays_of_tables_with_sub_tables() {
+        let v = parse("[[a]]\nx = 1\n[a.inner]\ny = 2\n[[a]]\nx = 3\n").unwrap();
+        let a = v.get("a").arr();
+        assert_eq!(a.len(), 2);
+        assert_eq!(a[0].get("inner").get("y").num(), Some(2.0));
+        assert_eq!(a[1].get("x").num(), Some(3.0));
+        assert!(a[1].get("inner").is_null());
+    }
+
+    #[test]
+    fn errors_say_the_line() {
+        for (text, line) in [
+            ("a = 1\nb = \"open\n", 2),
+            ("a = 1\n\nb = 'open\n", 3),
+            ("[table\n", 1),
+            ("ok = 1\nkey\n", 2),
+            ("a =\n", 1),
+            ("a = [1, 2\n", 2),
+            ("a = \"x\" extra\n", 1),
+        ] {
+            let e = parse(text).unwrap_err();
+            assert!(e.contains(&format!(" {line}:")), "{text:?}: {e}");
+        }
+        assert!(parse("command = 1\n[[command]]\n").is_err());
+        assert!(parse("s = \"\"\"never closed\n").is_err());
+    }
+
+    #[test]
+    fn empty_and_comment_only() {
+        assert_eq!(parse("").unwrap(), Value::obj());
+        assert_eq!(parse("# nothing\n\n   # here\r\n").unwrap(), Value::obj());
     }
 }

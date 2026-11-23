@@ -207,7 +207,7 @@ fn write_str(s: &str, out: &mut String) {
 // would re-enter i18n::es() while it reads the setting, and hang on its lock
 // when config.json is broken.
 pub fn parse(text: &str) -> Result<Value, String> {
-    let mut p = Parser { s: text.as_bytes(), i: 0 };
+    let mut p = Parser { s: text.as_bytes(), i: 0, depth: 0 };
     let v = p.value()?;
     p.ws();
     if p.i != p.s.len() {
@@ -216,9 +216,14 @@ pub fn parse(text: &str) -> Result<Value, String> {
     Ok(v)
 }
 
+/// How deep arrays and objects may nest. Parsing recurses, so without a limit
+/// a long run of `[` would overflow the stack and abort the process.
+const MAX_DEPTH: usize = 512;
+
 struct Parser<'a> {
     s: &'a [u8],
     i: usize,
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -236,8 +241,15 @@ impl Parser<'_> {
         self.ws();
         match self.s.get(self.i) {
             None => self.err("unexpected end"),
-            Some(b'{') => self.object(),
-            Some(b'[') => self.array(),
+            Some(&b) if b == b'{' || b == b'[' => {
+                if self.depth == MAX_DEPTH {
+                    return self.err("nested too deep");
+                }
+                self.depth += 1;
+                let v = if b == b'{' { self.object() } else { self.array() };
+                self.depth -= 1;
+                v
+            }
             Some(b'"') => Ok(Value::Str(self.string()?)),
             Some(b't') => self.literal("true", Value::Bool(true)),
             Some(b'f') => self.literal("false", Value::Bool(false)),
@@ -302,9 +314,14 @@ impl Parser<'_> {
                         b'u' => {
                             let mut code = self.hex4()?;
                             if (0xD800..0xDC00).contains(&code) && self.s[self.i..].starts_with(b"\\u") {
+                                let after_high = self.i;
                                 self.i += 2;
                                 let low = self.hex4()?;
-                                code = 0x10000 + ((code - 0xD800) << 10) + (low.wrapping_sub(0xDC00) & 0x3FF);
+                                if (0xDC00..0xE000).contains(&low) {
+                                    code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                                } else {
+                                    self.i = after_high; // not a pair: that \u is read on its own
+                                }
                             }
                             out.push(char::from_u32(code).unwrap_or('\u{FFFD}'));
                         }
@@ -392,5 +409,92 @@ mod tests {
         v.set("new", "s".into());
         v.remove("ratio");
         assert_eq!(v.to_json(), r#"{"n":4,"new":"s"}"#);
+    }
+
+    #[test]
+    fn unicode_escapes() {
+        let s = |text: &str| parse(text).unwrap().str().unwrap().to_string();
+        assert_eq!(s(r#""éé""#), "éé");
+        assert_eq!(s(r#""😀""#), "😀");
+        // Halves of a pair on their own: U+FFFD, and the next escape still counts.
+        assert_eq!(s(r#""\ud83dx""#), "\u{FFFD}x");
+        assert_eq!(s(r#""\ud83dA""#), "\u{FFFD}A");
+        assert_eq!(s(r#""\ude00""#), "\u{FFFD}");
+        assert_eq!(s(r#""\/\b\f""#), "/\u{8}\u{c}");
+        assert!(parse(r#""\u12""#).is_err());
+        assert!(parse(r#""\x41""#).is_err());
+    }
+
+    #[test]
+    fn control_characters_round_trip() {
+        let all: String = (0u32..0x20).chain([0x7f, 0x2028, 0x1F600]).filter_map(char::from_u32).collect();
+        let text = Value::Str(all.clone()).to_json();
+        assert!(!text.chars().any(|c| (c as u32) < 0x20), "{text:?}");
+        assert_eq!(parse(&text).unwrap().str(), Some(all.as_str()));
+    }
+
+    #[test]
+    fn numbers() {
+        for (text, n) in [("0", 0.0), ("-12", -12.0), ("-0.5", -0.5), ("1e3", 1000.0), ("2.5E-2", 0.025),
+                          ("1.5e+2", 150.0), ("123456789012", 123456789012.0)] {
+            assert_eq!(parse(text).unwrap().num(), Some(n), "{text}");
+        }
+        for (n, text) in [(3.0, "3"), (-0.0, "0"), (0.1, "0.1"), (-2.5, "-2.5"), (1e15, "1000000000000000"),
+                          (f64::NAN, "null"), (f64::INFINITY, "null")] {
+            assert_eq!(Value::Num(n).to_json(), text);
+        }
+        for n in [1e20, 1e-7, 123.456, -9.75e-300, f64::MAX] {
+            assert_eq!(parse(&Value::Num(n).to_json()).unwrap().num(), Some(n), "{n}");
+        }
+        for bad in ["-", "--1", "1e", "+", "."] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn invalid_input_is_an_error() {
+        for bad in ["", " ", "{", "[", "[1,]", "[1 2]", "{\"a\" 1}", "{a:1}", "{\"a\":1,}", "\"open", "tru", "nul",
+                    "1 2", "{}x", "[\"a\",]", "{\"a\":}", "}", "\"\\"] {
+            assert!(parse(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(parse(" \n\t{ \"a\" : [ 1 , 2 ] } \r\n").unwrap().get("a").arr().len(), 2);
+    }
+
+    #[test]
+    fn nesting_has_a_limit_instead_of_a_crash() {
+        assert!(parse(&"[".repeat(100_000)).unwrap_err().contains("too deep"));
+        assert!(parse(&"{\"a\":".repeat(100_000)).is_err());
+        let fine = "[".repeat(MAX_DEPTH) + &"]".repeat(MAX_DEPTH);
+        assert!(parse(&fine).is_ok());
+        let one_more = "[".repeat(MAX_DEPTH + 1) + &"]".repeat(MAX_DEPTH + 1);
+        assert!(parse(&one_more).is_err());
+        // The limit is on depth, not on how many there are.
+        let wide = format!("[{}]", vec!["[[1]]"; 10_000].join(","));
+        assert_eq!(parse(&wide).unwrap().arr().len(), 10_000);
+    }
+
+    #[test]
+    fn pretty_output() {
+        let v = parse(r#"{"a":[1,{"b":[]}],"c":{},"d":"x"}"#).unwrap();
+        let pretty = v.to_json_pretty(2);
+        assert_eq!(pretty, "{\n  \"a\": [\n    1,\n    {\n      \"b\": []\n    }\n  ],\n  \"c\": {},\n  \"d\": \"x\"\n}\n");
+        assert_eq!(parse(&pretty).unwrap(), v);
+    }
+
+    #[test]
+    fn get_set_remove_on_any_value() {
+        let mut v = Value::Null;
+        assert!(v.get("x").is_null());
+        v.set("a", 1.0.into()); // anything else becomes an object first
+        v.set("b", true.into());
+        v.set("a", "again".into()); // keeps its place
+        assert_eq!(v.to_json(), r#"{"a":"again","b":true}"#);
+        v.remove("missing");
+        v.remove("a");
+        assert_eq!(v.to_json(), r#"{"b":true}"#);
+        let arr = Value::Arr(vec![1.0.into()]);
+        assert!(arr.get("0").is_null());
+        assert!(Value::Str("s".into()).arr().is_empty());
+        assert_eq!(obj(vec![("k", Value::Null)]).to_json(), r#"{"k":null}"#);
     }
 }
