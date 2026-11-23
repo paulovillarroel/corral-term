@@ -84,7 +84,7 @@
 
     <h2>The two layouts</h2>
     <table>
-    <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+a</kbd>)</th></tr></thead>
+    <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+s</kbd>)</th></tr></thead>
     <tbody>
     <tr><td>Left, 52 % of the width</td><td>Claude Code</td><td>Script</td></tr>
     <tr><td>Right, top</td><td>Script</td><td>Claude Code</td></tr>
@@ -93,7 +93,7 @@
     </tbody>
     </table>
     <p>On the right, the two upper panes share 73 % of the height, 57/43, and the variables take the other 27 %. The editor opens with the file explorer in view.</p>
-    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+a</kbd> when you spend more time in the code; it needs the editor (Fresh). The first one you press opens the layout in a new tab. Once it's open, the other one rearranges it in place: the agent and the script swap sides, and the console, its objects, the draft and the agent's conversation stay as they are. Only closing Corral (<kbd>ctrl+b</kbd> <kbd>shift+c</kbd>) ends them. Both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts and panes» group.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+s</kbd> when you spend more time in the code; it needs the editor (Fresh). The first one you press opens the layout in a new tab. Once it's open, the other one rearranges it in place: the agent and the script swap sides, and the console, its objects, the draft and the agent's conversation stay as they are. Only closing Corral (<kbd>ctrl+b</kbd> <kbd>shift+q</kbd>) ends them. Both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts and panes» group.</p>
 
     <h3>From the command line</h3>
     <pre><code><span class="p">$ </span>corral layout
@@ -126,7 +126,7 @@
     <p>Each workspace has at most one hidden tab, named "corral (hidden)". It holds the pane that <kbd>ctrl+b</kbd> <kbd>t</kbd> moved out of the way and the console of the language you are not using. Everything there keeps running, and Corral brings each pane back to its place when you need it.</p>
 
     <h2>Close Corral</h2>
-    <p><kbd>ctrl+b</kbd> <kbd>shift+c</kbd> (<code>corral close</code>) closes the script, the console and the variables, including the panes in the hidden tab, and leaves the tab with Claude, like any herdr tab. Closing the console ends that R session, and the unsaved draft is discarded. Mirador stays open until you close its window; <code>corral mirador --stop</code> stops its server.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>shift+q</kbd> (<code>corral close</code>) closes the script, the console and the variables, including the panes in the hidden tab, and leaves the tab with Claude, like any herdr tab. Closing the console ends that R session, and the unsaved draft is discarded. Mirador stays open until you close its window; <code>corral mirador --stop</code> stops its server.</p>
 
     <h2>Add panes to a layout you already have</h2>
     <p>If you set up your own tab and marked a pane as the R console (<kbd>ctrl+b</kbd> <kbd>m</kbd>), you can add the other panes to it:</p>
@@ -143,7 +143,7 @@
     <p>Corral changes nothing until you ask:</p>
     <ul>
     <li><strong>In R</strong>, it only switches on in the console a layout opens (which starts R with <code>CORRAL=1</code>), or in an R where you turn it on: <kbd>ctrl+b</kbd> <kbd>m</kbd> in that pane, or <code>corral_activate()</code> in the console. Any other R works as always, with its own <code>View()</code> and graphics device, and Corral never switches on inside RStudio or Positron. To switch it on in every R, add <code>options(corral.always = TRUE)</code> to your <code>.Rprofile</code>, before Corral's line.</li>
-    <li><strong>The layout</strong> (script, console and variables) only appears with <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+a</kbd>.</li>
+    <li><strong>The layout</strong> (script, console and variables) only appears with <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+s</kbd>.</li>
     <li><strong>The <kbd>ctrl+b</kbd> shortcuts</strong> only do something when you use them.</li>
     <li><strong>Claude</strong> uses your console only if the workspace has an active Corral console. Otherwise, it works as usual.</li>
     </ul>
