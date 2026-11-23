@@ -45,7 +45,7 @@ The installer downloads the latest published version, says which, and checks its
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
-`sh -s -- --check` at the end of the line only checks. `corral uninstall` takes everything out again. At the end it sends one anonymous ping (version, system, country; no IP) to count installs; `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
+`sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes everything out again. At the end it sends one anonymous ping (version, system, country; no IP) to count installs; `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
 
 ### Then
 
