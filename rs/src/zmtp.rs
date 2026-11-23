@@ -202,13 +202,59 @@ pub fn send_reply(sock: &mut Socket, key: &[u8], session: &str, msg_type: &str, 
     Ok(id)
 }
 
-/// Header and content of a Jupyter message (the signature isn't checked: local kernel).
-pub fn parse_message(parts: &[Vec<u8>]) -> Option<(Value, Value)> {
-    parse_full(parts).map(|(header, _, content)| (header, content))
+/// Header and content of a message signed with `key` (see `parse_signed`).
+pub fn parse_message(parts: &[Vec<u8>], key: &[u8]) -> Option<(Value, Value)> {
+    parse_signed(parts, key).map(|(header, _, content)| (header, content))
 }
 
-/// Header, parent header and content.
-pub fn parse_full(parts: &[Vec<u8>]) -> Option<(Value, Value, Value)> {
+/// Header, parent header and content of a message whose signature matches
+/// `key`: the HMAC-SHA256, in hex, of its header, parent header, metadata and
+/// content, as Jupyter signs them. Anything else on the port (a wrong or
+/// missing signature) is dropped: None. With an empty key nothing is signed.
+pub fn parse_signed(parts: &[Vec<u8>], key: &[u8]) -> Option<(Value, Value, Value)> {
+    if !key.is_empty() {
+        let i = parts.iter().position(|p| p.as_slice() == b"<IDS|MSG>")?;
+        let signed: Vec<&[u8]> = (2..6).map(|k| parts.get(i + k).map(Vec::as_slice)).collect::<Option<_>>()?;
+        let expected = hmac_hex(key, &signed);
+        if !same(parts.get(i + 1)?, expected.as_bytes()) {
+            return None;
+        }
+    }
+    parse_full(parts)
+}
+
+/// Equal, in a time that doesn't depend on where they differ.
+fn same(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Read a kernel channel until `handle` says stop or the kernel is gone. When
+/// the connection drops while `alive()` says the kernel still runs,
+/// `reconnect()` opens it again (None gives up) and reading goes on there.
+pub fn read_channel(mut sock: Socket, mut alive: impl FnMut() -> bool, mut reconnect: impl FnMut() -> Option<Socket>,
+                    mut handle: impl FnMut(Vec<Vec<u8>>) -> bool) {
+    loop {
+        match sock.recv() {
+            Ok(parts) => {
+                if !handle(parts) {
+                    return;
+                }
+            }
+            Err(_) => {
+                if !alive() {
+                    return;
+                }
+                match reconnect() {
+                    Some(s) => sock = s,
+                    None => return,
+                }
+            }
+        }
+    }
+}
+
+/// Header, parent header and content, without looking at the signature.
+fn parse_full(parts: &[Vec<u8>]) -> Option<(Value, Value, Value)> {
     let i = parts.iter().position(|p| p.as_slice() == b"<IDS|MSG>")?;
     let text = |k: usize| std::str::from_utf8(parts.get(i + k)?).ok().and_then(|t| json::parse(t).ok());
     Some((text(2)?, text(3).unwrap_or(Value::obj()), text(5)?))
@@ -565,5 +611,109 @@ mod handshake_tests {
         assert!(result.is_err(), "the handshake finished without READY");
         assert!(started.elapsed() < Duration::from_millis(900), "it waited {:?}", started.elapsed());
         peer.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod signed_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    fn signed(key: &[u8], content: &str) -> Vec<Vec<u8>> {
+        let (h, p, m) = (r#"{"msg_type":"stream","msg_id":"1"}"#, r#"{"msg_id":"0"}"#, "{}");
+        let sig = if key.is_empty() { String::new() } else { hmac_hex(key, &[h.as_bytes(), p.as_bytes(), m.as_bytes(), content.as_bytes()]) };
+        [&b"<IDS|MSG>"[..], sig.as_bytes(), h.as_bytes(), p.as_bytes(), m.as_bytes(), content.as_bytes()].iter().map(|x| x.to_vec()).collect()
+    }
+
+    #[test]
+    fn only_messages_signed_with_the_key_get_through() {
+        let key = b"a1b2c3-key";
+        let good = signed(key, r#"{"text":"hi"}"#);
+        assert_eq!(parse_signed(&good, key).unwrap().2.get("text").str(), Some("hi"));
+        assert!(parse_message(&good, key).is_some());
+
+        let mut tampered = good.clone();
+        tampered[5] = br#"{"text":"rm -rf"}"#.to_vec();
+        assert!(parse_signed(&tampered, key).is_none(), "content changed after signing");
+        assert!(parse_signed(&signed(b"other-key", r#"{"text":"hi"}"#), key).is_none(), "signed with another key");
+        assert!(parse_signed(&signed(b"", r#"{"text":"hi"}"#), key).is_none(), "not signed at all");
+        let mut upper = good.clone();
+        upper[1] = String::from_utf8(good[1].clone()).unwrap().to_uppercase().into_bytes();
+        assert!(parse_signed(&upper, key).is_none(), "the hex is lowercase");
+        assert!(parse_signed(&good[..5], key).is_none(), "missing content");
+        // With an empty key, as a connection file can say, nothing is signed.
+        assert!(parse_signed(&signed(b"", "{}"), b"").is_some());
+    }
+
+    /// The kernel side of one connection: handshake, then each message as frames.
+    fn serve(s: &mut TcpStream, messages: &[&[&[u8]]]) {
+        let mut theirs = [0u8; 64];
+        s.read_exact(&mut theirs).unwrap();
+        let mut ours = [0u8; 64];
+        ours[0] = 0xFF;
+        ours[9] = 0x7F;
+        ours[10] = 3;
+        ours[12..16].copy_from_slice(b"NULL");
+        s.write_all(&ours).unwrap();
+        let mut head = [0u8; 2];
+        s.read_exact(&mut head).unwrap();
+        let mut ready = vec![0u8; head[1] as usize];
+        s.read_exact(&mut ready).unwrap();
+        let answer = b"\x05READY\x0bSocket-Type\x00\x00\x00\x03PUB";
+        s.write_all(&[0x04, answer.len() as u8]).unwrap();
+        s.write_all(answer).unwrap();
+        for m in messages {
+            for (i, part) in m.iter().enumerate() {
+                s.write_all(&[if i + 1 < m.len() { 1 } else { 0 }, part.len() as u8]).unwrap();
+                s.write_all(part).unwrap();
+            }
+        }
+    }
+
+    /// The connection drops while the kernel runs: reading goes on over a new one.
+    #[test]
+    fn a_dropped_channel_is_opened_again() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let kernel = std::thread::spawn(move || {
+            let (mut first, _) = listener.accept().unwrap();
+            serve(&mut first, &[&[b"one"]]);
+            drop(first); // the connection drops
+            let (mut second, _) = listener.accept().unwrap();
+            serve(&mut second, &[&[b"two"]]);
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        });
+        let sock = Socket::connect(&addr, "SUB").unwrap();
+        let (mut got, mut reconnects) = (Vec::new(), 0);
+        read_channel(sock, || true, || {
+            reconnects += 1;
+            if reconnects > 1 { None } else { Socket::connect(&addr, "SUB").ok() }
+        }, |parts| {
+            got.push(parts[0].clone());
+            got.len() < 2
+        });
+        kernel.join().unwrap();
+        assert_eq!(got, vec![b"one".to_vec(), b"two".to_vec()]);
+        assert_eq!(reconnects, 1);
+    }
+
+    /// When the kernel is gone, a dropped connection ends the reading.
+    #[test]
+    fn a_kernel_that_ended_is_not_called_again() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let kernel = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            serve(&mut s, &[&[b"last"]]);
+        });
+        let sock = Socket::connect(&addr, "SUB").unwrap();
+        let mut got = Vec::new();
+        read_channel(sock, || false, || panic!("tried to reconnect to an ended kernel"), |parts| {
+            got.push(parts[0].clone());
+            true
+        });
+        kernel.join().unwrap();
+        assert_eq!(got, vec![b"last".to_vec()]);
     }
 }

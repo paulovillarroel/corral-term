@@ -165,10 +165,10 @@ fn bridge(connection_file: &str) -> Result<(), String> {
     let mut sub = Socket::connect(&conn.addr(conn.iopub), "SUB").map_err(io_err)?;
     sub.subscribe_all().map_err(io_err)?;
     let (tx, rx) = mpsc::channel();
-    let wanted = comm_id.clone();
+    let (wanted, key) = (comm_id.clone(), conn.key.clone());
     std::thread::spawn(move || {
         while let Ok(parts) = sub.recv() {
-            let Some((header, content)) = zmtp::parse_message(&parts) else { continue };
+            let Some((header, content)) = zmtp::parse_message(&parts, &key) else { continue };
             if header.get("msg_type").str() == Some("comm_msg") && content.get("comm_id").str() == Some(&wanted) {
                 if let Some(port) = content.get("data").get("content").get("port").num() {
                     let _ = tx.send(port as u16);
