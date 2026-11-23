@@ -658,6 +658,22 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
+    if key == "plot_size" {
+        let Some(size) = crate::mirador::plot_size(value) else {
+            return Err(tr("plot_size takes window, or a size in pixels as WIDTHxHEIGHT (like 1000x650)",
+                          "plot_size acepta window, o un tamaño en píxeles como ANCHOxALTO (como 1000x650)").into());
+        };
+        cfg.set(key, crate::mirador::plot_size_text(size).into());
+        write_config(&cfg);
+        match size {
+            None => say(tr("Plots: the window's size", "Gráficos: del tamaño de la ventana"),
+                        tr("Mirador draws R plots to fit its window.", "Mirador dibuja los gráficos de R a la medida de su ventana.")),
+            Some((w, h)) => say(&trf!("Plots: {w} × {h}", "Gráficos: {w} × {h}"),
+                                tr("Mirador draws R plots at this size, whatever its window; a smaller window shows them scaled down.",
+                                   "Mirador dibuja los gráficos de R de este tamaño, sea cual sea su ventana; una ventana más chica los muestra reducidos.")),
+        }
+        return Ok(());
+    }
     if key == "checkpoint_max_mb" && !value.parse::<u64>().is_ok_and(|mb| mb >= 1) {
         return Err(tr("checkpoint_max_mb takes a size in MB (1 or more)", "checkpoint_max_mb acepta un tamaño en MB (1 o más)").into());
     }

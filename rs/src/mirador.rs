@@ -372,8 +372,32 @@ fn fingerprint(app: &Shared) -> String {
         out.push_str(t.get("id").str().unwrap_or(""));
     }
     // The language too, so a page waiting for a change switches language at once.
-    out.push_str(&format!("|{}|{}|{}", a.show_plot.to_json(), mtime(&palette_file()).unwrap_or(0.0), crate::i18n::lang()));
+    out.push_str(&format!("|{}|{}|{}|{}", a.show_plot.to_json(), mtime(&palette_file()).unwrap_or(0.0), crate::i18n::lang(), current_plot_size()));
     format!("{:016x}", fnv(out.as_bytes()))
+}
+
+/// The size Mirador draws R plots at (`corral config plot_size`): `window`, the
+/// default, fits them to the page; WIDTHxHEIGHT in pixels keeps them that size
+/// whatever the window. None when the text is neither.
+pub fn plot_size(value: &str) -> Option<Option<(u32, u32)>> {
+    let v = value.trim().to_lowercase();
+    if v == "window" {
+        return Some(None);
+    }
+    let (w, h) = v.split_once(['x', '×'])?;
+    let (w, h) = (w.trim().parse::<u32>().ok()?, h.trim().parse::<u32>().ok()?);
+    ((200..=4000).contains(&w) && (150..=4000).contains(&h)).then_some(Some((w, h)))
+}
+
+/// The setting as Corral writes it: `window` or `1000x650`.
+pub fn plot_size_text(size: Option<(u32, u32)>) -> String {
+    size.map(|(w, h)| format!("{w}x{h}")).unwrap_or_else(|| "window".into())
+}
+
+/// The plot size in effect: the setting when it is valid, otherwise the window's.
+fn current_plot_size() -> String {
+    let set = env::config().get("plot_size").str().and_then(plot_size).unwrap_or(None);
+    plot_size_text(set)
 }
 
 fn fnv(bytes: &[u8]) -> u64 {
@@ -408,6 +432,7 @@ fn state(app: &Shared) -> Value {
         ("show_plot", show_plot),
         ("palette", palette(app)),
         ("lang", crate::i18n::lang().into()),
+        ("plot_size", current_plot_size().into()),
     ])
 }
 
@@ -678,6 +703,17 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
             a.save_tables();
             json_reply(200, &obj(vec![("ok", true.into())]))
         }
+        "/api/plot-size" => {
+            // The page's size menu: the same setting as corral config plot_size.
+            let Some(size) = plot_size(&field("size")) else {
+                return Ok(error(400, tr("the size is window or WIDTHxHEIGHT in pixels, like 1000x650",
+                                        "el tamaño es window o ANCHOxALTO en píxeles, como 1000x650")));
+            };
+            let mut cfg = env::config();
+            cfg.set("plot_size", plot_size_text(size).into());
+            crate::theme::write_config(&cfg);
+            json_reply(200, &obj(vec![("ok", true.into()), ("plot_size", plot_size_text(size).into())]))
+        }
         "/api/plots/remove" | "/api/plots/clear" => {
             let sid = field("session");
             let ok = if path.ends_with("clear") {
@@ -727,4 +763,25 @@ pub fn serve() -> Result<(), String> {
         std::thread::spawn(move || handle(stream, app));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plot_sizes() {
+        assert_eq!(plot_size("window"), Some(None));
+        assert_eq!(plot_size(" Window "), Some(None));
+        assert_eq!(plot_size("1000x650"), Some(Some((1000, 650))));
+        assert_eq!(plot_size("1000 × 650"), Some(Some((1000, 650))));
+        assert_eq!(plot_size("800X500"), Some(Some((800, 500))));
+        // Too small to read, too big to draw, or not a size.
+        assert_eq!(plot_size("100x100"), None);
+        assert_eq!(plot_size("9000x500"), None);
+        assert_eq!(plot_size("big"), None);
+        assert_eq!(plot_size("1000x"), None);
+        assert_eq!(plot_size_text(Some((1000, 650))), "1000x650");
+        assert_eq!(plot_size_text(None), "window");
+    }
 }

@@ -219,6 +219,31 @@ title = "Corral: idioma: español"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "language", "es"]
 
+# The size Mirador draws R plots at: its window's, or fixed.
+[[actions]]
+id = "plot-size-window"
+title = "Corral: Mirador draws plots to fit its window"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "plot_size", "window"]
+
+[[actions]]
+id = "plot-size-800"
+title = "Corral: Mirador draws plots at 800 × 500"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "plot_size", "800x500"]
+
+[[actions]]
+id = "plot-size-1000"
+title = "Corral: Mirador draws plots at 1000 × 650"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "plot_size", "1000x650"]
+
+[[actions]]
+id = "plot-size-1200"
+title = "Corral: Mirador draws plots at 1200 × 800"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "plot_size", "1200x800"]
+
 # Corral's latest version, with the install line, in a popup.
 [[actions]]
 id = "update"
