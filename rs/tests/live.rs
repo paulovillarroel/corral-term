@@ -198,6 +198,21 @@ impl Live {
     fn screen(&self, pane: &str) -> String {
         self.run("herdr", &["pane", "read", pane])
     }
+
+    /// Wait until the pane shows every one of `texts`, wherever it wrapped them: a
+    /// console's notices can show up a moment after the request that follows them.
+    fn wait_screen(&self, pane: &str, texts: &[&str]) {
+        let squeeze = |s: &str| s.split_whitespace().collect::<String>();
+        let end = Instant::now() + Duration::from_secs(15);
+        loop {
+            let screen = self.screen(pane);
+            if texts.iter().all(|t| squeeze(&screen).contains(&squeeze(t))) {
+                return;
+            }
+            assert!(Instant::now() < end, "the pane doesn't show {texts:?}; it shows:\n{screen}");
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
 }
 
 impl Drop for Live {
@@ -213,6 +228,13 @@ impl Drop for Live {
 fn alive(pid: i64) -> bool {
     std::fs::read_to_string(format!("/proc/{pid}/stat"))
         .is_ok_and(|s| s.rsplit_once(')').is_some_and(|(_, rest)| !rest.trim_start().starts_with(['Z', 'X'])))
+}
+
+/// Kill a process as a crash would, and wait until it is gone: a request sent
+/// right after the signal could still reach it.
+fn crash(pid: i64) {
+    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
+    wait_for(Duration::from_secs(10), "the killed process to end", || !alive(pid));
 }
 
 /// A child that is already done, until the real server starts.
@@ -355,8 +377,7 @@ fn r_comes_back_by_itself_after_a_crash() {
         assert!(Instant::now() < end, "no new R session after 30 s; the console shows:\n{}", live.screen(&live.console));
         std::thread::sleep(Duration::from_millis(200));
     }
-    let screen = live.screen(&live.console);
-    assert!(screen.contains("R ended unexpectedly"), "{screen}");
+    live.wait_screen(&live.console, &["R ended unexpectedly"]);
     let started = Instant::now();
     let (code, text) = live.eval(&[r#"cat("back\n")"#]);
     assert_eq!(code, 0, "{text}");
@@ -547,8 +568,7 @@ fn r_objects_survive_a_crash() {
         "package:tools" %in% search(), exists("con"), "\n")"#]);
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("same: TRUE 42 5 TRUE FALSE"), "{text}");
-    let screen = live.screen(&live.console);
-    assert!(screen.contains("Restored") && screen.contains("con (a connection)"), "the console shows:\n{screen}");
+    live.wait_screen(&live.console, &["Restored", "con (a connection)"]);
 }
 
 /// Python too, after a crash: values, a function defined in the session, an
@@ -562,12 +582,11 @@ fn python_objects_survive_a_crash() {
     assert_eq!(status, 0, "{text}");
     live.wait_checkpoint("python", &["d", "f", "p"]);
     let (pid, pane) = live.session("python").unwrap();
-    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
+    crash(pid);
     let (status, text) = live.eval(&["--lang", "python", "print('same:', d['a'], f(21), p.n, js.dumps(1), 'lk' in dir())"]);
     assert_eq!(status, 0, "{text}");
     assert!(text.contains("same: [1, 2, 3] 42 7 1 False"), "{text}");
-    let screen = live.screen(&pane);
-    assert!(screen.contains("Restored") && screen.contains("lk (lock)"), "the console shows:\n{screen}");
+    live.wait_screen(&pane, &["Restored", "lk (lock)"]);
     // The crashed Python's temporary folder went when the new one started.
     let left: Vec<_> = std::fs::read_dir(std::env::temp_dir()).unwrap().flatten()
         .filter(|e| e.file_name().to_string_lossy().starts_with(&format!("corral-py-{pid}-"))).collect();
@@ -874,12 +893,7 @@ fn hidden_characters_show_in_the_popup_and_the_console() {
     let joined: String = popup.split_whitespace().collect();
     assert!(joined.contains(&long.split_whitespace().collect::<String>()), "the long line was cut:\n{popup}");
 
-    let mut console = String::new();
-    wait_for(Duration::from_secs(10), "the console's notice", || {
-        console = live.screen(&live.console);
-        console.contains("#   x <- 1 # ␛[1K␛[Gy <- 2")
-    });
-    assert!(console.contains("written out, it says:"), "{console}");
+    live.wait_screen(&live.console, &["written out, it says:", "#   x <- 1 # ␛[1K␛[Gy <- 2"]);
     live.config(r#"{"agents":"on"}"#);
     let (_, text) = live.eval(&[r#"cat(exists("y"), x, length(z), "\n")"#]);
     assert!(text.contains("FALSE 1 61"), "{text}");
@@ -888,7 +902,7 @@ fn hidden_characters_show_in_the_popup_and_the_console() {
     let (status, text) = live.eval(&["--lang", "python", "a = 1 # \x1b[1K\x1bGb = 2"]);
     assert_eq!(status, 0, "{text}");
     let pane = live.session("python").expect("no Python session").1;
-    wait_for(Duration::from_secs(10), "Python's notice", || live.screen(&pane).contains("#   a = 1 # ␛[1K␛Gb = 2"));
+    live.wait_screen(&pane, &["#   a = 1 # ␛[1K␛Gb = 2"]);
     let (_, text) = live.eval(&["--lang", "python", "print('b' in globals(), a)"]);
     assert!(text.contains("False 1"), "{text}");
     assert!(!text.contains("written out"), "{text}");
@@ -912,19 +926,17 @@ fn sensitive_sessions_stay_sensitive_after_a_crash() {
     let (status, text) = live.eval(&["cat(secret, \"\\n\")"]);
     assert_eq!(status, 3, "it ran without approval: {text}");
     assert!(!text.contains("42"), "{text}");
-    // The console shows the notice a moment later, wrapped to the pane.
-    let says = |pane: &str| { let s: String = live.screen(pane).split_whitespace().collect(); s.contains("Restored") && s.contains("markedsensitive") };
-    wait_for(Duration::from_secs(10), "R's notice", || says(&live.console));
+    live.wait_screen(&live.console, &["Restored", "marked sensitive"]);
 
     assert_eq!(live.eval(&["--lang", "python", "s = 42"]).0, 0);
     live.wait_checkpoint("python", &["s"]);
     assert_eq!(live.eval(&["--lang", "python", "corral_sensitive()"]).0, 0);
     let (pid, pane) = live.session("python").unwrap();
-    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
+    crash(pid);
     let (status, text) = live.eval(&["--lang", "python", "print(s)"]);
     assert_eq!(status, 3, "it ran without approval: {text}\nscreen:\n{}", live.screen(&pane));
     assert!(!text.contains("42"), "{text}");
-    wait_for(Duration::from_secs(10), "Python's notice", || says(&pane));
+    live.wait_screen(&pane, &["Restored", "marked sensitive"]);
 }
 
 /// An agent that runs its commands in a terminal of its own still can't loosen the
