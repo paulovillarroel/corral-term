@@ -4,6 +4,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- A third layout, Notebook: the script over the console on the left, like RStudio or Positron, and the agent over the variables on the right. "Layout: notebook" in the palette (Tab gives it a key) or `corral layout --focus notebook`. Like the other two, it rearranges an open layout in place, keeping the console's session, the draft and the agent.
 - Docs: Windows users get a step-by-step guide to set up WSL with Ubuntu, R (with rig), herdr and Corral, for people who don't use Linux or terminals. The install page starts with it, and the landing's "Windows · WSL" tag and FAQ link to it.
 - Change a shortcut from the palette: Tab on it, then press the new key; Backspace puts back Corral's. herdr takes it at once. From a terminal, `corral keys --reset ID` gives a shortcut back Corral's key.
 - Choose the R version (with rig) or the Python version (with uv) from the palette: "Console: R version (rig)" and "Console: Python version (uv)" open a window with the installed versions, and Enter uses one; if that console is open, Corral asks whether to restart it. Corral runs the chosen R without changing rig's default, so the rest of the system keeps it. Inside a uv project the Python goes to the project's `.python-version` (`uv python pin`); outside one, to `uv run --python`. From a terminal or an agent: `corral versions r|python [VERSION] [--list|--json] [--restart]`.
