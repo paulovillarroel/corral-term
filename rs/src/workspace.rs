@@ -1,5 +1,5 @@
-//! The Corral layout and its panes: `corral layout` (ctrl+b a, ctrl+b shift+a),
-//! `corral close` (ctrl+b shift+c), `corral script` (the editor and its draft)
+//! The Corral layout and its panes: `corral layout` (ctrl+b a, ctrl+b shift+s),
+//! `corral close` (ctrl+b shift+q), `corral script` (the editor and its draft)
 //! and `corral console` (ctrl+b m, mark a pane as the console).
 
 use crate::console;
@@ -100,7 +100,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     };
     let ws = env::current_workspace().ok_or(tr("no herdr workspace found", "no encontré un workspace de herdr"))?;
     // A layout already open here is rearranged, never replaced: its console, draft
-    // and agent keep running until Corral closes (ctrl+b shift+c).
+    // and agent keep running until Corral closes (ctrl+b shift+q).
     if let Some(kept) = layout::refocus(&ws, code)? {
         let active = kept.get("lang").str().unwrap_or("r").to_string();
         if let Some(l) = a.value("--lang").filter(|l| *l != active) {
@@ -488,7 +488,7 @@ pub fn script(args: &[String]) -> Result<(), String> {
 
 // ----------------------------------------------------------------------- close
 
-/// `corral close` (ctrl+b shift+c): Corral's panes (script, console, variables)
+/// `corral close` (ctrl+b shift+q): Corral's panes (script, console, variables)
 /// go; everything else, the agent included, stays.
 pub fn close(args: &[String]) -> Result<(), String> {
     let usage = tr("usage: corral close", "uso: corral close");

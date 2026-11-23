@@ -15,10 +15,10 @@ command = "corral.send"
 description = "Corral: send the selection or the clipboard to the console"
 
 [[keys.command]]
-key = "prefix+shift+c"
+key = "prefix+shift+q"
 type = "plugin_action"
 command = "corral.close"
-description = "Corral: close and go back to plain herdr"
+description = "Corral: quit, back to plain herdr (prefix+q, without shift, is herdr's detach)"
 
 [[keys.command]]
 key = "prefix+t"
@@ -51,10 +51,10 @@ command = "corral.layout"
 description = "Corral: layout, agent first"
 
 [[keys.command]]
-key = "prefix+shift+a"
+key = "prefix+shift+s"
 type = "plugin_action"
 command = "corral.layout-code"
-description = "Corral: layout, code first"
+description = "Corral: layout, script first (code first)"
 
 [[keys.command]]
 key = "prefix+m"
