@@ -209,6 +209,7 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("theme-herdr", Group::Settings, "Theme: back to herdr's", "Tema: volver al de herdr"),
     ("language-en", Group::Settings, "Language: English", "Language: English"),
     ("language-es", Group::Settings, "Idioma: español", "Idioma: español"),
+    ("update", Group::Settings, "Update: install the latest version of Corral", "Actualizar: instalar la última versión de Corral"),
     ("keys", Group::Help, "Help: shortcuts and actions (this palette)", "Ayuda: atajos y acciones (esta paleta)"),
 ];
 

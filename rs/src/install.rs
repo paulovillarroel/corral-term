@@ -929,6 +929,133 @@ pub fn cmd_install(args: &[String]) -> Result<(), String> {
     install(&src, in_place, &again)
 }
 
+// ----------------------------------------------------------------------- update
+
+const REPO: &str = "paulovillarroel/corral-term";
+const INSTALL_LINE: &str = "curl -LsSf https://corral-term.dev/install.sh | sh";
+
+fn update_usage() -> &'static str {
+    tr("usage: corral update [--check]", "uso: corral update [--check]")
+}
+
+/// The tag of the latest published version (v0.1.12): where GitHub's "latest"
+/// link leads, as the installer finds it.
+fn latest_tag() -> Result<String, String> {
+    let curl = env::which("curl").ok_or(tr("curl isn't installed", "curl no está instalado"))?;
+    let url = format!("https://github.com/{REPO}/releases/latest");
+    let out = Command::new(curl).args(["-fsSLI", "-o", "/dev/null", "-w", "%{url_effective}", "--max-time", "20", &url])
+        .output().map_err(|e| e.to_string())?;
+    tag_of(&String::from_utf8_lossy(&out.stdout)).ok_or_else(|| {
+        tr("couldn't find out the latest version: is there a connection to github.com?",
+           "no pude saber cuál es la última versión: ¿hay conexión con github.com?").into()
+    })
+}
+
+/// "https://github.com/…/releases/tag/v0.1.12" → "v0.1.12".
+fn tag_of(url: &str) -> Option<String> {
+    let tag = url.trim().rsplit_once("/tag/")?.1;
+    let numbers = tag.strip_prefix('v')?;
+    (numbers.split('.').count() == 3 && numbers.split('.').all(|n| n.parse::<u32>().is_ok())).then(|| tag.to_string())
+}
+
+/// What `corral update` does with the installed version, the latest one and where
+/// Corral is installed.
+#[derive(Debug, PartialEq)]
+enum Next {
+    UpToDate,
+    Ahead,
+    Install,
+    FromClone,
+}
+
+fn next_step(have: &str, latest: &str, from_clone: bool) -> Next {
+    match as_tuple(have).cmp(&as_tuple(latest)) {
+        std::cmp::Ordering::Equal => Next::UpToDate,
+        std::cmp::Ordering::Greater => Next::Ahead,
+        std::cmp::Ordering::Less if from_clone => Next::FromClone,
+        std::cmp::Ordering::Less => Next::Install,
+    }
+}
+
+/// `corral update [--check]`: install the latest published version, with the same
+/// line as the first time, which checks the package's SHA-256 and, with the GitHub
+/// CLI, its build provenance. `--check` only says whether there is a newer one. A
+/// Corral installed from a copy of the repository is updated there, with git: this
+/// says how instead of replacing it. From the palette it runs in a popup
+/// (`corral _update`), which waits for Enter before closing.
+pub fn cmd_update(args: &[String], in_popup: bool) -> Result<(), String> {
+    if env::wants_help(args) {
+        println!("{}", update_usage());
+        return Ok(());
+    }
+    if let Some(bad) = args.iter().find(|a| a.as_str() != "--check") {
+        return Err(trf!("unknown option {bad}\n{}", "opción desconocida {bad}\n{}", update_usage()));
+    }
+    // From the palette there is no terminal to show the installation: a popup has one.
+    if !in_popup && std::env::var_os("HERDR_PLUGIN_ID").is_some() {
+        return crate::vars::open_popup("update", &[]);
+    }
+    let result = update(args.iter().any(|a| a == "--check"));
+    if in_popup {
+        if let Err(e) = &result {
+            println!("\n{e}");
+        }
+        println!("\n{}", tr("Press Enter to close.", "Presiona Enter para cerrar."));
+        let _ = std::io::stdin().read_line(&mut String::new());
+        return Ok(());
+    }
+    result
+}
+
+fn update(check: bool) -> Result<(), String> {
+    let s = style();
+    let done = env::read_json(&manifest());
+    let have = done.get("version").str().unwrap_or(VERSION).to_string();
+    // Only a record that says so is a published package; without one, or from a
+    // clone, nothing is replaced.
+    let from_clone = done.get("in_place") != &Value::Bool(false);
+    let tag = latest_tag()?;
+    let latest = tag.trim_start_matches('v');
+    match next_step(&have, latest, from_clone) {
+        Next::UpToDate => {
+            println!("{}", trf!("Corral {have} is the latest version.", "Corral {have} es la última versión."));
+            Ok(())
+        }
+        Next::Ahead => {
+            println!("{}", trf!("You have Corral {have}, newer than the latest published one ({latest}).",
+                                "Tienes Corral {have}, más nuevo que el último publicado ({latest})."));
+            Ok(())
+        }
+        Next::FromClone => {
+            let folder = done.get("folder").str().map(String::from).unwrap_or_else(|| env::repo().display().to_string());
+            println!("{}", trf!("Corral {latest} is out; you have {have}.", "Salió Corral {latest}; tienes {have}."));
+            println!("{}", trf!("This Corral runs from a copy of the repository, so update it there:",
+                                "Este Corral corre desde una copia del repositorio, así que actualízalo ahí:"));
+            println!("  {}git -C {folder} pull{}\n  {}sh {folder}/install.sh{}", s.bold, s.off, s.bold, s.off);
+            Ok(())
+        }
+        Next::Install if check => {
+            println!("{}", trf!("Corral {latest} is out; you have {have}. corral update installs it.",
+                                "Salió Corral {latest}; tienes {have}. corral update lo instala."));
+            Ok(())
+        }
+        Next::Install => {
+            println!("{}", trf!("Updating Corral {have} to {latest}, with the install line:",
+                                "Actualizo Corral {have} a {latest}, con la línea de instalación:"));
+            println!("  {}{INSTALL_LINE}{}\n", s.dim, s.off);
+            let ok = Command::new("sh").args(["-c", INSTALL_LINE]).env("CORRAL_VERSION", &tag)
+                .status().map(|st| st.success()).unwrap_or(false);
+            if !ok {
+                return Err(trf!("the update didn't finish; Corral {have} is still installed",
+                                "la actualización no terminó; sigue instalado Corral {have}"));
+            }
+            println!("\n{}", tr("Consoles already open keep running the version they started with; the next ones you open use the new one.",
+                                "Las consolas ya abiertas siguen con la versión con que partieron; las próximas que abras usan la nueva."));
+            Ok(())
+        }
+    }
+}
+
 // ----------------------------------------------------------------------- uninstall
 
 /// `corral uninstall`: take out what the installer added (and the user's own Corral lines it recognizes).
@@ -1072,6 +1199,23 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_reads_the_latest_tag() {
+        assert_eq!(tag_of("https://github.com/paulovillarroel/corral-term/releases/tag/v0.1.12\n").as_deref(), Some("v0.1.12"));
+        assert_eq!(tag_of("https://github.com/paulovillarroel/corral-term/releases"), None);
+        assert_eq!(tag_of("https://github.com/x/releases/tag/nightly"), None);
+        assert_eq!(tag_of(""), None);
+    }
+
+    #[test]
+    fn update_knows_what_to_do() {
+        assert_eq!(next_step("0.1.12", "0.1.12", false), Next::UpToDate);
+        assert_eq!(next_step("0.1.11", "0.1.12", false), Next::Install);
+        assert_eq!(next_step("0.1.9", "0.1.12", false), Next::Install); // not compared as text
+        assert_eq!(next_step("0.1.11", "0.1.12", true), Next::FromClone);
+        assert_eq!(next_step("0.2.0", "0.1.12", false), Next::Ahead);
+    }
 
     #[test]
     fn keys_block_old_and_new_markers() {

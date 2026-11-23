@@ -992,3 +992,28 @@ fn requests_that_never_run_are_audited() {
     let line = audit.lines().find(|l| l.contains("second")).unwrap_or_else(|| panic!("not in the audit log:\n{audit}"));
     assert!(line.contains(r#""decision":"not run""#) && line.contains(r#""status":"queue timeout""#), "{line}");
 }
+
+/// Update from the palette runs in a popup: it says what it found (here, a Corral
+/// with no install record, so nothing is replaced) and waits for Enter to close.
+#[test]
+#[ignore]
+fn update_from_the_palette_runs_in_a_popup() {
+    let live = Live::start("update");
+    live.link_plugin();
+    // The popup's program, in a pane of its own so its screen can be read.
+    let split = live.run("herdr", &["pane", "split", &live.console, "--direction", "down"]);
+    let pane = field(&split, "pane_id").unwrap_or_else(|| panic!("no pane in {split}"));
+    live.run("herdr", &["pane", "run", &pane, "corral _update"]);
+    live.wait_screen(&pane, &["Press Enter to close."]);
+    let screen = live.screen(&pane);
+    assert!(screen.contains("is the latest version") || screen.contains("update it there"), "{screen}");
+    live.run("herdr", &["pane", "send-text", &pane, "\r"]);
+    wait_for(Duration::from_secs(10), "the popup to close on Enter", || !live.screen(&pane).trim_end().ends_with("Press Enter to close."));
+
+    // From the palette: the action opens that popup.
+    let running = || std::fs::read_dir("/proc").unwrap().flatten()
+        .filter_map(|p| std::fs::read(p.path().join("cmdline")).ok())
+        .any(|c| String::from_utf8_lossy(&c).replace('\0', " ").ends_with("corral _update "));
+    live.run("herdr", &["plugin", "action", "invoke", "update", "--plugin", "corral"]);
+    wait_for(Duration::from_secs(20), "the update popup", running);
+}

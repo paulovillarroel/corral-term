@@ -61,6 +61,7 @@ Setup
   ark          Ark's status, or --install
   doctor       checks that everything is in order
   install      checks the requirements and repairs the installation (--check)
+  update       installs the latest version (--check only says if there is one)
   uninstall    removes Corral from herdr, R, the editor and your agents
 ";
 
@@ -94,6 +95,7 @@ Instalación y ajustes
   ark          estado de Ark, o --install
   doctor       revisa que esté todo en orden
   install      revisa los requisitos y repara la instalación (--check)
+  update       instala la última versión (--check solo dice si hay una)
   uninstall    quita Corral de herdr, R, el editor y tus agentes
 ";
 
@@ -135,6 +137,8 @@ fn main() {
         Some("doctor") => setup::cmd_doctor(rest),
         Some("install") => install::cmd_install(rest),
         Some("uninstall") => install::cmd_uninstall(rest),
+        Some("update") => install::cmd_update(rest, false),
+        Some("_update") => install::cmd_update(rest, true),
         Some("config") => theme::cmd_config(rest),
         Some("--version" | "-V") => {
             println!("corral {} ({})", env!("CARGO_PKG_VERSION"), env::repo().display());

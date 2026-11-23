@@ -219,6 +219,13 @@ title = "Corral: idioma: español"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "language", "es"]
 
+# Corral's latest version, with the install line, in a popup.
+[[actions]]
+id = "update"
+title = "Corral: update to the latest version"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "update"]
+
 [[actions]]
 id = "open-url"
 title = "Corral: open a local link in the browser"
@@ -250,6 +257,15 @@ placement = "popup"
 width = "70%"
 height = "80%"
 command = ["../rs/target/release/corral", "_keys"]
+
+# Corral's latest version, installed in a popup with the install line.
+[[panes]]
+id = "update"
+title = "Corral: update"
+placement = "popup"
+width = "70%"
+height = "70%"
+command = ["../rs/target/release/corral", "_update"]
 
 # The installed R (rig) or Python (uv) versions; Enter uses one.
 [[panes]]
