@@ -187,6 +187,12 @@ Optional
 <span class="p">$ </span>sh corral-term/install.sh</code></pre>
     <p>If the copy has no compiled <code>corral</code>, the installer builds it with <code>cargo</code>. When you change something in <code>rs/</code>, build it again with <code>cargo build --release</code>; <code>corral --version</code> tells you which folder the binary you are using comes from.</p>
 
+    <h3 id="tests">Tests</h3>
+    <pre><code><span class="p">$ </span>cargo test --manifest-path rs/Cargo.toml
+<span class="p">$ </span>cargo test --release --manifest-path rs/Cargo.toml --test live -- --ignored --test-threads 1</code></pre>
+    <p>The first runs the unit tests (the JSON, TOML and zip readers, the ZMTP and Jupyter protocol Corral speaks to Ark, the audit log's dates) and checks Mirador's API: without its token, or from another address, it answers 403. GitHub runs them on every pull request.</p>
+    <p>The second runs the live tests. Each starts its own herdr server with an R console and checks what agents rely on: two agents asking at once take turns, a timeout leaves the code running and keeps its output, <kbd>Ctrl</kbd>+<kbd>C</kbd> stops it and keeps the session, a crash is reported at once and the next request gets a new session, and the variables are never read half-written. They need herdr, R and Ark, and leave your herdr, sessions and settings alone.</p>
+
     <h2>Update</h2>
     <p>Run the same install line again. It replaces your copy of Corral and doesn't repeat what is already done: in herdr's configuration, for example, it only adds shortcuts that are new.</p>
     <p><code>corral install</code> checks and repairs the installation from the copy you have, without downloading Corral again, and <code>corral install --check</code> only checks.</p>
