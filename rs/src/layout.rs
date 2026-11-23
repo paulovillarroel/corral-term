@@ -106,13 +106,24 @@ fn split_between(node: &Value, a: &str, b: &str, path: &mut Vec<bool>) -> Option
     None
 }
 
+/// The split between panes `a` and `b`: tab, path, whether `a` comes first, and `a`'s share.
+fn pane_split(a: &str, b: &str) -> Option<(String, Vec<bool>, bool, f64)> {
+    let layout = herdr::call("layout.export", obj(vec![("pane_id", b.into())])).ok()?;
+    let layout = layout.get("layout");
+    let (path, ratio, a_first) = split_between(layout.get("root"), a, b, &mut Vec::new())?;
+    let share = if a_first { ratio } else { 1.0 - ratio };
+    Some((layout.get("tab_id").str()?.to_string(), path, a_first, share))
+}
+
 /// Tab, split path, whether the script comes first, and the script's share.
 fn script_split(script: &str, console: &str) -> Option<(String, Vec<bool>, bool, f64)> {
-    let layout = herdr::call("layout.export", obj(vec![("pane_id", console.into())])).ok()?;
-    let layout = layout.get("layout");
-    let (path, ratio, script_first) = split_between(layout.get("root"), script, console, &mut Vec::new())?;
-    let share = if script_first { ratio } else { 1.0 - ratio };
-    Some((layout.get("tab_id").str()?.to_string(), path, script_first, share))
+    pane_split(script, console)
+}
+
+/// How wide the left column starts in each layout: about half for the agent,
+/// more for the script, which needs the long lines.
+pub fn default_width(kind: &str) -> f64 {
+    if kind == "agent" { 0.516 } else { 0.62 }
 }
 
 fn set_ratio(tab: &str, path: &[bool], ratio: f64) -> Result<(), String> {
@@ -157,7 +168,8 @@ fn kind_label(kind: &str) -> &'static str {
 ///   notebook      script over console | agent over variables
 /// so the agent and the script swap places, and the console moves under the
 /// script or under the agent. A pane hidden with ctrl+b t comes back first.
-/// None when the workspace has no layout yet. `announce` says it in a notice.
+/// The left column takes the width it had the last time in that layout, or
+/// `default_width`. None when the workspace has no layout yet. `announce` says it in a notice.
 pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, String> {
     let read = || -> Result<(Vec<Value>, Value), String> {
         let panes = herdr::panes(Some(ws))?;
@@ -194,6 +206,14 @@ pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, Stri
                 tr("couldn't tell which pane is the agent's", "no pude saber cuál es el panel del agente").into()
             });
         };
+        // Each layout keeps its own width for the left column: remember this one's
+        // (the user may have resized it) and give the next one the width it had.
+        let left_right = |kind: &str| if kind == "agent" { (a.as_str(), s.as_str()) } else { (s.as_str(), a.as_str()) };
+        let mut widths = state.get("widths").clone();
+        let (l, r) = left_right(from);
+        if let Some(w) = pane_split(l, r).map(|x| x.3).filter(|w| (0.15..=0.85).contains(w)) {
+            widths.set(from, w.into());
+        }
         let swap = || herdr::call("pane.swap", obj(vec![("source_pane_id", a.as_str().into()), ("target_pane_id", s.as_str().into())])).map(|_| ());
         // herdr leaves a move within the same tab unchanged, so the console goes
         // through the hidden tab, as ctrl+b t does, and comes back under `target`.
@@ -215,6 +235,11 @@ pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, Stri
                 swap()?;
             }
         }
+        let want = widths.get(to).num().unwrap_or_else(|| default_width(to));
+        let (l, r) = left_right(to);
+        if let Some((tab, path, l_first, _)) = pane_split(l, r) {
+            set_ratio(&tab, &path, if l_first { want } else { 1.0 - want })?;
+        }
         let path = env::layout_file();
         let mut saved = env::read_json(&path);
         let key = env::ws_key(Some(ws));
@@ -226,6 +251,7 @@ pub fn refocus(ws: &str, to: &str, announce: bool) -> Result<Option<Value>, Stri
             st.set("focus", to.into());
             st.set("agent", a.as_str().into());
         }
+        st.set("widths", widths);
         saved.set(&key, st);
         env::write_json(&path, &saved);
     }
