@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.11
+
+Objects that outlive a crash, an R console that comes back by itself, Corral's files kept private to you, and a harness that asks before an agent loosens it.
 
 - Corral's files are yours only. The state folder, `~/.local/state/corral`, holds the audit log, your console history, previews of your variables and the agents' requests, and Corral now keeps it at `700`: it fixes an existing install's folder, and everything already inside, the next time it runs, and `corral doctor` checks it. The audit log, the console history and the logs are created readable only by you. This matters on shared servers.
 - The audit log keeps 90 days. `corral config audit_days` changes that (a number of days, or `forever`), and the palette has "Agents: keep the audit log 30 days", "90 days" and "a year".
