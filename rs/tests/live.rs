@@ -20,11 +20,17 @@ struct Live {
     server: Child,
     console: String,
     workspace: String,
+    /// More environment for herdr, and so for the consoles it starts.
+    extra: Vec<(String, String)>,
 }
 
 impl Live {
     /// A herdr server, a workspace and a Corral layout with an R console, ready.
     fn start(name: &str) -> Live {
+        Live::start_with(name, &[])
+    }
+
+    fn start_with(name: &str, extra: &[(&str, &str)]) -> Live {
         // Under /tmp itself: herdr's socket path must stay short.
         let dir = PathBuf::from(format!("/tmp/corral-live-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -32,12 +38,18 @@ impl Live {
             std::fs::create_dir_all(dir.join(d)).unwrap();
         }
         std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_corral"), dir.join("bin/corral")).unwrap();
+        // The panes' shell: bash with its line editor, like a real terminal, but
+        // without rc files, which could put an installed corral first on the PATH.
+        let shell = dir.join("bin/shell");
+        std::fs::write(&shell, "#!/bin/sh\nexec bash --norc --noprofile \"$@\"\n").unwrap();
+        std::fs::set_permissions(&shell, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
         // Agents run without asking: there is nobody to answer a popup here.
         std::fs::write(dir.join("config/corral/config.json"), r#"{"agents":"on"}"#).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         std::fs::write(dir.join("Rprofile"), format!("if (interactive()) source(\"{}\")\n", repo.join("r/corral.R").display())).unwrap();
 
-        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), workspace: String::new() };
+        let extra = extra.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), workspace: String::new(), extra };
         live.server = live.command("herdr").arg("server")
             .stdout(Stdio::null()).stderr(Stdio::null()).spawn()
             .expect("herdr is not on the PATH");
@@ -71,10 +83,11 @@ impl Live {
             .env("CORRAL_LANG", "en")
             .env("CORRAL_NO_TELEMETRY", "1")
             .env("CORRAL_AGENT", "")
-            // Panes run a shell that reads no rc file, so they keep this PATH and
-            // run the corral under test, not the one installed in ~/.local/bin.
-            .env("SHELL", "/bin/sh")
+            // Panes run bash without rc files, so they keep this PATH and run the
+            // corral under test, not the one installed in ~/.local/bin.
+            .env("SHELL", self.dir.join("bin/shell"))
             .env_remove("ENV")
+            .envs(self.extra.iter().map(|(k, v)| (k.as_str(), v.as_str())))
             .env_remove("HERDR_ENV")
             .env_remove("HERDR_PANE_ID")
             .env_remove("HERDR_PLUGIN_CONTEXT_JSON")
@@ -111,6 +124,33 @@ impl Live {
             .filter(|m| field(m, "lang").unwrap_or_else(|| "r".into()) == lang)
             .filter_map(|m| Some((field(&m, "pid")?.parse::<i64>().ok()?, field(&m, "pane_id")?)))
             .find(|(p, _)| alive(*p))
+    }
+
+    /// Corral's settings for this test.
+    fn config(&self, json: &str) {
+        std::fs::write(self.dir.join("config/corral/config.json"), json).unwrap();
+    }
+
+    /// The live session's checkpoint folder, and its index once written.
+    fn checkpoint(&self, lang: &str) -> (PathBuf, String) {
+        let sessions = self.dir.join("state/corral/sessions");
+        let id = std::fs::read_dir(&sessions).unwrap().flatten()
+            .filter_map(|d| std::fs::read_to_string(d.path().join("meta.json")).ok())
+            .filter(|m| field(m, "lang").unwrap_or_else(|| "r".into()) == lang)
+            .filter(|m| field(m, "pid").and_then(|p| p.parse::<i64>().ok()).is_some_and(alive))
+            .find_map(|m| field(&m, "id")).expect("no live session");
+        let prefix = if lang == "python" { "py" } else { "r" };
+        let dir = self.dir.join("state/corral/checkpoints").join(format!("{prefix}-{id}"));
+        let index = std::fs::read_to_string(dir.join("index.json")).unwrap_or_default();
+        (dir, index)
+    }
+
+    /// Wait until the checkpoint holds every one of `names`.
+    fn wait_checkpoint(&self, lang: &str, names: &[&str]) {
+        wait_for(Duration::from_secs(30), "the checkpoint", || {
+            let index: String = self.checkpoint(lang).1.split_whitespace().collect();
+            names.iter().all(|n| index.contains(&format!("\"{n}\":{{")))
+        });
     }
 
     fn kernel_pid(&self) -> i64 {
@@ -258,8 +298,10 @@ fn variables_are_never_read_half_written() {
         writer.join().unwrap();
         assert!(reads > 5, "only {reads} reads");
     });
-    let out = live.corral(&["vars", "--json"]);
-    assert!(String::from_utf8_lossy(&out.stdout).contains("v14"));
+    // The last request returns before the console describes its objects.
+    wait_for(Duration::from_secs(5), "v14 in the variables", || {
+        String::from_utf8_lossy(&live.corral(&["vars", "--json"]).stdout).contains("v14")
+    });
 }
 
 /// When R crashes, the console starts a new session by itself and says so:
@@ -418,4 +460,280 @@ fn the_editors_language_server_reaches_ark() {
     let _ = lsp.kill();
     let _ = lsp.wait();
     assert!(answer.starts_with("Content-Length:") && answer.contains(r#""result":{"capabilities""#), "the language server said: {answer}");
+}
+
+
+/// Resident memory of a process, in MB.
+fn rss_mb(pid: i64) -> f64 {
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
+    status.lines().find(|l| l.starts_with("VmRSS:"))
+        .and_then(|l| l.split_whitespace().nth(1)?.parse::<f64>().ok()).unwrap_or(0.0) / 1024.0
+}
+
+/// Children of `pid` that ended and nobody collected.
+fn zombies_of(pid: i64) -> usize {
+    std::fs::read_dir("/proc").unwrap().flatten()
+        .filter_map(|e| std::fs::read_to_string(e.path().join("stat")).ok())
+        .filter(|stat| {
+            let rest: Vec<&str> = stat.rsplit_once(')').map(|(_, r)| r.split_whitespace().collect()).unwrap_or_default();
+            rest.first() == Some(&"Z") && rest.get(1).and_then(|p| p.parse::<i64>().ok()) == Some(pid)
+        })
+        .count()
+}
+
+fn folder_mb(dir: &Path) -> f64 {
+    std::fs::read_dir(dir).map(|r| r.flatten().filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum::<u64>()).unwrap_or(0) as f64 / 1048576.0
+}
+
+/// After a crash, R's objects come back as they were: a big table, a function,
+/// a model, the packages attached, and a change made in place. A connection
+/// can't come back, and the console says so.
+#[test]
+#[ignore]
+fn r_objects_survive_a_crash() {
+    let live = Live::start_with("rkeep", &[("CORRAL_CHECKPOINT_EVERY", "2")]);
+    let code = r#"library(tools); set.seed(1); big <- data.frame(id = seq_len(1e6), x = rnorm(1e6), g = sample(letters, 1e6, TRUE));
+        f <- function(x) x * 2; m <- lm(x ~ g, big[1:1000, ]); v <- numeric(10); con <- file(tempfile(), "w");
+        check <- c(sum(big$x), coef(m)[[1]]); cat("ok\n")"#;
+    assert_eq!(live.eval(&[code]).0, 0);
+    live.wait_checkpoint("r", &["big", "f", "m", "v", "check"]);
+    // A change in place keeps the object's address: the minute pass (2 s here) catches it.
+    assert_eq!(live.eval(&["v[1] <- 5"]).0, 0);
+    std::thread::sleep(Duration::from_millis(2500));
+    assert_eq!(live.eval(&["invisible(1)"]).0, 0);
+    std::thread::sleep(Duration::from_millis(1500));
+    std::thread::sleep(Duration::from_secs(3)); // older than 5 s: the console starts R again by itself
+    let old = live.kernel_pid();
+    Command::new("kill").args(["-9", &old.to_string()]).status().unwrap();
+    wait_for(Duration::from_secs(60), "a new R session", || live.session("r").is_some_and(|(p, _)| p != old));
+    let (code, text) = live.eval(&[r#"cat("same:", isTRUE(all.equal(check, c(sum(big$x), coef(m)[[1]]))), f(21), v[1],
+        "package:tools" %in% search(), exists("con"), "\n")"#]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("same: TRUE 42 5 TRUE FALSE"), "{text}");
+    let screen = live.screen(&live.console);
+    assert!(screen.contains("Restored") && screen.contains("con (a connection)"), "the console shows:\n{screen}");
+}
+
+/// Python too, after a crash: values, a function defined in the session, an
+/// instance of a class defined there, and a module imported under another name.
+#[test]
+#[ignore]
+fn python_objects_survive_a_crash() {
+    let live = Live::start("pykeep");
+    let code = "import json as js, threading\nd = {'a': [1, 2, 3], 'b': 'text'}\ndef f(x):\n    return x * 2\nclass P:\n    def __init__(self, n): self.n = n\np = P(7)\nlk = threading.Lock()\nprint('ok')";
+    let (status, text) = live.eval(&["--lang", "python", code]);
+    assert_eq!(status, 0, "{text}");
+    live.wait_checkpoint("python", &["d", "f", "p"]);
+    let (pid, pane) = live.session("python").unwrap();
+    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
+    let (status, text) = live.eval(&["--lang", "python", "print('same:', d['a'], f(21), p.n, js.dumps(1), 'lk' in dir())"]);
+    assert_eq!(status, 0, "{text}");
+    assert!(text.contains("same: [1, 2, 3] 42 7 1 False"), "{text}");
+    let screen = live.screen(&pane);
+    assert!(screen.contains("Restored") && screen.contains("lk (lock)"), "the console shows:\n{screen}");
+}
+
+/// Closing on purpose starts clean: q() in R, and corral close.
+#[test]
+#[ignore]
+fn closing_on_purpose_starts_clean() {
+    let live = Live::start("clean");
+    assert_eq!(live.eval(&["kept <- 1"]).0, 0);
+    live.wait_checkpoint("r", &["kept"]);
+    let (dir, _) = live.checkpoint("r");
+    live.run("herdr", &["pane", "send-text", &live.console, "q('no')"]);
+    live.run("herdr", &["pane", "send-keys", &live.console, "enter"]);
+    wait_for(Duration::from_secs(10), "R to quit", || live.session("r").is_none());
+    assert!(!dir.exists(), "q() left the checkpoint");
+    let (code, text) = live.eval(&[r#"cat("kept exists:", exists("kept"), "\n")"#]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("kept exists: FALSE"), "{text}");
+
+    assert_eq!(live.eval(&["kept <- 2"]).0, 0);
+    live.wait_checkpoint("r", &["kept"]);
+    live.run("corral", &["close"]);
+    live.run("corral", &["layout", "--editor", ""]);
+    wait_for(Duration::from_secs(60), "the R console", || live.corral(&["eval", "--check"]).status.success());
+    let (code, text) = live.eval(&[r#"cat("kept exists:", exists("kept"), "\n")"#]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("kept exists: FALSE"), "after corral close: {text}");
+}
+
+/// The work Corral does after each command, as the console timed it
+/// (CORRAL_TIMING), for the command a request just ran.
+struct Timing(PathBuf);
+
+impl Timing {
+    fn lines(&self) -> Vec<f64> {
+        std::fs::read_to_string(&self.0).unwrap_or_default().lines().filter_map(|l| l.trim().parse().ok()).collect()
+    }
+
+    /// Run `code` and return how long Corral's work after it kept the prompt waiting.
+    fn after(&self, live: &Live, args: &[&str]) -> f64 {
+        let before = self.lines().len();
+        let (code, text) = live.eval(args);
+        assert_eq!(code, 0, "{text}");
+        let end = Instant::now() + Duration::from_secs(5);
+        loop {
+            let lines = self.lines();
+            if lines.len() > before {
+                return *lines.last().unwrap();
+            }
+            assert!(Instant::now() < end, "no timing for {args:?}");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+fn stats(v: &mut [f64]) -> (f64, f64, f64) {
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let at = |q: f64| v[((v.len() - 1) as f64 * q).round() as usize];
+    (at(0.5), at(0.1), at(0.9))
+}
+
+/// Requests alternating checkpoints off and on, for a command that changes
+/// nothing and one that changes an object: the prompt's wait for each, in ms.
+fn on_off(live: &Live, timing: &Timing, lang: &[&str], same: &str, change: &str, rounds: usize) -> [(f64, f64, f64); 4] {
+    let mut t: [Vec<f64>; 4] = Default::default();
+    for round in 0..rounds {
+        for on in [round % 2 == 0, round % 2 == 1] {
+            live.config(if on { r#"{"agents":"on"}"# } else { r#"{"agents":"on","checkpoints":"off"}"# });
+            // The first command after switching carries what changed in the other mode.
+            timing.after(live, &[lang, &[same]].concat());
+            let k = if on { 1 } else { 0 };
+            t[k].push(timing.after(live, &[lang, &[same]].concat()));
+            t[2 + k].push(timing.after(live, &[lang, &[change]].concat()));
+        }
+    }
+    live.config(r#"{"agents":"on"}"#);
+    let names = ["changes nothing, off", "changes nothing, on ", "changes an object, off", "changes an object, on "];
+    let mut out = [(0.0, 0.0, 0.0); 4];
+    for (i, v) in t.iter_mut().enumerate() {
+        out[i] = stats(v);
+        println!("    {:<24} median {:6.2} ms  (p10 {:6.2}, p90 {:6.2})", names[i], out[i].0, out[i].1, out[i].2);
+    }
+    out
+}
+
+/// What checkpoints cost R, measured where the user waits: Corral's work after
+/// each command, before the prompt comes back (timed inside R). Two session
+/// sizes, checkpoints off and on alternating; then 200 commands with them off
+/// and 200 with them on, for memory, leftover processes and disk.
+#[test]
+#[ignore]
+fn checkpoints_cost_report() {
+    let file = PathBuf::from(format!("/tmp/corral-live-cost-{}/timing", std::process::id()));
+    let live = Live::start_with("cost", &[("CORRAL_TIMING", file.to_str().unwrap())]);
+    let timing = Timing(file);
+    let pid = live.kernel_pid();
+    let mut fork_cost = Vec::new();
+    for (size, load) in [
+        ("350 MB", r#"set.seed(2); a <- data.frame(id = seq_len(1e7), x = rnorm(1e7), g = sample(letters, 1e7, TRUE)); invisible(gc())"#),
+        ("1.5 GB", r#"b <- data.frame(id = seq_len(4e7), y = runif(4e7), z = rnorm(4e7)); invisible(gc())"#),
+    ] {
+        assert_eq!(live.eval(&[load]).0, 0);
+        live.wait_checkpoint("r", &["a"]);
+        std::thread::sleep(Duration::from_secs(2));
+        println!("\nR with about {size} ({:.0} MB in use):", rss_mb(pid));
+        let r = on_off(&live, &timing, &[], "invisible(1)", "v <- runif(10)", 20);
+        fork_cost.push((r[1].0 - r[0].0, r[3].0 - r[2].0));
+    }
+    assert_eq!(live.eval(&["rm(b); invisible(gc())"]).0, 0);
+
+    // A long session: the same 200 commands four times, checkpoints off, on,
+    // off, on. One in five changes a 1-million-row table.
+    assert_eq!(live.eval(&["d <- data.frame(x = rnorm(1e6))"]).0, 0);
+    let mut phases = Vec::new();
+    for on in [false, true, false, true] {
+        live.config(if on { r#"{"agents":"on"}"# } else { r#"{"agents":"on","checkpoints":"off"}"# });
+        std::thread::sleep(Duration::from_secs(1));
+        let rss0 = rss_mb(pid);
+        let mut waits = Vec::new();
+        for i in 0..200 {
+            let code = match i % 5 { 0 => "d$x <- d$x + 1", 1 => "s <- summary(d$x)", _ => "invisible(nrow(d))" };
+            waits.push(timing.after(&live, &[code]));
+        }
+        std::thread::sleep(Duration::from_secs(3));
+        timing.after(&live, &["invisible(1)"]); // collects the last copy
+        let (m, _, p90) = stats(&mut waits);
+        phases.push((on, rss0, rss_mb(pid), m, p90, zombies_of(pid)));
+    }
+    // Then 1,000 more with checkpoints on: memory every 200 commands should level off.
+    live.config(r#"{"agents":"on"}"#);
+    let mut samples = vec![rss_mb(pid)];
+    for i in 0..1000 {
+        let code = match i % 5 { 0 => "d$x <- d$x + 1", 1 => "s <- summary(d$x)", _ => "invisible(nrow(d))" };
+        timing.after(&live, &[code]);
+        if i % 200 == 199 {
+            samples.push(rss_mb(pid));
+        }
+    }
+    let (dir, index) = live.checkpoint("r");
+    let (_, text) = live.eval(&[r#"cat(round(sum(sapply(ls(), function(n) length(serialize(get(n), NULL)))) / 2^20))"#]);
+    let serialized: f64 = text.lines().last().unwrap_or("0").trim().parse().unwrap_or(0.0);
+    println!("\nLong session, 200 commands in each phase:");
+    for (on, rss0, rss1, m, p90, z) in &phases {
+        println!("    checkpoints {:<3}  R {rss0:.0} -> {rss1:.0} MB  wait median {m:.2} ms, p90 {p90:.2} ms  leftover processes {z}",
+                 if *on { "on" } else { "off" });
+    }
+    println!("    1,000 more with checkpoints on, R every 200: {}", samples.iter().map(|m| format!("{m:.0}")).collect::<Vec<_>>().join(" -> "));
+    println!("    checkpoint on disk {:.0} MB; the objects, serialized: {serialized:.0} MB", folder_mb(&dir));
+    // R hands memory back now and then, so it goes up and down: no new highs is what counts.
+    let peak = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max);
+    assert!(peak(&samples[3..]) <= peak(&samples[..3]) + 60.0, "memory kept growing: {samples:?}");
+
+    for (nothing, change) in &fork_cost {
+        assert!(*nothing < 1.0, "a command that changes nothing waited {nothing:.2} ms more");
+        assert!(*change < 40.0, "a command that changes an object waited {change:.2} ms more");
+    }
+    let (off, on) = (phases[2], phases[3]);
+    assert!(on.5 <= 1, "{} copies were never collected", on.5);
+    assert!((on.2 - on.1) <= (off.2 - off.1) + 50.0, "memory grew more with checkpoints on");
+    assert!(folder_mb(&dir) <= serialized * 1.1 + 1.0, "the checkpoint holds more than the objects");
+    assert!(index.split_whitespace().collect::<String>().contains("\"d\":{"), "the checkpoint lost d");
+}
+
+/// The same for Python: a session with about 400 MB in use.
+#[test]
+#[ignore]
+fn python_checkpoints_cost_report() {
+    let file = PathBuf::from(format!("/tmp/corral-live-pycost-{}/timing", std::process::id()));
+    let live = Live::start_with("pycost", &[("CORRAL_TIMING", file.to_str().unwrap())]);
+    let timing = Timing(file);
+    let py = ["--lang", "python"];
+    assert_eq!(live.eval(&[&py[..], &["big = list(range(10**7)); text = 'x' * 10**8"]].concat()).0, 0);
+    live.wait_checkpoint("python", &["big", "text"]);
+    let (pid, _) = live.session("python").unwrap();
+    println!("\nPython with {:.0} MB in use:", rss_mb(pid));
+    let r = on_off(&live, &timing, &py, "None", "v = [1, 2, 3]", 20);
+    std::thread::sleep(Duration::from_secs(3));
+    timing.after(&live, &[&py[..], &["None"]].concat());
+    let z = zombies_of(pid);
+    println!("    leftover processes {z}");
+    assert!(r[1].0 - r[0].0 < 1.0, "a cell that changes nothing waited more");
+    assert!(r[3].0 - r[2].0 < 40.0, "a cell that changes an object waited much more");
+    assert!(z <= 1, "{z} copies were never collected");
+}
+
+
+/// How long a crashed R takes to come back with its objects, for two sizes.
+#[test]
+#[ignore]
+fn restore_time_report() {
+    for (size, load) in [("250 MB", "a <- data.frame(id = seq_len(1e7), x = rnorm(1e7), g = sample(letters, 1e7, TRUE))"),
+                         ("1 GB", "a <- data.frame(id = seq_len(4e7), x = rnorm(4e7), y = runif(4e7))")] {
+        let live = Live::start("restore");
+        assert_eq!(live.eval(&[&format!("{load}; n <- nrow(a)")]).0, 0);
+        live.wait_checkpoint("r", &["a", "n"]);
+        std::thread::sleep(Duration::from_secs(6));
+        let old = live.kernel_pid();
+        let killed = Instant::now();
+        Command::new("kill").args(["-9", &old.to_string()]).status().unwrap();
+        wait_for(Duration::from_secs(120), "R with its objects", || {
+            live.session("r").is_some_and(|(p, _)| p != old) && live.eval(&[r#"cat(exists("a") && nrow(a) == n)"#]).1.contains("TRUE")
+        });
+        let (dir, _) = live.checkpoint("r");
+        let _ = dir;
+        println!("\n{size} of objects: back {:.1} s after the crash", killed.elapsed().as_secs_f64());
+    }
 }
