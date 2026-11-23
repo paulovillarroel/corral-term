@@ -802,6 +802,49 @@ fn skill(dest: &Path) {
     }
 }
 
+/// With several agents installed and none chosen, ask once which one the agent pane
+/// opens. Only in a terminal: the install line reads its script from a pipe, so the
+/// answer comes from /dev/tty, and without one (CI, a log) nothing is asked. Enter
+/// keeps Corral's choice, the first one installed. The install record remembers
+/// that it asked, so an update doesn't ask again; the palette changes it later.
+fn ask_agent(before: &Value, done: &mut Value) {
+    use std::io::{BufRead, Write};
+    if before.get("agent_asked") == &Value::Bool(true) {
+        done.set("agent_asked", true.into());
+        return;
+    }
+    if env::config().get("agent").str().is_some() {
+        return;
+    }
+    let found: Vec<(&str, &str)> = env::AGENTS.iter().filter(|(cmd, _)| env::which(cmd).is_some()).copied().collect();
+    if found.len() < 2 || !std::io::stdout().is_terminal() {
+        return;
+    }
+    let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return };
+    let s = style();
+    println!("\n  {}{}{}", s.bold, tr("Several agents are installed. Which one should the agent pane open?",
+                                         "Hay varios agentes instalados. ¿Cuál abre el panel del agente?"), s.off);
+    for (i, (_, name)) in found.iter().enumerate() {
+        println!("    {}. {name}", i + 1);
+    }
+    print!("  {}", trf!("Number, or Enter for the first one installed ({}): ", "Número, o Enter para el primero instalado ({}): ", found[0].1));
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    let _ = std::io::BufReader::new(tty).read_line(&mut answer);
+    done.set("agent_asked", true.into());
+    match answer.trim().parse::<usize>().ok().and_then(|n| n.checked_sub(1)).and_then(|i| found.get(i)) {
+        Some((cmd, name)) => {
+            let mut cfg = env::config();
+            cfg.set("agent", (*cmd).into());
+            theme::write_config(&cfg);
+            step(&trf!("the agent pane opens {name} (the palette changes it: Agents: use…)",
+                       "el panel del agente abre {name} (la paleta lo cambia: Agentes: usar…)"), State::Ok);
+        }
+        None => step(&trf!("the agent pane opens the first agent installed, {} now (the palette changes it: Agents: use…)",
+                           "el panel del agente abre el primer agente instalado, {} ahora (la paleta lo cambia: Agentes: usar…)", found[0].1), State::Ok),
+    }
+}
+
 fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let s = style();
     println!("{}Corral {VERSION}{}: {}", s.bold, s.off,
@@ -848,6 +891,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     rprofile_step(&dest, &mut done, &mut saved);
     fresh(&dest, &mut done, &mut saved);
     skill(&dest);
+    ask_agent(&before, &mut done);
     theme::apply();
     step(tr("herdr's theme colors in the editor, the console and Mirador", "colores del tema de herdr en el editor, la consola y Mirador"), State::Ok);
     done.set("backups", Value::Arr(saved.iter().map(|b| Value::from(b.as_str())).collect()));
