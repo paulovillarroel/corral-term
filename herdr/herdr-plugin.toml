@@ -173,6 +173,25 @@ title = "Corral: agents see only the structure of results"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "agent_output", "structure"]
 
+# How long the audit log (what agents ran, and what came back) is kept.
+[[actions]]
+id = "audit-30"
+title = "Corral: keep the audit log 30 days"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "audit_days", "30"]
+
+[[actions]]
+id = "audit-90"
+title = "Corral: keep the audit log 90 days (Corral's)"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "audit_days", "90"]
+
+[[actions]]
+id = "audit-365"
+title = "Corral: keep the audit log a year"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "audit_days", "365"]
+
 # Corral's language: English by default. Commands stay in English either way. Each
 # title is written in the language it switches to, so you can find yours.
 [[actions]]

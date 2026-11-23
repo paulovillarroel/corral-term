@@ -22,6 +22,72 @@ pub fn state_dir() -> PathBuf {
     xdg("XDG_STATE_HOME", ".local/state").join("corral")
 }
 
+/// Make `dir` a folder only you can open (0700), creating it if needed. If
+/// group or others could get in, everything already inside loses their access
+/// too. The state folder holds what agents ran and what came back, your console
+/// history and previews of your variables, so Corral keeps it this way.
+pub fn make_private(dir: &Path) {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    if let Some(parent) = dir.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::DirBuilder::new().mode(0o700).create(dir);
+    if std::fs::metadata(dir).is_ok_and(|m| m.permissions().mode() & 0o077 != 0) {
+        close_up(dir);
+    }
+}
+
+/// Take group's and others' access away from `path` and, for a folder, from
+/// what it holds. Links are left as they are.
+fn close_up(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return };
+    if meta.file_type().is_symlink() {
+        return;
+    }
+    let mode = meta.permissions().mode();
+    if mode & 0o077 != 0 {
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode & !0o077));
+    }
+    if meta.is_dir() {
+        for e in std::fs::read_dir(path).into_iter().flatten().flatten() {
+            close_up(&e.path());
+        }
+    }
+}
+
+/// Keep the state folder yours only once it exists (see `make_private`). A
+/// command that only prints its usage must not create it.
+pub fn keep_state_private() {
+    let dir = state_dir();
+    if dir.is_dir() && !is_private(&dir) {
+        close_up(&dir);
+    }
+}
+
+/// Only you can open the folder (no access for group or others).
+pub fn is_private(dir: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(dir).is_ok_and(|m| m.permissions().mode() & 0o077 == 0)
+}
+
+/// Open a file to add lines to, readable only by you when Corral creates it.
+pub fn append_private(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new().create(true).append(true).mode(0o600).open(path)
+}
+
+/// Write a file only you can read (0600), whole: a temporary copy first, then
+/// moved into place.
+pub fn write_private(path: &Path, body: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let tmp = path.with_extension(format!("tmp-{}", random_hex(3)));
+    let mut f = std::fs::OpenOptions::new().create(true).write(true).truncate(true).mode(0o600).open(&tmp)?;
+    f.write_all(body)?;
+    std::fs::rename(&tmp, path)
+}
+
 /// A file in the state folder that Corral 0.1.7 and earlier kept under a Spanish
 /// name (`old`): it moves to `name` the first time, so nothing is lost on upgrade.
 pub fn state_file(name: &str, old: &str) -> PathBuf {
@@ -120,6 +186,29 @@ pub fn sessions() -> Vec<Value> {
         out.push(meta);
     }
     out
+}
+
+/// Folders of sessions whose R or Python has ended go away, with the previews of
+/// variables and the agents' requests they held. A folder without meta.json
+/// waits a day: its console may be starting right now.
+pub fn remove_dead_sessions() {
+    let Ok(dirs) = std::fs::read_dir(state_dir().join("sessions")) else { return };
+    for dir in dirs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+        let dead = match read_json(&dir.join("meta.json")).get("pid").num() {
+            Some(pid) => !Path::new(&format!("/proc/{}", pid as i64)).exists(),
+            None => dir.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a.as_secs() > 86400),
+        };
+        if dead {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+}
+
+/// A log that grew past 5 MB starts over, so logs don't fill the disk.
+pub fn trim_log(path: &Path) {
+    if std::fs::metadata(path).is_ok_and(|m| m.len() > 5 * 1024 * 1024) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 pub fn session_for(pane: &str) -> Option<Value> {
@@ -325,7 +414,7 @@ extern "C" {
 pub fn spawn_detached(cmd: &mut Command, log: Option<&Path>) -> std::io::Result<()> {
     use std::process::Stdio;
     cmd.stdin(Stdio::null());
-    match log.and_then(|l| std::fs::OpenOptions::new().create(true).append(true).open(l).ok()) {
+    match log.and_then(|l| append_private(l).ok()) {
         Some(f) => {
             let f2 = f.try_clone()?;
             cmd.stdout(f).stderr(f2);

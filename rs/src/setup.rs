@@ -196,6 +196,13 @@ pub fn cmd_doctor(args: &[String]) -> Result<(), String> {
     let source = if theme::own_theme().is_some() { tr("Corral theme", "tema de Corral") } else { tr("from herdr", "desde herdr") };
     let fix = if same { "" } else { tr("; run `corral theme`", "; corre `corral theme`") };
     check(same, tr("theme", "tema"), format!("{wanted} {source}{fix}"));
+    let state = env::state_dir();
+    let private = env::is_private(&state);
+    check(private, tr("Corral's files", "archivos de Corral"), if private {
+        trf!("{}, only you can open it", "{}, solo tú puedes abrirla", state.display())
+    } else {
+        trf!("{} is open to others: chmod 700 {}", "{} está abierta a otros: chmod 700 {}", state.display(), state.display())
+    });
     let (mode, why) = plots::image_mode();
     let how = if mode == "kitty" { tr("sharp (Kitty)", "nítidos (Kitty)") } else { tr("with characters", "con caracteres") };
     check(mode == "kitty", tr("plots in herdr", "gráficos en herdr"), format!("{how}; {why}"));

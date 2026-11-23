@@ -575,6 +575,23 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
+    if key == "audit_days" {
+        if value != "forever" && !value.parse::<i64>().is_ok_and(|d| d >= 1) {
+            return Err(tr("audit_days takes a number of days (1 or more) or forever",
+                          "audit_days acepta un número de días (1 o más) o forever").into());
+        }
+        cfg.set(key, value.as_str().into());
+        write_config(&cfg);
+        crate::audit::prune(); // what is older goes now
+        if value == "forever" {
+            say(tr("Audit log: kept for good", "Registro de auditoría: se guarda siempre"),
+                tr("Corral never deletes what agents ran.", "Corral nunca borra lo que ejecutaron los agentes."));
+        } else {
+            say(&trf!("Audit log: {value} days", "Registro de auditoría: {value} días"),
+                &trf!("Entries older than {value} days are deleted.", "Se borran las entradas de más de {value} días."));
+        }
+        return Ok(());
+    }
     let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"]),

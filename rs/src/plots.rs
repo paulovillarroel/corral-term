@@ -130,6 +130,7 @@ pub fn ensure_mirador() -> Result<Value, String> {
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let log = env::state_dir().join("mirador.log");
     let _ = std::fs::create_dir_all(env::state_dir());
+    env::trim_log(&log);
     env::spawn_detached(Command::new(me).arg("_mirador").current_dir(env::repo()), Some(&log))
         .map_err(|e| trf!("couldn't start Mirador: {e}", "no pude iniciar Mirador: {e}"))?;
     let old = info.get("pid").num();

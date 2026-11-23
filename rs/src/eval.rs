@@ -254,6 +254,21 @@ fn restricted_report(sdir: &Path, since: SystemTime, output: &str, result: &Valu
     out.join("\n")
 }
 
+/// Requests and their results older than a day go away; the audit log keeps the
+/// record. `last-plots.json` stays: `--replace` reads it.
+fn remove_old_requests(edir: &Path) {
+    for ext in ["R", "py", "out", "deadline", "decision"] {
+        env::remove_old(edir, ext, 86400);
+    }
+    let keep = edir.join("last-plots.json");
+    for p in std::fs::read_dir(edir).into_iter().flatten().flatten().map(|e| e.path()) {
+        let old = p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a.as_secs() > 86400);
+        if old && p != keep && p.extension().is_some_and(|x| x == "json") {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let o = parse(args);
     let ws = env::current_workspace();
@@ -306,6 +321,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let sid = session.get("id").str().unwrap_or("").to_string();
     let edir = sdir.join("eval");
     std::fs::create_dir_all(&edir).map_err(|e| e.to_string())?;
+    remove_old_requests(&edir);
 
     // One request at a time per console: several agents queue instead of interleaving.
     let lock = File::create(edir.join(".lock")).map_err(|e| e.to_string())?;
