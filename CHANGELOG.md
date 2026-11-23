@@ -4,6 +4,9 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- The layout opens the agent you have. It opened Claude Code unless you set another, so with opencode, Codex or Gemini CLI the agent pane said command not found. Now it opens the first one installed of Claude Code, Codex, Gemini CLI and opencode, or a shell when there is none, with a notice saying how to choose. The palette chooses one ("Agents: use … in the agent pane", or none), `corral config agent` takes any command, and the installer says which agent it found.
+- Gemini CLI finds Corral's skill: the installer also puts it in `~/.gemini/skills` when Gemini CLI is installed.
+
 ### Fixes
 
 - A shell that asks something as it starts, like zsh's compinit about insecure folders, took the first letter of the command Corral typed as its answer: the panes said `command not found: orral` and nothing started. Corral now types its commands after a space, which answers such a question instead, and the commands start whole. The Troubleshooting page says how to fix the zsh warning itself.
