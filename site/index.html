@@ -258,12 +258,14 @@
 
   <article class="feature">
     <div class="n">06</div>
-    <div><h3><a href="docs/layouts.html">Close the terminal, lose nothing.</a></h3>
-      <p>Corral lives in <a href="https://herdr.dev/tui/">herdr TUI</a>, herdr's terminal workspace: your consoles keep running when the window closes, and the workspace is exactly where you left it. Two layouts, focused on the agent or on the code, one key apart.</p></div>
+    <div><h3><a href="docs/consoles.html#checkpoints">Close the terminal, lose nothing. Not even in a crash.</a></h3>
+      <p>Corral lives in <a href="https://herdr.dev/tui/">herdr TUI</a>, herdr's terminal workspace: close the window and your consoles keep running, with the workspace exactly where you left it. If R or Python crashes, your objects come back by themselves about a second later: the tables, the models, the functions you wrote and the packages you loaded. Corral keeps them from the background, so the prompt doesn't feel it, <a href="docs/performance.html#checkpoints">measured</a> over a thousand commands.</p></div>
     <div class="card">
-      <div class="row"><span>ctrl+b a</span><span>layout, agent first</span></div>
-      <div class="row"><span>ctrl+b shift+s</span><span>layout, code first</span></div>
-      <div class="row"><span>ctrl+b space</span><span>every shortcut</span></div>
+      <div class="row"><span>close the window</span><span>consoles keep running</span></div>
+      <div class="row"><span><span class="dot" style="background:var(--ok)"></span>R crashes, objects back</span><span>1.2 s</span></div>
+      <div class="row"><span>the prompt, per command</span><span>+0.3 ms</span></div>
+      <div class="row"><span>after an object changes</span><span>+2–7 ms</span></div>
+      <div class="row"><span>1,000 commands later</span><span>memory steady</span></div>
     </div>
   </article>
 
