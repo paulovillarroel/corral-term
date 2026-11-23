@@ -139,6 +139,7 @@ Optional
   ✓ Skill for agents  goes in ~/.agents/skills (Codex, opencode and other agents) and ~/.claude/skills (Claude Code)
   ✓ Browser           the Windows one, for Mirador
   ✓ PATH              ~/.local/bin is on the PATH</code></pre>
+    <p>If you have several agents and haven't chosen one, it asks which one the agent pane opens; <kbd>Enter</kbd> leaves it to Corral, which opens the first one installed. It asks once, and only in a terminal where you can answer; later, the palette changes it ("Agents: use … in the agent pane").</p>
     <h3 id="how-the-download-is-checked">How the download is checked</h3>
     <ul>
       <li>It installs a published version, the latest unless you pick one with <code>CORRAL_VERSION=v0.1.3</code>, and says which. It never falls back to unreleased code: if the download fails, it stops and says why.</li>
