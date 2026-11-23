@@ -286,7 +286,7 @@ fn restricted_report(sdir: &Path, since: SystemTime, output: &str, result: &Valu
 /// Requests and their results older than a day go away; the audit log keeps the
 /// record. `last-plots.json` stays: `--replace` reads it.
 fn remove_old_requests(edir: &Path) {
-    for ext in ["R", "py", "out", "deadline", "decision"] {
+    for ext in ["R", "py", "out", "deadline", "decision", "shown"] {
         env::remove_old(edir, ext, 86400);
     }
     let keep = edir.join("last-plots.json");
@@ -396,6 +396,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let ext = if o.lang == "python" { "py" } else { "R" };
     let body = if code.ends_with('\n') { code.clone() } else { format!("{code}\n") };
     std::fs::write(edir.join(format!("{rid}.{ext}")), body).map_err(|e| e.to_string())?;
+    // The console echoes the code as the terminal draws it, and control or invisible
+    // characters can hide part of it there: then it also prints it written out.
+    let shown: Vec<(String, bool)> = code.lines().map(|l| crate::term::visible(l, false)).collect();
+    if shown.iter().any(|(_, h)| *h) {
+        let text: String = shown.iter().map(|(l, _)| format!("{l}\n")).collect();
+        std::fs::write(edir.join(format!("{rid}.shown")), text).map_err(|e| e.to_string())?;
+    }
     // If the console only gets to it after the agent gave up, it must not run.
     std::fs::write(edir.join(format!("{rid}.deadline")), format!("{}", now() + o.timeout)).map_err(|e| e.to_string())?;
     let before = plots_json(&sid, "state");

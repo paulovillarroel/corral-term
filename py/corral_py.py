@@ -957,6 +957,13 @@ def corral_eval(rid: str) -> None:
 
     code = path(".py").read_text(encoding="utf-8")
     print("# corral eval")
+    # Control or invisible characters can hide part of the echoed code: corral eval
+    # then writes the code out with them shown, and this prints it first.
+    if path(".shown").exists():
+        print(tr("# corral eval: this code has control or invisible characters; written out, it says:",
+                 "# corral eval: este código tiene caracteres de control o invisibles; escrito tal cual, dice:"))
+        for line in path(".shown").read_text(encoding="utf-8").splitlines():
+            print("#   " + line)
     with open(path(".out"), "w", encoding="utf-8") as sink:
         out, err = sys.stdout, sys.stderr
         tees = _Tee(out, sink), _Tee(err, sink)

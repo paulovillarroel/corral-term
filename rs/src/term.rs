@@ -323,6 +323,55 @@ pub fn width(s: &str) -> usize {
     s.chars().count()
 }
 
+/// Characters a terminal draws as nothing, or that reorder the text around them:
+/// zero-width spaces and joiners, bidirectional controls (Trojan Source), line and
+/// paragraph separators, invisible fillers, and tag characters and variation
+/// selectors past U+E0000 (hidden text). Code or output may carry them unseen.
+fn invisible(c: char) -> bool {
+    matches!(c as u32, 0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180F
+        | 0x200B..=0x200F | 0x2028..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFEFF | 0xFFA0
+        | 0xFFF9..=0xFFFB | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
+}
+
+/// One line as it really is, safe to draw: control characters become their symbol
+/// (ESC shows as ␛, a carriage return as ␍), invisible ones become <U+XXXX>, and a
+/// tab four spaces. With `drop_color`, color and style sequences (ESC [ … m) go
+/// away instead, so printed output keeps its text without hiding any. The flag
+/// says whether anything was shown that the terminal would otherwise have hidden
+/// or acted on.
+pub fn visible(s: &str, drop_color: bool) -> (String, bool) {
+    let chars: Vec<char> = s.chars().collect();
+    let (mut out, mut hidden, mut i) = (String::with_capacity(s.len()), false, 0);
+    while i < chars.len() {
+        let c = chars[i];
+        if drop_color && c == '\x1b' && chars.get(i + 1) == Some(&'[') {
+            let end = (i + 2..chars.len()).find(|&j| !matches!(chars[j], '0'..='9' | ';' | ':'));
+            if let Some(j) = end.filter(|&j| chars[j] == 'm') {
+                i = j + 1;
+                continue;
+            }
+        }
+        match c {
+            '\t' => out.push_str("    "),
+            '\x7f' => { out.push('␡'); hidden = true; }
+            c if (c as u32) < 0x20 => { out.push(char::from_u32(0x2400 + c as u32).unwrap_or('?')); hidden = true; }
+            c if (0x80..=0x9f).contains(&(c as u32)) || invisible(c) => { out += &format!("<U+{:04X}>", c as u32); hidden = true; }
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    (out, hidden)
+}
+
+/// Cut a line into rows of `width` characters, so nothing goes past the edge.
+pub fn wrap(s: &str, width: usize) -> Vec<String> {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.is_empty() || width == 0 {
+        return vec![String::new()];
+    }
+    chars.chunks(width).map(|c| c.iter().collect()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,5 +385,36 @@ mod tests {
         assert_eq!(names("\x1b"), ["esc"]);
         assert_eq!(names("\x1b[Aq"), ["up", "q"]);
         assert_eq!(names("ab"), ["a", "b"]);
+    }
+
+    #[test]
+    fn hidden_characters_are_shown() {
+        // An escape in a comment that would erase the line and draw other code over it.
+        let (s, hidden) = visible("x <- 1 # \x1b[1K\x1b[Gy <- 2", false);
+        assert_eq!(s, "x <- 1 # ␛[1K␛[Gy <- 2");
+        assert!(hidden);
+        assert_eq!(visible("a\rb", false), ("a␍b".to_string(), true));
+        assert_eq!(visible("a\u{202E}b\u{200B}c", false), ("a<U+202E>b<U+200B>c".to_string(), true));
+        assert_eq!(visible("tag\u{E0041}", false), ("tag<U+E0041>".to_string(), true));
+        assert_eq!(visible("a\u{85}b\x7f", false), ("a<U+0085>b␡".to_string(), true));
+        // Ordinary text stays as it is: accents, ñ, an emoji with its variation selector, tabs.
+        assert_eq!(visible("año <- \"café ✔\u{FE0F}\"\tx", false), ("año <- \"café ✔\u{FE0F}\"    x".to_string(), false));
+    }
+
+    #[test]
+    fn printed_colors_go_away_but_other_escapes_show() {
+        assert_eq!(visible("\x1b[1;31mError\x1b[0m: x", true), ("Error: x".to_string(), false));
+        // Concealed text (SGR 8) loses its style, so it shows; a cursor move doesn't pass.
+        assert_eq!(visible("a\x1b[8msecret\x1b[0m", true), ("asecret".to_string(), false));
+        assert_eq!(visible("ok\x1b[2K\x1b[1Gfine", true), ("ok␛[2K␛[1Gfine".to_string(), true));
+        // In code, even colors are shown: what runs is what you read.
+        assert_eq!(visible("\x1b[31m", false), ("␛[31m".to_string(), true));
+    }
+
+    #[test]
+    fn long_lines_wrap() {
+        assert_eq!(wrap("abcdefg", 3), ["abc", "def", "g"]);
+        assert_eq!(wrap("", 3), [""]);
+        assert_eq!(wrap("añoñ", 2), ["añ", "oñ"]);
     }
 }

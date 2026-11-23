@@ -162,6 +162,15 @@ impl Live {
     /// Wait for a popup's request (approve or review) newer than `seen`, and answer it
     /// as the popup would: the decision file next to it.
     fn answer_popup(&self, seen: &[PathBuf], word: &str) -> String {
+        let found = self.wait_popup(seen);
+        let request = std::fs::read_to_string(&found).unwrap();
+        let decision = field(&request, "decision").expect("no decision file");
+        std::fs::write(decision, word).unwrap();
+        request
+    }
+
+    /// Wait for a popup's request not answered yet, newer than `seen`.
+    fn wait_popup(&self, seen: &[PathBuf]) -> PathBuf {
         let dirs = [self.dir.join("state/corral/requests")];
         let mut found = None;
         wait_for(Duration::from_secs(20), "a popup's request", || {
@@ -177,10 +186,7 @@ impl Live {
             found = all.pop();
             found.is_some()
         });
-        let request = std::fs::read_to_string(found.as_ref().unwrap()).unwrap();
-        let decision = field(&request, "decision").expect("no decision file");
-        std::fs::write(decision, word).unwrap();
-        request
+        found.unwrap()
     }
 
     fn kernel_pid(&self) -> i64 {
@@ -829,4 +835,60 @@ fn restricted_output_never_points_to_the_values() {
     assert!(text.contains("still running"), "{text}");
     assert!(!text.contains(".out") && !text.contains("eval/"), "it pointed to the output: {text}");
     assert!(!text.contains("secret"), "{text}");
+}
+
+/// Code with control or invisible characters can't hide what it does: the approval
+/// popup shows it written out (ESC as ␛) with a warning and wraps long lines, and
+/// the R and Python consoles print it written out before echoing it.
+#[test]
+#[ignore]
+fn hidden_characters_show_in_the_popup_and_the_console() {
+    let live = Live::start("hidden");
+    live.link_plugin();
+    live.config(r#"{"agents":"ask"}"#);
+    // It runs x <- 1, but a terminal draws y <- 2 over it; the second line is long.
+    let long = format!("z <- c({}9999)", "1, ".repeat(60));
+    let code = format!("x <- 1 # \x1b[1K\x1b[Gy <- 2\n{long}");
+    let (status, text, popup) = std::thread::scope(|s| {
+        let asking = s.spawn(|| live.eval(&[&code]));
+        let request = live.wait_popup(&[]);
+        // The popup as you'd see it, drawn in a pane of its own.
+        let env = format!("CORRAL_REQUEST={}", request.display());
+        let split = live.run("herdr", &["pane", "split", &live.console, "--direction", "down", "--env", &env]);
+        let pane = field(&split, "pane_id").unwrap_or_else(|| panic!("no pane in {split}"));
+        live.run("herdr", &["pane", "run", &pane, "corral _approve"]);
+        let mut popup = String::new();
+        wait_for(Duration::from_secs(15), "the popup", || {
+            popup = live.screen(&pane);
+            popup.contains("9999)") || popup.split_whitespace().collect::<String>().contains("9999)")
+        });
+        let decision = field(&std::fs::read_to_string(&request).unwrap(), "decision").unwrap();
+        std::fs::write(decision, "run").unwrap();
+        let (status, text) = asking.join().unwrap();
+        (status, text, popup)
+    });
+    assert_eq!(status, 0, "{text}");
+    assert!(popup.contains("control or invisible characters"), "no warning:\n{popup}");
+    assert!(popup.contains("x <- 1 # ␛[1K␛[Gy <- 2"), "the line isn't written out:\n{popup}");
+    let joined: String = popup.split_whitespace().collect();
+    assert!(joined.contains(&long.split_whitespace().collect::<String>()), "the long line was cut:\n{popup}");
+
+    let mut console = String::new();
+    wait_for(Duration::from_secs(10), "the console's notice", || {
+        console = live.screen(&live.console);
+        console.contains("#   x <- 1 # ␛[1K␛[Gy <- 2")
+    });
+    assert!(console.contains("written out, it says:"), "{console}");
+    live.config(r#"{"agents":"on"}"#);
+    let (_, text) = live.eval(&[r#"cat(exists("y"), x, length(z), "\n")"#]);
+    assert!(text.contains("FALSE 1 61"), "{text}");
+
+    // Python prints it written out too; plain code doesn't get the notice.
+    let (status, text) = live.eval(&["--lang", "python", "a = 1 # \x1b[1K\x1bGb = 2"]);
+    assert_eq!(status, 0, "{text}");
+    let pane = live.session("python").expect("no Python session").1;
+    wait_for(Duration::from_secs(10), "Python's notice", || live.screen(&pane).contains("#   a = 1 # ␛[1K␛Gb = 2"));
+    let (_, text) = live.eval(&["--lang", "python", "print('b' in globals(), a)"]);
+    assert!(text.contains("False 1"), "{text}");
+    assert!(!text.contains("written out"), "{text}");
 }

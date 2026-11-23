@@ -1,7 +1,9 @@
 //! `corral _approve`: the popups that ask you about an agent's request.
 //!
 //! - approve (before): the code exactly as it will run, when `corral config agents
-//!   ask` is set or the session is marked sensitive (`corral_sensitive()`).
+//!   ask` is set or the session is marked sensitive (`corral_sensitive()`). Control
+//!   and invisible characters show (␛, ␍, <U+202E>), with a warning, and long lines
+//!   wrap: nothing the terminal would hide or cut stays out of sight.
 //!   Enter or y runs it; n, Esc or q refuses.
 //! - review (after, `corral config agent_output review`): the result exactly as the
 //!   agent would get it. Enter or y shares it; n, Esc or q keeps it, and the agent
@@ -17,7 +19,7 @@
 use crate::env;
 use crate::i18n::tr;
 use crate::json::Value;
-use crate::term::{clip, out, Screen};
+use crate::term::{clip, out, visible, wrap, Screen};
 use crate::vars::Colors;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -70,7 +72,15 @@ pub fn run(_args: &[String]) -> Result<(), String> {
         _ if r.get("restricted") == &Value::Bool(true) => tr("it will only see the structure of the result", "solo verá la estructura del resultado"),
         _ => tr("it will see what the code prints, and new plots", "verá lo que imprima el código, y los gráficos nuevos"),
     };
-    let lines: Vec<&str> = body.lines().collect();
+    // Each line as it really is: control and invisible characters shown, so what you
+    // approve is what runs (and, in a review, what the agent gets). A result keeps
+    // its text without its colors.
+    let lines: Vec<(String, bool)> = body.lines().map(|l| visible(l, reviewing)).collect();
+    let hidden = lines.iter().any(|(_, h)| *h);
+    let numbered = !(reviewing || changing);
+    let numw = lines.len().to_string().len();
+    // The lines cut to the popup's width, with each line's number on its first row.
+    let mut rows_for: (usize, Vec<(Option<usize>, String)>) = (usize::MAX, Vec::new());
 
     let answer = |yes: bool| {
         let word = match (reviewing, changing, yes) {
@@ -93,11 +103,18 @@ pub fn run(_args: &[String]) -> Result<(), String> {
     loop {
         let (cols, rows) = scr.size();
         let area = rows.saturating_sub(7).max(1);
-        top = top.min(lines.len().saturating_sub(area));
+        let w = cols.saturating_sub(4);
+        let text_w = w.saturating_sub(if numbered { numw + 2 } else { 0 }).max(1);
+        if rows_for.0 != text_w {
+            rows_for = (text_w, lines.iter().enumerate()
+                .flat_map(|(n, (l, _))| wrap(l, text_w).into_iter().enumerate().map(move |(k, r)| ((k == 0).then_some(n + 1), r)))
+                .collect());
+        }
+        let shown = &rows_for.1;
+        top = top.min(shown.len().saturating_sub(area));
         if drawn != (cols, rows, top) {
             drawn = (cols, rows, top);
             let c = Colors::load();
-            let w = cols.saturating_sub(4);
             let title = match (reviewing, lang) {
                 _ if changing => tr("An agent wants to change a Corral setting", "Un agente quiere cambiar un ajuste de Corral"),
                 (false, "R") => tr("An agent wants to run this in your R console", "Un agente quiere ejecutar esto en tu consola de R"),
@@ -116,16 +133,32 @@ pub fn run(_args: &[String]) -> Result<(), String> {
             let mut f = String::from("\x1b[2J");
             f += &format!("\x1b[2;3H{}{BOLD}{}{RESET}", c.accent, clip(title, w));
             f += &format!("\x1b[3;3H{}{}{RESET}", c.muted, clip(&sub, w));
-            let numw = lines.len().to_string().len();
-            for (i, l) in lines.iter().skip(top).take(area).enumerate() {
-                let text = clip(&l.replace('\t', "    "), w.saturating_sub(if reviewing || changing { 0 } else { numw + 2 }));
-                if reviewing || changing {
-                    f += &format!("\x1b[{};3H{}{text}{RESET}", 5 + i, c.text);
+            if hidden {
+                let warn = if reviewing {
+                    tr("⚠ This result has control or invisible characters: here they show as ␛, ␍ or <U+…>",
+                       "⚠ Este resultado tiene caracteres de control o invisibles: aquí se ven como ␛, ␍ o <U+…>")
                 } else {
-                    f += &format!("\x1b[{};3H{}{:>numw$}{RESET}  {}{text}{RESET}", 5 + i, c.dim, top + i + 1, c.text);
+                    tr("⚠ This code has control or invisible characters: here they show as ␛, ␍ or <U+…>",
+                       "⚠ Este código tiene caracteres de control o invisibles: aquí se ven como ␛, ␍ o <U+…>")
+                };
+                f += &format!("\x1b[4;3H{}{BOLD}{}{RESET}", c.accent, clip(warn, w));
+            }
+            for (i, (n, text)) in shown.iter().skip(top).take(area).enumerate() {
+                if numbered {
+                    let n = n.map(|n| n.to_string()).unwrap_or_default();
+                    f += &format!("\x1b[{};3H{}{n:>numw$}{RESET}  {}{text}{RESET}", 5 + i, c.dim, c.text);
+                } else {
+                    f += &format!("\x1b[{};3H{}{text}{RESET}", 5 + i, c.text);
                 }
             }
-            let more = if lines.len() > area { tr(" · ↑↓ scroll", " · ↑↓ desplazar") } else { "" };
+            let below = shown.len().saturating_sub(top + area);
+            let more = if below > 0 {
+                trf!(" · ↓ {below} more below", " · ↓ {below} más abajo")
+            } else if shown.len() > area {
+                tr(" · ↑↓ scroll", " · ↑↓ desplazar").to_string()
+            } else {
+                String::new()
+            };
             let (yes, no) = if changing {
                 (tr("allow it", "permitirlo"), tr("refuse", "rechazarlo"))
             } else if reviewing {
