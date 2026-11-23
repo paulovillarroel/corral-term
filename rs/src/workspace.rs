@@ -15,7 +15,6 @@ use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-const SCRIPT_SHARE: f64 = 0.57;
 const CORRAL_LABELS: [&str; 5] = ["corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell"];
 const SCRATCH_MAX_AGE: u64 = 2 * 86400;
 /// The draft's file name, in English and Spanish, for an R or a Python draft;
@@ -76,9 +75,9 @@ fn layout_state() -> (Value, String) {
 
 fn layout_usage() -> &'static str {
     tr("usage: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
-[--console COMMAND] [--ratio N] [--shell] [--editor COMMAND]",
+[--console COMMAND] [--ratio N] [--shell] [--editor COMMAND] [--default-sizes]",
        "uso: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
-[--console COMANDO] [--ratio N] [--shell] [--editor COMANDO]")
+[--console COMANDO] [--ratio N] [--shell] [--editor COMANDO] [--default-sizes]")
 }
 
 /// New tab: the agent on the left; on the right, the script over the console and
@@ -89,7 +88,11 @@ fn layout_usage() -> &'static str {
 /// gives it to one or the other.
 /// It starts with R, or with Python: `--lang`, else `corral config start`.
 pub fn layout(args: &[String]) -> Result<(), String> {
-    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus", "--lang"], &["--shell"], layout_usage())?;
+    let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus", "--lang"], &["--shell", "--default-sizes"], layout_usage())?;
+    if a.flag("--default-sizes") {
+        // Forget the sizes you left; the open layout goes back to Corral's.
+        return layout::forget_sizes(env::current_workspace().as_deref());
+    }
     let lang = match a.value("--lang") {
         Some(l @ ("r" | "python")) => l,
         Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),
@@ -124,13 +127,15 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         .or_else(|| env::config().get("agent").str().map(String::from))
         .unwrap_or_else(|| "claude".into());
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
-    let ratio: f64 = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?.unwrap_or_else(|| layout::default_width(focus));
+    let ratio: Option<f64> = a.value("--ratio").map(|r| r.parse().map_err(|_| trf!("--ratio is not a number: {r}", "--ratio no es un número: {r}"))).transpose()?;
+    // The sizes you left in this layout the last time, else Corral's.
+    let [width, over_vars, over_console] = layout::sizes(focus);
     let label = a.value("--label").unwrap_or("corral");
 
     theme::apply(); // herdr's theme rules every Corral window
     let tab = herdr::cli(&["tab", "create", "--workspace", &ws, "--label", label, "--cwd", &cwd, "--focus"])?;
     let left = tab.get("root_pane").get("pane_id").str().ok_or(tr("herdr did not create the tab", "herdr no creó la pestaña"))?.to_string();
-    let right = herdr::split(&left, "right", Some(ratio), Some(&cwd))?;
+    let right = herdr::split(&left, "right", Some(ratio.unwrap_or(width)), Some(&cwd))?;
 
     // Only one of each per workspace: take the labels away from older panes.
     for p in herdr::panes(Some(&ws))? {
@@ -142,7 +147,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let mut state = Value::obj();
 
     // Right column: [script (or the agent) over the console] over the variables.
-    let vars_pane = vars::split_under(&right, 0.73)?;
+    let vars_pane = vars::split_under(&right, over_vars)?;
     let editor_ok = !editor_cmd.trim().is_empty() && editor_cmd.split_whitespace().next().and_then(env::which).is_some();
     if code && !editor_ok {
         return Err(tr("the code-first and notebook layouts need the editor (Fresh); corral doctor tells what is missing",
@@ -150,7 +155,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     }
     let (agent_pane, script_pane) = if code { (right.clone(), left.clone()) } else { (left.clone(), right.clone()) };
     let console_pane = if editor_ok {
-        let c = herdr::split(&right, "down", Some(SCRIPT_SHARE), Some(&cwd))?;
+        let c = herdr::split(&right, "down", Some(over_console), Some(&cwd))?;
         herdr::rename(&script_pane, "corral:script")?;
         let draft = scratch_script(Some(&ws), &cwd, lang)?;
         herdr::run(&script_pane, &editor_command(&editor_cmd, &draft, true))?;
@@ -163,7 +168,6 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         state.set("focus", "code".into());
         state.set("agent", agent_pane.as_str().into());
     }
-    state.set("widths", obj(vec![(focus, ratio.into())])); // a notebook keeps it after the console moves
     state.set("active", lang.into());
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
@@ -172,7 +176,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let console_cmd = a.value("--console").map(String::from).or(env_console).unwrap_or_else(|| console::command(lang));
     herdr::run(&console_pane, &console_cmd)?;
     if focus == "notebook" {
-        layout::refocus(&ws, "notebook", false)?; // the console goes under the script
+        layout::arrange_new(&ws, "notebook", ratio)?; // the console goes under the script
     }
 
     if a.flag("--shell") {
@@ -529,6 +533,7 @@ pub fn close(args: &[String]) -> Result<(), String> {
             }
         }
     }
+    layout::remember_open(ws.as_deref()); // the sizes you left, for the next layout
     let (mut saved, key) = layout_state();
     let had_state = !saved.get(&key).is_null();
     if targets.is_empty() {
