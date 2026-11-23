@@ -366,6 +366,7 @@ kbd {
 @media (max-width: 1180px) { .layouts { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
 /* The palette: text beside the screenshot, like Mirador. */
 .palette-shot { margin: 0; }
+.harness-shot { margin: 0; }
 /* The hero: a screenshot of a real session. */
 .hero-real { margin: 0; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
 .points { list-style: none; margin: 28px 0 0; padding: 0; }

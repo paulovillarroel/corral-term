@@ -31,6 +31,7 @@
   </a>
   <nav class="nav">
     <a href="docs/">Docs</a>
+    <a class="hide-sm" href="#harness">Harness</a>
     <a class="hide-sm" href="docs/performance.html">Performance</a>
     <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
     <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
@@ -82,54 +83,34 @@
     <h2>Not an IDE with AI bolted on. A workspace you and your agent share.</h2>
     <p class="together-lead">You and your agent work on the same computational context. No copying code from a chat into a console, no re-running an agent's script to get its objects back, no switching windows: the agent works in the session you are looking at, and you decide what it may do. Corral is the harness in between: a few commands the agent calls, a skill that teaches them, and rules it can't skip (<a href="docs/agents.html#the-agent-harness">how it works</a>). Built for the flow of data science as it is done today, and out of your way.</p>
     <div class="trio">
-      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><b>You, the data scientist</b><span>Control the code, the data, the sessions and the analytic decisions.</span></div>
+      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><b>You, the data scientist</b><span>Write, inspect, correct and decide.</span></div>
       <div class="op" aria-hidden="true">+</div>
-      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 12v1M15 12v1M9.5 16h5"/></svg><b>Your agent</b><span>Explores, runs, transforms, models and proposes results.</span></div>
+      <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 12v1M15 12v1M9.5 16h5"/></svg><b>Your agent</b><span>Explores, writes code, runs it and proposes.</span></div>
       <div class="op arrow" aria-hidden="true">→</div>
-      <div class="who shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><b>One working session</b><span>The same objects, data, plots and results, under your control.</span></div>
+      <div class="who shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><b>One live session</b><span>Your R or Python console, with the objects, tables, plots and results you both work on.</span></div>
     </div>
   </section>
 
   <section class="showcase" id="harness">
     <div class="mirador-grid">
       <div class="show-text">
-        <div class="section-label"><span>The agent harness</span><span>corral eval</span></div>
-        <h2>The harness between your agent and your session.</h2>
-        <p>A few commands your agent calls from its own shell, a skill that teaches it when to call them, and rules that Corral enforces around every call, whatever the model was told.</p>
+        <div class="section-label"><span>Corral Harness</span><span>corral eval</span></div>
+        <h2>The agent proposes. You decide.</h2>
+        <p>Every time your agent runs code, it goes through <code>corral eval</code>: the code is typed into the console you are looking at, and its objects, tables and plots stay there for both of you to inspect and build on. Corral Harness is the set of rules around each request that makes this joint work safe, enforced in Corral's own code, whatever the model was told.</p>
         <ul class="points">
-          <li><b>In plain sight</b><span>the code is typed into the console you are looking at</span></li>
-          <li><b>One at a time</b><span>requests queue, with a time limit and clipped output</span></li>
-          <li><b>Yours to decide</b><span>agents ask first by default, or run freely, or not at all; full results, your review first, or structure only</span></li>
-          <li><b>Recorded</b><span>every request in a local audit log</span></li>
-          <li><b>Any agent</b><span>shell commands plus an open Agent Skills skill</span></li>
+          <li><b>In plain sight</b><span>you watch each request run in your console, one at a time</span></li>
+          <li><b>Your call</b><span>each request waits for your yes by default, showing the exact code and which agent asks</span></li>
+          <li><b>What it reads</b><span>full results, your review first, or only their structure</span></li>
+          <li><b>No loosening</b><span>an agent can't give itself more room: that needs your yes too</span></li>
+          <li><b>Recorded</b><span>every request, and every change it asks for, in a local audit log</span></li>
+          <li><b>Any agent</b><span>Claude Code, Codex, Gemini, opencode: shell commands and an open Agent Skills skill</span></li>
         </ul>
         <p class="more-links"><a href="docs/agents.html#the-agent-harness">How the harness works</a><a href="docs/security.html">Security model</a></p>
       </div>
-        <figure class="arch">
-          <svg viewBox="0 0 680 300" role="img" aria-labelledby="home-harness-t home-harness-d">
-            <title id="home-harness-t">Corral as the agent harness</title>
-            <desc id="home-harness-d">The agent calls corral eval; Corral checks what you allow, asks you if needed and queues it; the code runs in your console, where you see it; Corral returns the output or only its structure to the agent and records the request in the audit log.</desc>
-            <defs><marker id="home-harness-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
-            <text class="t" x="40" y="22" dominant-baseline="central">The request</text>
-            <g class="ui"><rect x="40" y="40" width="170" height="64" rx="6"/><text class="t" x="125" y="60" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="82" text-anchor="middle" dominant-baseline="central">calls corral eval</text></g>
-            <line class="arr" x1="212" y1="72" x2="252" y2="72" marker-end="url(#home-harness-arrow)"/>
-            <g class="core"><rect x="254" y="40" width="172" height="64" rx="6"/><text class="t" x="340" y="60" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="82" text-anchor="middle" dominant-baseline="central">checks, asks you, queues</text></g>
-            <line class="arr" x1="428" y1="72" x2="468" y2="72" marker-end="url(#home-harness-arrow)"/>
-            <g class="eng"><rect x="470" y="40" width="170" height="64" rx="6"/><text class="t" x="555" y="60" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="555" y="82" text-anchor="middle" dominant-baseline="central">runs it where you see</text></g>
-            <text class="t" x="40" y="160" dominant-baseline="central">The answer</text>
-            <g class="eng"><rect x="470" y="178" width="170" height="64" rx="6"/><text class="t" x="555" y="198" text-anchor="middle" dominant-baseline="central">Your session</text><text class="s" x="555" y="220" text-anchor="middle" dominant-baseline="central">objects, plots stay</text></g>
-            <line class="arr" x1="468" y1="210" x2="428" y2="210" marker-end="url(#home-harness-arrow)"/>
-            <g class="core"><rect x="254" y="178" width="172" height="64" rx="6"/><text class="t" x="340" y="198" text-anchor="middle" dominant-baseline="central">Corral, the harness</text><text class="s" x="340" y="220" text-anchor="middle" dominant-baseline="central">full or structure, audit</text></g>
-            <line class="arr" x1="252" y1="210" x2="212" y2="210" marker-end="url(#home-harness-arrow)"/>
-            <g class="ui"><rect x="40" y="178" width="170" height="64" rx="6"/><text class="t" x="125" y="198" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="125" y="220" text-anchor="middle" dominant-baseline="central">reads what it may</text></g>
-            <line class="arr" x1="555" y1="106" x2="555" y2="176" marker-end="url(#home-harness-arrow)"/>
-            <g class="legend">
-              <rect class="ui-k" x="40" y="270" width="12" height="12" rx="3"/><text class="s" x="58" y="276" dominant-baseline="central">the agent</text>
-              <rect class="core-k" x="150" y="270" width="12" height="12" rx="3"/><text class="s" x="168" y="276" dominant-baseline="central">Corral</text>
-              <rect class="eng-k" x="240" y="270" width="12" height="12" rx="3"/><text class="s" x="258" y="276" dominant-baseline="central">your session, in plain sight</text>
-            </g>
-          </svg>
-        </figure>
+      <figure class="browser harness-shot">
+        <div class="browser-bar"><i></i><i></i><i></i><span>Corral: approve the agent's code</span></div>
+        <img src="assets/shots/harness.webp" width="2000" height="1170" loading="lazy" alt="Corral's approval popup over the IDE: Claude Code wants to run a plot in your R console; the exact code, which agent asks, what it will see back, and Enter to run it or n to refuse">
+      </figure>
     </div>
   </section>
 
