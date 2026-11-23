@@ -194,6 +194,40 @@
     </div>
   </section>
 
+  <section class="showcase" id="layouts">
+    <div class="show-head">
+      <div>
+        <div class="section-label"><span>Layouts</span><span>ctrl+b a · ctrl+b shift+s</span></div>
+        <h2>Three layouts, one key apart.</h2>
+      </div>
+      <p>Put the agent first while it does the work, the code first while you do, or the script over its console, like a notebook. Switching moves the panes and nothing else: the console, its objects, the script and the agent's conversation stay as they are.</p>
+    </div>
+    <div class="layouts">
+      <input type="radio" name="layout" id="lay-agent" checked>
+      <input type="radio" name="layout" id="lay-code">
+      <input type="radio" name="layout" id="lay-notebook">
+      <div class="layout-switch">
+        <label for="lay-agent"><b>Agent first</b><span>ctrl+b a</span></label>
+        <label for="lay-code"><b>Code first</b><span>ctrl+b shift+s</span></label>
+        <label for="lay-notebook"><b>Notebook</b><span>from the palette</span></label>
+      </div>
+      <figure class="browser layout-shot">
+        <div class="browser-bar"><i></i><i></i><i></i><span>herdr · ~/projects/sales</span></div>
+        <div class="layout-frames">
+          <img class="lay-agent" src="assets/shots/layout-agent.webp" width="2000" height="1365" loading="lazy" alt="Corral's agent-first layout: Claude Code on the left, after fitting a model in the R console; on the right, sales.R in the editor, the R console with the agent's request, and the variables">
+          <img class="lay-code" src="assets/shots/layout-code.webp" width="2000" height="1365" loading="lazy" alt="Corral's code-first layout: sales.R in the editor on the left; on the right, the agent over the R console, and the variables below">
+          <img class="lay-notebook" src="assets/shots/layout-notebook.webp" width="2000" height="1365" loading="lazy" alt="Corral's notebook layout: sales.R over the R console on the left; the agent over the variables on the right">
+        </div>
+      </figure>
+      <div class="layout-notes">
+        <p class="lay-agent">The agent gets the big pane; the script, the console and your objects share the right.</p>
+        <p class="lay-code">The script takes the left; the agent sits over the console, with your objects below.</p>
+        <p class="lay-notebook">The script over its console on the left, as in RStudio or Positron; the agent and your objects on the right.</p>
+      </div>
+    </div>
+    <p class="more-links"><a href="docs/layouts.html">Layouts and panes</a></p>
+  </section>
+
   <div class="section-label"><span>The data science workflow, in your terminal</span><span>ctrl+b a</span></div>
 
   <article class="feature">
@@ -334,52 +368,26 @@
     </div>
   </section>
 
-  <section class="showcase split" id="palette">
-    <div class="show-text">
-      <div class="section-label"><span>Command palette</span><span>ctrl+b space</span></div>
-      <h2>Corral's command center, one key away.</h2>
-      <p><kbd>ctrl+b</kbd> <kbd>space</kbd> opens Corral's palette from any pane: every shortcut and action in one searchable list, grouped from the layouts to the editor, the consoles, the tables and Mirador, then agents, appearance and help. Each entry starts with its category, so typing <code>agents</code> or <code>editor</code> lists just those. Type a few letters, press <kbd>Enter</kbd>, and it runs.</p>
-      <p>Everything in Corral is there: the layouts, the consoles and their R or Python version, the agents, the theme and the language. Change any shortcut right in it: <kbd>Tab</kbd> on it, then the new key. Your keys stay when Corral updates.</p>
-      <div class="card">
-        <div class="row"><span>ctrl+b space</span><span>open it from any pane</span></div>
-        <div class="row"><span>type</span><span>search names and keys</span></div>
-        <div class="row"><span>Enter</span><span>run the action</span></div>
-        <div class="row"><span>Tab</span><span>change its key</span></div>
+  <section class="showcase" id="palette">
+    <div class="show-head palette-head">
+      <div>
+        <div class="section-label"><span>Command palette</span><span>ctrl+b space</span></div>
+        <h2>Corral's command center, one key away.</h2>
+      </div>
+      <div>
+        <p><kbd>ctrl+b</kbd> <kbd>space</kbd> opens Corral's palette from any pane: every shortcut and action in one searchable list, grouped from the layouts to the editor, the consoles, the tables and Mirador, then agents, appearance and help. Each entry starts with its category, so typing <code>agents</code> or <code>editor</code> lists just those. Type a few letters, press <kbd>Enter</kbd>, and it runs.</p>
+        <p>Everything in Corral is there: the layouts, the consoles and their R or Python version, the agents, the theme and the language. Change any shortcut right in it: <kbd>Tab</kbd> on it, then the new key. Your keys stay when Corral updates.</p>
+        <div class="card">
+          <div class="row"><span>ctrl+b space</span><span>open it from any pane</span></div>
+          <div class="row"><span>type</span><span>search names and keys</span></div>
+          <div class="row"><span>Enter</span><span>run the action</span></div>
+          <div class="row"><span>Tab</span><span>change its key</span></div>
+        </div>
       </div>
     </div>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette: 74 shortcuts and actions, grouped by part of the IDE, each starting with its category (Layout, Editor, Console…) and showing its keys">
-      <div class="tui-bar"><span>Corral: shortcuts</span><span>74 shortcuts</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#5c5c5c;">Search for a shortcut or an action…</span>                                              <span style="color:#5c5c5c;">74 shortcuts</span>
-<span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
-  <span style="color:#a0a0a0;font-weight:700;">LAYOUTS AND PANES</span>
-<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Layout: agent first ↵                                                                  </span><span style="color:#ffc799;background:#343434;">ctrl+b a</span>
-   <span style="color:#ffffff;">Layout: code first</span>                                                               <span style="color:#ffc799;">ctrl+b shift+s</span>
-   <span style="color:#ffffff;">Layout: start with R</span>                                                                           <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Layout: start with Python</span>                                                                      <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Layout: expand the script (or agent) or the console</span>                                    <span style="color:#ffc799;">ctrl+b t</span>
-   <span style="color:#ffffff;">Layout: add the script editor above the console</span>                                                <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Layout: close (keeps the agent and the rest of the tab)</span>                          <span style="color:#ffc799;">ctrl+b shift+q</span>
-
-  <span style="color:#a0a0a0;font-weight:700;">SCRIPT EDITOR</span>
-   <span style="color:#ffffff;">Editor: save (a draft asks where)</span>                                                        <span style="color:#ffc799;">ctrl+s</span>
-   <span style="color:#ffffff;">Editor: run the line or the selection</span>                             <span style="color:#ffc799;">ctrl+r  ctrl+enter  alt+enter</span>
-   <span style="color:#ffffff;">Editor: run the whole file</span>                                                 <span style="color:#ffc799;">F5  ctrl+shift+enter</span>
-   <span style="color:#ffffff;">Editor: insert &lt;-</span>                                                                 <span style="color:#ffc799;">ctrl+l  alt+-</span>
-   <span style="color:#ffffff;">Editor: insert |&gt;</span>                                                          <span style="color:#ffc799;">ctrl+u  ctrl+shift+m</span>
-   <span style="color:#ffffff;">Editor: comment or uncomment</span>                                               <span style="color:#ffc799;">ctrl+/  ctrl+shift+c</span>
-   <span style="color:#ffffff;">Editor: autocomplete</span>                                                                 <span style="color:#ffc799;">ctrl+space</span>
-   <span style="color:#ffffff;">Editor: command palette (all its actions)</span>                                                <span style="color:#ffc799;">ctrl+p</span>
-   <span style="color:#ffffff;">Editor: find in the file</span>                                                                 <span style="color:#ffc799;">ctrl+f</span>
-   <span style="color:#ffffff;">Editor: undo</span>                                                                             <span style="color:#ffc799;">ctrl+z</span>
-   <span style="color:#ffffff;">Editor: close (the drafts are discarded)</span>                                                 <span style="color:#ffc799;">ctrl+q</span>
-
-  <span style="color:#a0a0a0;font-weight:700;">CONSOLE (R AND PYTHON)</span>
-   <span style="color:#ffffff;">Console: R or Python</span>                                                                   <span style="color:#ffc799;">ctrl+b y</span>
-   <span style="color:#ffffff;">Console: send the selection (R or Python)</span>                                          <span style="color:#ffc799;">ctrl+b enter</span>
-   <span style="color:#ffffff;">Console: use this pane as the console</span>                                                  <span style="color:#ffc799;">ctrl+b m</span>
-   <span style="color:#ffffff;">R console: run, if the expression is complete</span>                                             <span style="color:#ffc799;">enter</span>
-
- <span style="color:#5c5c5c;">↑↓ select · Enter run · Tab change key · Esc close · type to search</span></pre>
+    <figure class="browser palette-shot">
+      <div class="browser-bar"><i></i><i></i><i></i><span>ctrl+b space · Corral: shortcuts</span></div>
+      <img src="assets/shots/palette.webp" width="2000" height="1484" loading="lazy" alt="Corral's palette open over the IDE: 83 shortcuts and actions grouped by part of the IDE, starting with the layouts, each with its key">
     </figure>
   </section>
 

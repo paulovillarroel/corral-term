@@ -367,6 +367,42 @@ kbd {
 /* Mirador: the text beside the screenshot, so the picture keeps a reasonable size. */
 .mirador-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 72px; align-items: center; }
 .mirador-grid .browser { margin: 0; }
+/* Layouts: three screenshots of the same session, one at a time; radio buttons, no script. */
+.layouts { position: relative; margin-top: 40px; }
+.layouts > input { position: absolute; opacity: 0; pointer-events: none; }
+.layout-switch { display: inline-flex; flex-wrap: wrap; margin-bottom: 16px; border: 1px solid var(--line-2); }
+.layout-switch label { display: grid; gap: 6px; padding: 11px 20px 12px; cursor: pointer; border-right: 1px solid var(--line-2); transition: background-color .2s ease, box-shadow .2s ease; }
+.layout-switch label:last-child { border-right: 0; }
+.layout-switch b { font: 600 14px/1.2 var(--sans); color: var(--muted); transition: color .2s ease; }
+.layout-switch span { font: 12px/1 var(--mono); color: var(--dim); }
+.layout-switch label:hover b { color: var(--fg); }
+#lay-agent:checked ~ .layout-switch [for="lay-agent"],
+#lay-code:checked ~ .layout-switch [for="lay-code"],
+#lay-notebook:checked ~ .layout-switch [for="lay-notebook"] { background: var(--raised); box-shadow: inset 0 -2px 0 var(--accent); }
+#lay-agent:checked ~ .layout-switch [for="lay-agent"] b,
+#lay-code:checked ~ .layout-switch [for="lay-code"] b,
+#lay-notebook:checked ~ .layout-switch [for="lay-notebook"] b { color: var(--fg); }
+#lay-agent:focus-visible ~ .layout-switch [for="lay-agent"],
+#lay-code:focus-visible ~ .layout-switch [for="lay-code"],
+#lay-notebook:focus-visible ~ .layout-switch [for="lay-notebook"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.layout-shot { margin: 0; }
+.layout-frames { display: grid; }
+.layout-frames img { grid-area: 1 / 1; display: block; width: 100%; height: auto; opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s linear .3s; }
+.layout-notes p { display: none; margin: 16px 0 0; font-size: 14.5px; color: var(--muted); }
+#lay-agent:checked ~ .layout-shot .lay-agent, #lay-code:checked ~ .layout-shot .lay-code, #lay-notebook:checked ~ .layout-shot .lay-notebook { opacity: 1; visibility: visible; transition: opacity .3s ease; }
+#lay-agent:checked ~ .layout-notes .lay-agent, #lay-code:checked ~ .layout-notes .lay-code, #lay-notebook:checked ~ .layout-notes .lay-notebook { display: block; }
+#layouts .more-links { margin-top: 18px !important; }
+@media (prefers-reduced-motion: reduce) { .layout-frames img, .layout-switch label, .layout-switch b { transition: none; } }
+@media (max-width: 640px) {
+  .layout-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .layout-switch label { padding: 10px 10px 11px; }
+  .layout-switch span { font-size: 10.5px; }
+}
+/* The palette: its text above, the screenshot below at full width, so it reads. */
+.palette-head { align-items: start; }
+.palette-head p + p { margin-top: 14px; }
+.palette-head .card { margin-top: 24px; max-width: 520px; }
+.palette-shot { margin: 40px 0 0; }
 .points { list-style: none; margin: 28px 0 0; padding: 0; }
 .points li { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .points li:first-child { border-top: 1px solid var(--line); }
