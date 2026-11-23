@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.10
+
+The Notebook layout, layouts that switch in place and keep the sizes you leave, and a palette that picks the R or Python version and changes shortcuts.
 
 - A third layout, Notebook: the script over the console on the left, like RStudio or Positron, and the agent over the variables on the right. "Layout: notebook" in the palette (Tab gives it a key) or `corral layout --focus notebook`. Like the other two, it rearranges an open layout in place, keeping the console's session, the draft and the agent.
 - Each layout has its own sizes. The left column starts at about half the width when the agent is there and at 62 % when the script is (code first and notebook), since code needs the long lines. Panes you resize by hand keep their size: Corral notes the sizes when you switch layouts, press ctrl+b t or close Corral, and each layout opens with the ones you left, in any workspace. "Layout: back to Corral's sizes" in the palette (`corral layout --default-sizes`) forgets them.
