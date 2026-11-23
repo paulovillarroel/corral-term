@@ -75,16 +75,18 @@ fn layout_state() -> (Value, String) {
 // ----------------------------------------------------------------------- layout
 
 fn layout_usage() -> &'static str {
-    tr("usage: corral layout [--focus agent|code] [--lang r|python] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
+    tr("usage: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd FOLDER] [--label NAME] [--agent COMMAND] \
 [--console COMMAND] [--ratio 0.516] [--shell] [--editor COMMAND]",
-       "uso: corral layout [--focus agent|code] [--lang r|python] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
+       "uso: corral layout [--focus agent|code|notebook] [--lang r|python] [--cwd CARPETA] [--label NOMBRE] [--agent COMANDO] \
 [--console COMANDO] [--ratio 0.516] [--shell] [--editor COMANDO]")
 }
 
 /// New tab: the agent on the left; on the right, the script over the console and
 /// the variables below. With `--focus code` the script and the agent trade
-/// places: the script on the left, the agent over the console. The two panes
-/// above the variables share that area; ctrl+b t gives it to one or the other.
+/// places: the script on the left, the agent over the console. With `--focus
+/// notebook`, the script is over the console on the left, and the agent over the
+/// variables on the right. The script and the console share their area; ctrl+b t
+/// gives it to one or the other.
 /// It starts with R, or with Python: `--lang`, else `corral config start`.
 pub fn layout(args: &[String]) -> Result<(), String> {
     let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus", "--lang"], &["--shell"], layout_usage())?;
@@ -93,15 +95,16 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),
         None => start_lang(),
     };
-    let code = match a.value("--focus").unwrap_or("agent") {
-        "agent" => false,
-        "code" => true,
-        other => return Err(trf!("--focus takes agent or code, not {other}", "--focus acepta agent o code, no {other}")),
+    let focus = match a.value("--focus").unwrap_or("agent") {
+        f @ ("agent" | "code" | "notebook") => f,
+        other => return Err(trf!("--focus takes agent, code or notebook, not {other}", "--focus acepta agent, code o notebook, no {other}")),
     };
+    // A notebook starts as code first; then its console moves under the script.
+    let code = focus != "agent";
     let ws = env::current_workspace().ok_or(tr("no herdr workspace found", "no encontré un workspace de herdr"))?;
     // A layout already open here is rearranged, never replaced: its console, draft
     // and agent keep running until Corral closes (ctrl+b shift+q).
-    if let Some(kept) = layout::refocus(&ws, code)? {
+    if let Some(kept) = layout::refocus(&ws, focus, true)? {
         let active = kept.get("lang").str().unwrap_or("r").to_string();
         if let Some(l) = a.value("--lang").filter(|l| *l != active) {
             layout::switch(&[l.to_string()])?;
@@ -142,8 +145,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let vars_pane = vars::split_under(&right, 0.73)?;
     let editor_ok = !editor_cmd.trim().is_empty() && editor_cmd.split_whitespace().next().and_then(env::which).is_some();
     if code && !editor_ok {
-        return Err(tr("the code-first layout needs the editor (Fresh); corral doctor tells what is missing",
-                      "el layout con foco en el código necesita el editor (Fresh); corral doctor dice qué falta").into());
+        return Err(tr("the code-first and notebook layouts need the editor (Fresh); corral doctor tells what is missing",
+                      "los layouts con foco en el código y notebook necesitan el editor (Fresh); corral doctor dice qué falta").into());
     }
     let (agent_pane, script_pane) = if code { (right.clone(), left.clone()) } else { (left.clone(), right.clone()) };
     let console_pane = if editor_ok {
@@ -167,6 +170,9 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let env_console = if lang == "r" { std::env::var("CORRAL_R").ok() } else { None };
     let console_cmd = a.value("--console").map(String::from).or(env_console).unwrap_or_else(|| console::command(lang));
     herdr::run(&console_pane, &console_cmd)?;
+    if focus == "notebook" {
+        layout::refocus(&ws, "notebook", false)?; // the console goes under the script
+    }
 
     if a.flag("--shell") {
         let shell = herdr::split(&vars_pane, "right", Some(0.5), Some(&cwd))?;
@@ -179,7 +185,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         ("tab", tab.get("tab").get("tab_id").clone()), ("agent", agent_pane.as_str().into()),
         ("console", console_pane.as_str().into()),
         ("script", if editor_ok { script_pane.as_str().into() } else { Value::Null }),
-        ("vars", vars_pane.as_str().into()), ("focus", if code { "code" } else { "agent" }.into()),
+        ("vars", vars_pane.as_str().into()), ("focus", focus.into()),
         ("lang", lang.into()),
     ]).to_json());
     Ok(())

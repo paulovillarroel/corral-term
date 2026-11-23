@@ -22,6 +22,13 @@ title = "Corral: layout, code first"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "layout", "--focus", "code"]
 
+# The script over the console on the left, the agent over the variables on the right.
+[[actions]]
+id = "layout-notebook"
+title = "Corral: layout, notebook (script over the console)"
+contexts = ["global", "workspace"]
+command = ["../rs/target/release/corral", "layout", "--focus", "notebook"]
+
 [[actions]]
 id = "send"
 title = "Corral: send the selection to the console (R or Python)"
