@@ -9,6 +9,9 @@ What changed in each version of Corral. The release workflow publishes each vers
 - Less is left on disk: a console that starts deletes the folders of sessions that ended, an agent's requests and their full output go after a day, and Ark's and Mirador's logs start over when they pass 5 MB.
 - Docs: the security model lists what stays on your disk, what each file holds and for how long.
 - Tests run on every pull request. Live tests (`cargo test --test live -- --ignored`) start their own herdr and R and check what agents rely on: two agents at once take turns, timeouts, Ctrl+C, a crash in the middle of a request, and reading the variables while they change.
+- The R console comes back by itself when R crashes: it starts a new session in the same pane and says so, instead of leaving the shell. A crash right after starting doesn't restart it again and again.
+- The R console checks the signature of every message from Ark (HMAC-SHA256 with the session's key) and drops any that doesn't match; the editor's language server bridge does too. A connection to Ark that drops while R runs is opened again.
+- Live tests for the Python console too (objects kept, two agents at once, timeouts, Ctrl+C, a crash, the variables), and for R's restart and the editor's language server.
 
 ### Fixes
 
