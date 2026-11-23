@@ -195,21 +195,20 @@
   </section>
 
   <section class="showcase" id="layouts">
-    <div class="show-head">
-      <div>
-        <div class="section-label"><span>Layouts</span><span>ctrl+b a · ctrl+b shift+s</span></div>
-        <h2>Three layouts, one key apart.</h2>
-      </div>
-      <p>Put the agent first while it does the work, the code first while you do, or the script over its console, like a notebook. Switching moves the panes and nothing else: the console, its objects, the script and the agent's conversation stay as they are.</p>
-    </div>
     <div class="layouts">
       <input type="radio" name="layout" id="lay-agent" checked>
       <input type="radio" name="layout" id="lay-code">
       <input type="radio" name="layout" id="lay-notebook">
-      <div class="layout-switch">
-        <label for="lay-agent"><b>Agent first</b><span>ctrl+b a</span></label>
-        <label for="lay-code"><b>Code first</b><span>ctrl+b shift+s</span></label>
-        <label for="lay-notebook"><b>Notebook</b><span>from the palette</span></label>
+      <div class="layouts-text">
+        <div class="section-label"><span>Layouts</span><span>one session</span></div>
+        <h2>Three layouts, one key apart.</h2>
+        <p>Switching moves the panes and nothing else: the console, its objects, the script and the agent's conversation stay as they are.</p>
+        <div class="layout-switch">
+          <label for="lay-agent"><b>Agent first</b><span>The agent gets the big pane; the script, the console and your objects share the right.</span></label>
+          <label for="lay-code"><b>Code first</b><span>The script takes the left; the agent sits over the console, with your objects below.</span></label>
+          <label for="lay-notebook"><b>Notebook</b><span>The script over its console, as in RStudio or Positron; the agent and your objects on the right.</span></label>
+        </div>
+        <p class="more-links"><a href="docs/layouts.html">Layouts and panes</a></p>
       </div>
       <figure class="browser layout-shot">
         <div class="browser-bar"><i></i><i></i><i></i><span>herdr · ~/projects/sales</span></div>
@@ -219,13 +218,7 @@
           <img class="lay-notebook" src="assets/shots/layout-notebook.webp" width="2000" height="1365" loading="lazy" alt="Corral's notebook layout: sales.R over the R console on the left; the agent over the variables on the right">
         </div>
       </figure>
-      <div class="layout-notes">
-        <p class="lay-agent">The agent gets the big pane; the script, the console and your objects share the right.</p>
-        <p class="lay-code">The script takes the left; the agent sits over the console, with your objects below.</p>
-        <p class="lay-notebook">The script over its console on the left, as in RStudio or Positron; the agent and your objects on the right.</p>
-      </div>
     </div>
-    <p class="more-links"><a href="docs/layouts.html">Layouts and panes</a></p>
   </section>
 
   <div class="section-label"><span>The data science workflow, in your terminal</span><span>ctrl+b a</span></div>
