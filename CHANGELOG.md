@@ -2,6 +2,11 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- The installer installs nanoparquet when R doesn't have it, instead of suggesting it: `View()` opens big tables faster and R's memory stays steady. It goes in your own R library, without sudo, already compiled from Posit's package manager on the Ubuntu and Debian releases it builds for (seconds), from CRAN otherwise.
+- The Python console comes with pyarrow, so `View()` saves pandas tables as parquet: a million rows in 0.16 s and 18 MB, instead of 0.95 s and 46 MB as CSV, and dates stay dates. A version your project pins wins, and the console starts as fast. With uv, the installer puts IPython, cloudpickle and pyarrow in uv's cache, so the first Python console starts at once.
+
 ## 0.1.15
 
 The layout opens the agent you have, the installer asks which one when you have several, and a shell that asks something as it starts no longer swallows Corral's commands.
