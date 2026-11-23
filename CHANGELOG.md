@@ -2,6 +2,12 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+### Fixes
+
+- A shell that asks something as it starts, like zsh's compinit about insecure folders, took the first letter of the command Corral typed as its answer: the panes said `command not found: orral` and nothing started. Corral now types its commands after a space, which answers such a question instead, and the commands start whole. The Troubleshooting page says how to fix the zsh warning itself.
+
 ## 0.1.14
 
 Mirador keeps plots at a size you choose, whatever the window.
