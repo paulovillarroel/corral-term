@@ -31,7 +31,7 @@ Written in Rust. DuckDB for your data.</p>
 | [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. `herdr update` updates it. |
 | R, with the `httpgd` and `jsonlite` packages | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig), then `Rscript -e 'install.packages(c("httpgd", "jsonlite"))'`. |
 
-Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…), [uv](https://docs.astral.sh/uv/) for the Python console, and the R packages `nanoparquet` and `rlang`.
+Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console, and the R packages `nanoparquet` and `rlang`.
 
 ### One line
 
