@@ -53,14 +53,18 @@ fn every_command_prints_its_usage() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// Commands that change things and take no arguments refuse a typo like -help
+/// instead of running: uninstall would remove Corral, close would close the panes.
 #[test]
-fn a_typo_does_not_uninstall() {
+fn a_typo_does_not_run_them() {
     let home = empty_home("typo");
-    let out = corral(&home, "en", &["uninstall", "-help"]);
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success());
-    assert!(out.stdout.is_empty(), "it started: {}", String::from_utf8_lossy(&out.stdout));
-    assert!(stderr.contains("unknown option -help") && stderr.contains("usage: corral uninstall"), "{stderr}");
+    for cmd in ["uninstall", "close", "doctor", "theme"] {
+        let out = corral(&home, "en", &[cmd, "-help"]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "corral {cmd} -help ran");
+        assert!(out.stdout.is_empty(), "corral {cmd} -help started: {}", String::from_utf8_lossy(&out.stdout));
+        assert!(stderr.contains("unknown option -help") && stderr.contains(&format!("usage: corral {cmd}")), "corral {cmd}: {stderr}");
+    }
     assert!(is_empty(&home));
     let _ = std::fs::remove_dir_all(&home);
 }
