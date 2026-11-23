@@ -524,6 +524,13 @@ local({
       return(invisible(done()))
     }
     cat("# corral eval\n")
+    # Control or invisible characters can hide part of the echoed code: corral eval
+    # then writes the code out with them shown, and this prints it first.
+    if (file.exists(path(".shown"))) {
+      cat(tr("# corral eval: this code has control or invisible characters; written out, it says:\n",
+             "# corral eval: este c\u00f3digo tiene caracteres de control o invisibles; escrito tal cual, dice:\n"))
+      cat(paste0("#   ", readLines(path(".shown"), warn = FALSE, encoding = "UTF-8"), "\n"), sep = "")
+    }
     con <- file(path(".out"), open = "wt", encoding = "UTF-8")
     sink(con, split = TRUE)
     on.exit({ sink(); close(con); done() }, add = TRUE)
