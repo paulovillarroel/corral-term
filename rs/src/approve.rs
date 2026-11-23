@@ -108,10 +108,10 @@ pub fn run(_args: &[String]) -> Result<(), String> {
                 trf!("from {agent} · it asked from a shell without a terminal, so you decide",
                      "desde {agent} · lo pidió desde una shell sin terminal, así que decides tú")
             } else if reviewing {
-                trf!("from pane {agent} · exactly what it would get; keep it and it gets only the structure",
-                     "desde el panel {agent} · lo que recibiría; si te lo guardas, recibe solo la estructura")
+                trf!("from {agent} · exactly what it would get; keep it and it gets only the structure",
+                     "desde {agent} · lo que recibiría; si te lo guardas, recibe solo la estructura")
             } else {
-                trf!("from pane {agent} · {output}", "desde el panel {agent} · {output}")
+                trf!("from {agent} · {output}", "desde {agent} · {output}")
             };
             let mut f = String::from("\x1b[2J");
             f += &format!("\x1b[2;3H{}{BOLD}{}{RESET}", c.accent, clip(title, w));
