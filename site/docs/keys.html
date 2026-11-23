@@ -50,9 +50,9 @@
 
     <h2>The palette</h2>
     <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Agents:</code>, <code>Theme:</code>…), so typing a category lists just that. Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 6 of 74 entries, the Agents group, each starting with Agents:">
+    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 9 of 81 entries, the Agents group, each starting with Agents:">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                               <span style="color:#5c5c5c;">6 of 74</span>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                               <span style="color:#5c5c5c;">9 of 81</span>
 <span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
   <span style="color:#a0a0a0;font-weight:700;">AGENTS</span>
 <span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Agents: ask before each request ↵                                                              </span><span style="color:#ffc799;background:#343434;"></span>
@@ -61,6 +61,9 @@
    <span style="color:#ffffff;">Agents: see full results</span>                                                                       <span style="color:#ffc799;"></span>
    <span style="color:#ffffff;">Agents: you review results before they see them</span>                                                <span style="color:#ffc799;"></span>
    <span style="color:#ffffff;">Agents: see only the structure of results</span>                                                      <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: keep the audit log 30 days</span>                                                             <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: keep the audit log 90 days (Corral&#x27;s)</span>                                                  <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: keep the audit log a year</span>                                                              <span style="color:#ffc799;"></span>
 
  <span style="color:#5c5c5c;">↑↓ select · Enter run · Esc close · type to search</span></pre>
     </figure>
@@ -218,6 +221,9 @@
     <tr><td>Agents: see full results</td><td><code>corral config agent_output full</code>, the default</td></tr>
     <tr><td>Agents: you review results before they see them</td><td><code>corral config agent_output review</code></td></tr>
     <tr><td>Agents: see only the structure of results</td><td><code>corral config agent_output structure</code></td></tr>
+    <tr><td>Agents: keep the audit log 30 days</td><td><code>corral config audit_days 30</code></td></tr>
+    <tr><td>Agents: keep the audit log 90 days (Corral's)</td><td><code>corral config audit_days 90</code>, the default</td></tr>
+    <tr><td>Agents: keep the audit log a year</td><td><code>corral config audit_days 365</code></td></tr>
     </tbody>
     </table>
 
