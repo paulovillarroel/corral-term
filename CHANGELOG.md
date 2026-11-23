@@ -2,6 +2,19 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- The approval popup shows exactly what runs. Control and invisible characters in an agent's code, which a terminal acts on or draws as nothing, show as `␛`, `␍` or `<U+202E>` under a warning, and long lines wrap instead of being cut. Before, an escape in a comment could make the popup show other code than the code that ran. The console prints such code written out too, before its echo, and the review popup shows a result's text without its colors.
+- A sensitive session comes back sensitive after a crash: its objects return into a session marked like the one that crashed, before anything is loaded, and the console says so.
+- Loosening the harness asks when the command comes from a pane herdr sees an agent in, even when the agent runs its commands in a terminal of its own.
+- The audit log keeps requests that never got to run (no console, a busy one, a turn that didn't come), with why.
+- Docs: the security page lists how an agent set on it still gets past the harness, and the agent permissions that hold.
+- The live tests run in GitHub Actions, by hand before each version.
+
+### Fixes
+
+- A Python console that crashed sometimes didn't come back: the terminal left stray input on the shell's line, the shell refused the command that starts the console, and the next request waited three minutes.
+
 ## 0.1.11
 
 Objects that outlive a crash, an R console that comes back by itself, Corral's files kept private to you, and a harness that asks before an agent loosens it.
