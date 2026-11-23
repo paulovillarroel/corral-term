@@ -13,7 +13,7 @@ Written in Rust. DuckDB for your data.</p>
   <a href="https://corral-term.dev/docs/architecture.html">Architecture</a>
 </p>
 
-<p align="center"><img src="site/assets/shots/corral-layout.webp" width="860" alt="A Corral layout in herdr: Claude Code on the left runs code in the R console; on the right, the script editor, the R console and the variables pane"></p>
+<p align="center"><img src="site/assets/shots/hero.webp" width="860" alt="Corral in herdr: Claude Code on the left, after running code in the R console with corral eval; on the right, the script, the R console and the variables"></p>
 
 - **Script, console, variables, tables and plots** in a [herdr TUI](https://herdr.dev/tui/) workspace: R on [Ark](https://github.com/posit-dev/ark), Python in IPython.
 - **Big tables at once.** `View()` saves the table as Parquet and asks DuckDB only for what's on screen: ten million rows take about a second to save with nanoparquet, then about 30 ms a screen.
