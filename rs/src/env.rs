@@ -255,6 +255,21 @@ pub fn active_lang(ws: Option<&str>, panes: &[Value]) -> String {
     lang
 }
 
+/// The agents Corral knows: the command, and the name people know it by. With no
+/// `corral config agent`, the agent pane runs the first one installed.
+pub const AGENTS: &[(&str, &str)] = &[("claude", "Claude Code"), ("codex", "Codex"), ("gemini", "Gemini CLI"), ("opencode", "opencode")];
+
+/// The first agent in AGENTS that `installed` finds.
+pub fn first_agent(installed: impl Fn(&str) -> bool) -> Option<&'static str> {
+    AGENTS.iter().map(|(cmd, _)| *cmd).find(|cmd| installed(cmd))
+}
+
+/// An agent's name, for a command Corral knows; the command itself otherwise.
+pub fn agent_name(command: &str) -> String {
+    let cmd = command.split_whitespace().next().unwrap_or("");
+    AGENTS.iter().find(|(c, _)| *c == cmd).map(|(_, n)| n.to_string()).unwrap_or_else(|| cmd.to_string())
+}
+
 pub fn which(cmd: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path).map(|d| d.join(cmd)).find(|p| p.is_file())
@@ -506,4 +521,20 @@ pub fn sh_split(s: &str) -> Vec<String> {
         words.push(cur);
     }
     words
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_first_agent_installed() {
+        assert_eq!(first_agent(|c| c == "opencode"), Some("opencode"));
+        assert_eq!(first_agent(|c| c == "codex" || c == "opencode"), Some("codex"));
+        assert_eq!(first_agent(|_| true), Some("claude"));
+        assert_eq!(first_agent(|_| false), None);
+        assert_eq!(agent_name("opencode"), "opencode");
+        assert_eq!(agent_name("gemini --yolo"), "Gemini CLI");
+        assert_eq!(agent_name("aider --model x"), "aider");
+    }
 }

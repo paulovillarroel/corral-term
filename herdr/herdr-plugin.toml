@@ -219,6 +219,37 @@ title = "Corral: idioma: español"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "language", "es"]
 
+# The agent the layout opens in its agent pane (corral config agent).
+[[actions]]
+id = "agent-claude"
+title = "Corral: the agent pane runs Claude Code"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent", "claude"]
+
+[[actions]]
+id = "agent-codex"
+title = "Corral: the agent pane runs Codex"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent", "codex"]
+
+[[actions]]
+id = "agent-gemini"
+title = "Corral: the agent pane runs Gemini CLI"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent", "gemini"]
+
+[[actions]]
+id = "agent-opencode"
+title = "Corral: the agent pane runs opencode"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent", "opencode"]
+
+[[actions]]
+id = "agent-none"
+title = "Corral: no agent, a shell in the agent pane"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "agent", "none"]
+
 # The size Mirador draws R plots at: its window's, or fixed.
 [[actions]]
 id = "plot-size-window"

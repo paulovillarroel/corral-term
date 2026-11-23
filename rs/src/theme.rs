@@ -658,6 +658,24 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         }
         return Ok(());
     }
+    if key == "agent" {
+        cfg.set(key, value.as_str().into());
+        write_config(&cfg);
+        let cmd = value.split_whitespace().next().unwrap_or("");
+        let name = env::agent_name(value);
+        if value == "none" {
+            say(tr("Agent pane: a shell", "Panel del agente: una shell"),
+                tr("The next layout you open has no agent, and a shell in its place.", "El próximo layout que abras no tiene agente: tiene una shell en su lugar."));
+        } else if env::which(cmd).is_none() {
+            say(&trf!("Agent pane: {name}", "Panel del agente: {name}"),
+                &trf!("{cmd} isn't on the PATH Corral sees, so the next layout may not find it. Install it, or choose another agent.",
+                      "{cmd} no está en el PATH que ve Corral, así que el próximo layout podría no encontrarlo. Instálalo, o elige otro agente."));
+        } else {
+            say(&trf!("Agent pane: {name}", "Panel del agente: {name}"),
+                tr("The next layout you open (ctrl+b a) runs it.", "El próximo layout que abras (ctrl+b a) lo abre."));
+        }
+        return Ok(());
+    }
     if key == "plot_size" {
         let Some(size) = crate::mirador::plot_size(value) else {
             return Err(tr("plot_size takes window, or a size in pixels as WIDTHxHEIGHT (like 1000x650)",
