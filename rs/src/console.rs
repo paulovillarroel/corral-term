@@ -347,6 +347,10 @@ pub fn ensure_running(pane: &str, lang: &str) -> bool {
     // Only a shell waiting at an empty prompt: a command just typed there is still starting.
     let at_prompt = last_line(pane).ends_with(['$', '#', '%', '❯']);
     if !names.is_empty() && names.iter().all(|n| shells.contains(&n.as_str())) && at_prompt {
+        // A console that was killed can leave stray input on the shell's line, unseen
+        // (the terminal's answer to a question it had asked): Ctrl+U clears it first,
+        // or the shell would read it with the command and refuse both.
+        let _ = herdr::send_text(pane, "\x15");
         return herdr::run(pane, &command(lang)).is_ok();
     }
     false
