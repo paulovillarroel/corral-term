@@ -517,6 +517,65 @@ fn config_usage() -> &'static str {
        "uso: corral config [CLAVE [VALOR]]   (las claves: corral-term.dev/docs/config.html)")
 }
 
+/// How much room each value of a harness setting gives agents; for the audit log,
+/// how much of the record it keeps (fewer days, less record).
+fn harness_rank(key: &str, value: Option<&str>) -> Option<i64> {
+    match key {
+        "agents" => Some(match value { Some("off") => 0, Some("on") => 2, _ => 1 }),
+        "agent_output" => Some(match value { Some("structure") => 0, Some("review") => 1, _ => 2 }),
+        "audit_days" => Some(match value {
+            Some("forever") => i64::MIN,
+            Some(d) => -d.trim().parse::<i64>().unwrap_or(crate::audit::KEEP_DAYS),
+            None => -crate::audit::KEEP_DAYS,
+        }),
+        _ => None,
+    }
+}
+
+/// The change gives agents more room, or keeps less of the record: (from, to).
+fn loosens(cfg: &Value, key: &str, value: &str) -> Option<(String, String)> {
+    let current = cfg.get(key).str().map(String::from)
+        .or_else(|| cfg.get(key).num().map(|n| format!("{n}")));
+    let (before, after) = (harness_rank(key, current.as_deref())?, harness_rank(key, Some(value))?);
+    let shown = current.unwrap_or_else(|| match key { "agents" => "ask".into(), "agent_output" => "full".into(), _ => "90".into() });
+    (after > before).then(|| (shown, value.to_string()))
+}
+
+/// From the palette, or typed in a terminal: the user. A shell without a terminal
+/// (an agent's) is not.
+fn by_the_user() -> bool {
+    use std::io::IsTerminal;
+    std::env::var_os("HERDR_PLUGIN_ID").is_some() || std::io::stdin().is_terminal()
+}
+
+/// What a harness setting means, for the notice and for the approval popup.
+fn meaning_of(key: &str, value: &str) -> Option<(String, String)> {
+    let m = |t: &str, b: &str| Some((t.to_string(), b.to_string()));
+    match (key, value) {
+        ("agents", "on") => m(tr("Agents: on", "Agentes: activados"), tr("They run code in your console without asking.", "Ejecutan código en tu consola sin preguntar.")),
+        ("agents", "ask") => m(tr("Agents: ask", "Agentes: preguntan"), tr("Each request waits until you approve it.", "Cada petición espera hasta que la apruebes.")),
+        ("agents", "off") => m(tr("Agents: off", "Agentes: desactivados"), tr("They can't run code in your consoles.", "No pueden ejecutar código en tus consolas.")),
+        ("agent_output", "full") => m(tr("Agent output: full", "Salida para agentes: completa"), tr("They see what their code prints, and new plots.", "Ven lo que imprime su código, y los gráficos nuevos.")),
+        ("agent_output", "review") => m(tr("Agent output: review", "Salida para agentes: revisar"), tr("You see each result first, and decide whether they get it.", "Ves cada resultado primero y decides si lo reciben.")),
+        ("agent_output", "structure") => m(tr("Agent output: structure", "Salida para agentes: estructura"), tr("They see whether it worked and the shape of objects, without values. Keep agents on ask: they write the code.", "Ven si funcionó y la forma de los objetos, sin valores. Deja los agentes en ask: ellos escriben el código.")),
+        ("audit_days", "forever") => m(tr("Audit log: kept for good", "Registro de auditoría: se guarda siempre"), tr("Corral never deletes what agents ran.", "Corral nunca borra lo que ejecutaron los agentes.")),
+        ("audit_days", d) => Some((trf!("Audit log: {d} days", "Registro de auditoría: {d} días"), trf!("Entries older than {d} days are deleted.", "Se borran las entradas de más de {d} días."))),
+        _ => None,
+    }
+}
+
+/// Loosening the harness from a shell without a terminal waits for the user's
+/// approval in a popup; from the palette or a terminal it doesn't. Tightening never asks.
+fn confirm_if_loosened(cfg: &Value, key: &str, value: &str) -> Result<(), String> {
+    match loosens(cfg, key, value) {
+        Some((from, to)) if !by_the_user() => {
+            let meaning = meaning_of(key, value).map(|(_, body)| body).unwrap_or_default();
+            crate::eval::confirm_setting(key, &from, &to, &meaning)
+        }
+        _ => Ok(()),
+    }
+}
+
 /// `corral config [KEY [VALUE]]`: read or change Corral's settings.
 pub fn cmd_config(args: &[String]) -> Result<(), String> {
     if env::wants_help(args) {
@@ -580,15 +639,12 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
             return Err(tr("audit_days takes a number of days (1 or more) or forever",
                           "audit_days acepta un número de días (1 o más) o forever").into());
         }
+        confirm_if_loosened(&cfg, key, value)?;
         cfg.set(key, value.as_str().into());
         write_config(&cfg);
         crate::audit::prune(); // what is older goes now
-        if value == "forever" {
-            say(tr("Audit log: kept for good", "Registro de auditoría: se guarda siempre"),
-                tr("Corral never deletes what agents ran.", "Corral nunca borra lo que ejecutaron los agentes."));
-        } else {
-            say(&trf!("Audit log: {value} days", "Registro de auditoría: {value} días"),
-                &trf!("Entries older than {value} days are deleted.", "Se borran las entradas de más de {value} días."));
+        if let Some((title, body)) = meaning_of(key, value) {
+            say(&title, &body);
         }
         return Ok(());
     }
@@ -606,25 +662,53 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
             return Err(trf!("{key} takes: {}", "{key} acepta: {}", v.join(", ")));
         }
     }
+    confirm_if_loosened(&cfg, key, value)?;
     cfg.set(key, value.as_str().into());
     write_config(&cfg);
     // The security settings come from the palette too: say what they mean.
-    let meaning = match (key.as_str(), value.as_str()) {
-        ("agents", "on") => Some((tr("Agents: on", "Agentes: activados"), tr("They run code in your console without asking.", "Ejecutan código en tu consola sin preguntar."))),
-        ("agents", "ask") => Some((tr("Agents: ask", "Agentes: preguntan"), tr("Each request waits until you approve it.", "Cada petición espera hasta que la apruebes."))),
-        ("agents", "off") => Some((tr("Agents: off", "Agentes: desactivados"), tr("They can't run code in your consoles.", "No pueden ejecutar código en tus consolas."))),
-        ("agent_output", "full") => Some((tr("Agent output: full", "Salida para agentes: completa"), tr("They see what their code prints, and new plots.", "Ven lo que imprime su código, y los gráficos nuevos."))),
-        ("agent_output", "review") => Some((tr("Agent output: review", "Salida para agentes: revisar"), tr("You see each result first, and decide whether they get it.", "Ves cada resultado primero y decides si lo reciben."))),
-        ("agent_output", "structure") => Some((tr("Agent output: structure", "Salida para agentes: estructura"), tr("They see whether it worked and the shape of objects, without values. Keep agents on ask: they write the code.", "Ven si funcionó y la forma de los objetos, sin valores. Deja los agentes en ask: ellos escriben el código."))),
-        ("checkpoints", "on") => Some((tr("Checkpoints: on", "Respaldos: activados"), tr("If R or Python crashes, the next console in the project gets the objects back.", "Si R o Python se cae, la próxima consola del proyecto recupera los objetos."))),
-        ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados"), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola."))),
-        ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R"), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R."))),
-        ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python"), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python."))),
+    let meaning = meaning_of(key, value).or_else(|| match (key.as_str(), value.as_str()) {
+        ("checkpoints", "on") => Some((tr("Checkpoints: on", "Respaldos: activados").to_string(), tr("If R or Python crashes, the next console in the project gets the objects back.", "Si R o Python se cae, la próxima consola del proyecto recupera los objetos.").to_string())),
+        ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados").to_string(), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola.").to_string())),
+        ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R").to_string(), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R.").to_string())),
+        ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python").to_string(), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python.").to_string())),
         _ => None,
-    };
+    });
     match meaning {
-        Some((title, body)) => say(title, body),
+        Some((title, body)) => say(&title, &body),
         None => println!("{key} = {value}"),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod harness_tests {
+    use super::*;
+
+    fn cfg(json: &str) -> Value {
+        crate::json::parse(json).unwrap()
+    }
+
+    #[test]
+    fn more_room_for_agents_is_loosening() {
+        let c = cfg(r#"{"agents":"ask","agent_output":"structure","audit_days":"90"}"#);
+        assert_eq!(loosens(&c, "agents", "on"), Some(("ask".into(), "on".into())));
+        assert_eq!(loosens(&c, "agents", "off"), None, "tightening never asks");
+        assert_eq!(loosens(&c, "agents", "ask"), None, "no change");
+        assert_eq!(loosens(&c, "agent_output", "full"), Some(("structure".into(), "full".into())));
+        assert_eq!(loosens(&c, "agent_output", "review"), Some(("structure".into(), "review".into())));
+        assert_eq!(loosens(&c, "audit_days", "30"), Some(("90".into(), "30".into())), "a shorter record");
+        assert_eq!(loosens(&c, "audit_days", "365"), None);
+        assert_eq!(loosens(&c, "audit_days", "forever"), None);
+        assert_eq!(loosens(&c, "theme", "herdr"), None, "not a harness setting");
+    }
+
+    #[test]
+    fn missing_settings_count_as_their_defaults() {
+        let c = cfg("{}");
+        assert_eq!(loosens(&c, "agents", "on"), Some(("ask".into(), "on".into())));
+        assert_eq!(loosens(&c, "agent_output", "full"), None, "full is already the default");
+        assert_eq!(loosens(&c, "audit_days", "7"), Some(("90".into(), "7".into())));
+        let forever = cfg(r#"{"audit_days":"forever"}"#);
+        assert_eq!(loosens(&forever, "audit_days", "365"), Some(("forever".into(), "365".into())));
+    }
 }

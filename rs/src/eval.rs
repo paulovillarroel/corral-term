@@ -158,7 +158,7 @@ fn audit_entry(o: &Opts, code: &str, access: &str, output: &str, decision: &str)
 }
 
 /// Why the user couldn't be asked, or didn't answer.
-enum NoAnswer {
+pub(crate) enum NoAnswer {
     Busy,
     Failed(String),
     Timeout,
@@ -167,7 +167,7 @@ enum NoAnswer {
 /// Open one of Corral's question popups (approve.rs) and wait for the answer:
 /// true for yes (run it, share it). herdr shows one popup at a time, so while the
 /// user has another one open (the palette, a viewer), wait for it instead of failing.
-fn ask_user(edir: &Path, rid: &str, entrypoint: &str, mut request: Value) -> Result<bool, NoAnswer> {
+pub(crate) fn ask_user(edir: &Path, rid: &str, entrypoint: &str, mut request: Value) -> Result<bool, NoAnswer> {
     let path = edir.join(format!("{rid}.{entrypoint}.json"));
     let decision = edir.join(format!("{rid}.{entrypoint}.decision"));
     request.set("kind", entrypoint.into());
@@ -185,12 +185,41 @@ fn ask_user(edir: &Path, rid: &str, entrypoint: &str, mut request: Value) -> Res
     }
     while Instant::now() < end {
         if let Ok(answer) = std::fs::read_to_string(&decision) {
-            return Ok(matches!(answer.trim(), "run" | "share"));
+            return Ok(matches!(answer.trim(), "run" | "share" | "allow"));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     let _ = std::fs::write(&decision, "expired"); // the popup sees it and closes
     Err(NoAnswer::Timeout)
+}
+
+/// An agent's shell asks to loosen the harness (`corral config agents on`, say):
+/// the user decides in a popup, and the audit log keeps the request either way.
+pub(crate) fn confirm_setting(key: &str, from: &str, to: &str, meaning: &str) -> Result<(), String> {
+    let dir = env::state_dir().join("requests");
+    let _ = std::fs::create_dir_all(&dir);
+    env::remove_old(&dir, "json", 86400);
+    env::remove_old(&dir, "decision", 86400);
+    let rid = format!("{}-{}", now() as u64, env::random_hex(3));
+    let setting = obj(vec![("key", key.into()), ("from", from.into()), ("to", to.into()), ("meaning", meaning.into())]);
+    let answer = ask_user(&dir, &rid, "setting", obj(vec![("setting", setting)]));
+    let decision = match answer {
+        Ok(true) => "allowed",
+        Ok(false) => "refused",
+        Err(_) => "not asked",
+    };
+    audit::record(obj(vec![
+        ("decision", decision.into()), ("lang", "setting".into()),
+        ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null)),
+        ("workspace", env::current_workspace().map(Value::from).unwrap_or(Value::Null)),
+        ("code", format!("corral config {key} {to}").into()),
+    ]));
+    match answer {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(trf!("the user refused to set {key} to {to}; it stays {from}", "el usuario rechazó poner {key} en {to}; sigue en {from}")),
+        Err(_) => Err(trf!("{key} stays {from}: loosening it from a shell without a terminal needs the user's approval, and they couldn't be asked; they can change it in the palette (ctrl+b space)",
+                           "{key} sigue en {from}: aflojarlo desde una shell sin terminal necesita la aprobación del usuario, y no se le pudo preguntar; puede cambiarlo en la paleta (ctrl+b space)")),
+    }
 }
 
 /// Ask before the code runs; true when the user lets it run.
@@ -420,9 +449,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let mut e = audit_entry(&o, &code, access, output_mode, "ran");
         e.set("status", "timeout".into());
         audit::record(e);
-        let (secs, file) = (o.timeout, out_file.display());
-        println!("\n{}", trf!("[corral] still running after {secs:.0} s; the full output will be in {file}",
-                                "[corral] sigue corriendo después de {secs:.0} s; la salida completa quedará en {file}"));
+        let secs = o.timeout;
+        if output_mode == "full" {
+            let file = out_file.display();
+            println!("\n{}", trf!("[corral] still running after {secs:.0} s; the full output will be in {file}",
+                                    "[corral] sigue corriendo después de {secs:.0} s; la salida completa quedará en {file}"));
+        } else {
+            // Restricted output: that file holds the values the agent must not get.
+            println!("\n{}", trf!("[corral] still running after {secs:.0} s; the user sees its output in the console",
+                                    "[corral] sigue corriendo después de {secs:.0} s; el usuario ve su salida en la consola"));
+        }
         std::process::exit(2);
     }
     let result = std::fs::read_to_string(&result_file).ok().and_then(|t| json::parse(&t).ok()).unwrap_or(Value::obj());
