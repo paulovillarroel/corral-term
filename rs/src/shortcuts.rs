@@ -413,7 +413,15 @@ fn rows_for(shown: &[&Entry]) -> Vec<Row> {
     rows
 }
 
-fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total: usize, sel: usize, top: &mut usize) {
+/// A shortcut you can change: one of Corral's herdr actions or editor actions.
+fn changeable(id: &str) -> bool {
+    id.starts_with("herdr:") && id != "herdr:help" || id.starts_with("editor:")
+}
+
+/// `footer`: lines for the bottom of the palette (a message, or changing a key)
+/// instead of the usual hint.
+#[allow(clippy::too_many_arguments)]
+fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total: usize, sel: usize, top: &mut usize, footer: &[String]) {
     let mut f = String::from("\x1b[H\x1b[2J");
     let count = if q.is_empty() { trf!("{total} shortcuts", "{total} atajos") } else { trf!("{} of {total}", "{} de {total}", shown.len()) };
     let search = if q.is_empty() {
@@ -425,7 +433,7 @@ fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total
     f += &format!("\x1b[2;1H{}{}{RESET}", c.dim, "─".repeat(cols));
 
     let rows = rows_for(shown);
-    let list_h = height.saturating_sub(4);
+    let list_h = height.saturating_sub(4 + footer.len().saturating_sub(1));
     let sel_row = rows.iter().position(|r| matches!(r, Row::Item(i) if *i == sel)).unwrap_or(0);
     // Keep the selection in view, with its group's title when it is the first item.
     let want_top = if sel_row > 0 && matches!(rows[sel_row - 1], Row::Header(_)) { sel_row - 1 } else { sel_row };
@@ -455,7 +463,20 @@ fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total
             }
         }
     }
+    if !footer.is_empty() {
+        let first = height + 1 - footer.len();
+        for (n, line) in footer.iter().enumerate() {
+            let color = if n == 0 { &c.text } else if n + 1 == footer.len() { &c.dim } else { &c.accent };
+            f += &format!("\x1b[{};1H\x1b[2K\x1b[{};2H{}{}{RESET}", first + n, first + n, color, clip(line, cols.saturating_sub(2)));
+        }
+        out(&f);
+        return;
+    }
+    let tab = shown.get(sel).is_some_and(|e| changeable(&e.id));
     let hint = match shown.get(sel) {
+        Some(e) if e.run.is_some() && tab => tr("↑↓ select · Enter run · Tab change key · Esc close · type to search",
+                                                "↑↓ elegir · Enter ejecutar · Tab cambiar tecla · Esc cerrar · escribe para buscar"),
+        Some(_) if tab => tr("↑↓ select · Tab change key · Esc close · type to search", "↑↓ elegir · Tab cambiar tecla · Esc cerrar · escribe para buscar"),
         Some(e) if e.run.is_some() => tr("↑↓ select · Enter run · Esc close · type to search", "↑↓ elegir · Enter ejecutar · Esc cerrar · escribe para buscar"),
         Some(_) => tr("↑↓ select · Esc close · type to search", "↑↓ elegir · Esc cerrar · escribe para buscar"),
         None => tr("Esc clears the search", "Esc borra la búsqueda"),
@@ -464,24 +485,81 @@ fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total
     out(&f);
 }
 
+/// The lines under the palette while you change a shortcut.
+fn changing(e: &Entry, prefix: &str, problem: &str) -> Vec<String> {
+    let now = if e.keys.is_empty() { tr("no key", "sin tecla").to_string() } else { e.keys.join(", ") };
+    let how = if e.id.starts_with("herdr:") {
+        trf!("Press the key that goes after {prefix} (for {prefix} u, just u)", "Presiona la tecla que va después de {prefix} (para {prefix} u, solo u)")
+    } else {
+        tr("Press the new shortcut, with ctrl or alt, or an F key", "Presiona el atajo nuevo, con ctrl o alt, o una tecla F").to_string()
+    };
+    let mut lines = vec![trf!("Change “{}” (now {now})", "Cambiar «{}» (ahora {now})", e.desc), how];
+    if !problem.is_empty() {
+        lines.push(problem.to_string());
+    }
+    lines.push(tr("Backspace Corral's default · Esc cancel", "Backspace la de Corral · Esc cancelar").into());
+    lines
+}
+
+/// A message from changing a key, said for the palette (there is no --force here).
+fn for_palette(msg: String) -> String {
+    msg.replace("; use another key or --force", "; press another key").replace("; usa otra tecla o --force", "; presiona otra tecla")
+}
+
 fn palette() -> Result<(), String> {
-    let all = entries();
+    let mut all = entries();
     let Some(scr) = Screen::enter(true) else { return Err(tr("not a terminal", "no hay una terminal").into()) };
     let c = Colors::load();
+    let prefix = herdr_bindings(&std::fs::read_to_string(herdr_config_path()).unwrap_or_default()).0;
     let (mut q, mut sel, mut top, mut dirty) = (String::new(), 0usize, 0usize, true);
     let mut chosen: Option<(String, Vec<String>)> = None;
+    // Changing a shortcut (Tab): its id, and what went wrong with the last key pressed.
+    let mut change: Option<(String, String)> = None;
+    let mut note: Vec<String> = Vec::new();
     loop {
         let shown = filter(&all, &q);
         sel = sel.min(shown.len().saturating_sub(1));
         if dirty && !scr.has_input() {
             let (cols, rows) = scr.size();
-            draw(&c, cols, rows, &q, &shown, all.len(), sel, &mut top);
+            let footer = match &change {
+                Some((id, problem)) => all.iter().find(|e| &e.id == id).map(|e| changing(e, &prefix, problem)).unwrap_or_default(),
+                None => note.clone(),
+            };
+            draw(&c, cols, rows, &q, &shown, all.len(), sel, &mut top, &footer);
             dirty = false;
         }
         let Some(k) = scr.key(300) else { continue };
         dirty = true;
+        if let Some((id, _)) = change.clone() {
+            let result = match k.as_str() {
+                "esc" | "quit" => {
+                    change = None;
+                    continue;
+                }
+                "backspace" => reset_key(&id),
+                key => match pressed(key, id.starts_with("herdr:")).and_then(|spec| set_key(&id, &spec, false)) {
+                    Ok(msg) => Ok(msg),
+                    Err(e) => {
+                        change = Some((id, for_palette(e)));
+                        continue;
+                    }
+                },
+            };
+            change = None;
+            note = vec![for_palette(result.unwrap_or_else(|e| e)), tr("Any key goes on", "Cualquier tecla sigue").into()];
+            all = entries();
+            continue;
+        }
+        if !note.is_empty() {
+            note.clear();
+            continue;
+        }
         let last = shown.len().saturating_sub(1);
         match k.as_str() {
+            "\t" => match shown.get(sel).filter(|e| changeable(&e.id)) {
+                Some(e) => change = Some((e.id.clone(), String::new())),
+                None => dirty = false,
+            },
             "quit" => break,
             "esc" if q.is_empty() => break,
             "esc" | "\u{15}" => (q, sel, top) = (String::new(), 0, 0),
@@ -567,7 +645,7 @@ fn to_json(all: &[Entry]) -> Value {
         ("description", e.desc.as_str().into()),
         ("id", e.id.as_str().into()),
         ("runnable", e.run.is_some().into()),
-        ("changeable", (e.id.starts_with("herdr:") && e.id != "herdr:help" || e.id.starts_with("editor:")).into()),
+        ("changeable", changeable(&e.id).into()),
     ])).collect())
 }
 
@@ -631,11 +709,10 @@ fn change_herdr(action: &str, key: &str, force: bool) -> Result<String, String> 
                else { tr(" (in herdr: ctrl+b shift+r to reload)", " (en herdr: ctrl+b shift+r para recargar)") }))
 }
 
-fn change_editor(action: &str, key: &str, force: bool) -> Result<String, String> {
-    let path = fresh_config_path();
-    let mut cfg = env::read_json(&path);
+/// An editor key ("ctrl+e", "f6", "ctrl+shift+enter") as a binding of Fresh's config.
+fn editor_binding(action: &str, key: &str) -> Result<Value, String> {
     let parts: Vec<String> = key.trim().to_lowercase().split('+').map(String::from).collect();
-    let (k, mods) = parts.split_last().ok_or(tr("the key is missing", "falta la tecla"))?;
+    let (k, mods) = parts.split_last().filter(|(k, _)| !k.is_empty()).ok_or(tr("the key is missing", "falta la tecla"))?;
     let mods: Vec<String> = mods.to_vec();
     let k = match k.as_str() {
         "/" if mods == ["ctrl"] => "7".to_string(),
@@ -645,15 +722,24 @@ fn change_editor(action: &str, key: &str, force: bool) -> Result<String, String>
         f if f.starts_with('f') && f.len() > 1 && f[1..].chars().all(|c| c.is_ascii_digit()) => f.to_uppercase(),
         other => other.to_string(),
     };
-    let new = {
-        let mut pairs = vec![("key", Value::from(k.as_str()))];
-        if !mods.is_empty() {
-            pairs.push(("modifiers", Value::Arr(mods.iter().map(|m| m.as_str().into()).collect())));
-        }
-        pairs.push(("action", action.into()));
-        obj(pairs)
-    };
-    let same_key = |kb: &Value| kb.get("key") == new.get("key") && kb.get("modifiers").arr() == new.get("modifiers").arr();
+    let mut pairs = vec![("key", Value::from(k.as_str()))];
+    if !mods.is_empty() {
+        pairs.push(("modifiers", Value::Arr(mods.iter().map(|m| m.as_str().into()).collect())));
+    }
+    pairs.push(("action", action.into()));
+    Ok(obj(pairs))
+}
+
+/// Two editor bindings on the same key.
+fn same_combo(a: &Value, b: &Value) -> bool {
+    a.get("key") == b.get("key") && a.get("modifiers").arr() == b.get("modifiers").arr()
+}
+
+fn change_editor(action: &str, key: &str, force: bool) -> Result<String, String> {
+    let path = fresh_config_path();
+    let mut cfg = env::read_json(&path);
+    let new = editor_binding(action, key)?;
+    let same_key = |kb: &Value| same_combo(kb, &new);
     let mut list: Vec<Value> = cfg.get("keybindings").arr().to_vec();
     if let Some(other) = list.iter().find(|kb| same_key(kb) && kb.get("action").str() != Some(action)) {
         if !force {
@@ -668,6 +754,179 @@ fn change_editor(action: &str, key: &str, force: bool) -> Result<String, String>
     std::fs::write(&path, cfg.to_json_pretty(2)).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(trf!("{} → {} (close the editor with Ctrl+Q and open it again to use it)",
             "{} → {} (cierra el editor con Ctrl+Q y vuelve a abrirlo para usarlo)", fresh_key(&new), editor_desc(action)))
+}
+
+// --------------------------------------------------------------------------- your keys
+
+/// The keys you changed (Tab in the palette, `corral keys --change`), by id:
+/// "herdr:toggle" -> "prefix+u", "editor:corral_run_line" -> "ctrl+e". They live
+/// in Corral's config, so the installer puts them back when Corral updates.
+pub fn own_keys() -> Value {
+    env::config().get("keys").clone()
+}
+
+fn remember(id: &str, key: Option<&str>) {
+    let mut cfg = env::config();
+    let mut keys = match cfg.get("keys") {
+        v @ Value::Obj(_) => v.clone(),
+        _ => Value::obj(),
+    };
+    match key {
+        Some(k) => keys.set(id, k.into()),
+        None => keys.remove(id),
+    }
+    if matches!(&keys, Value::Obj(items) if items.is_empty()) {
+        cfg.remove("keys");
+    } else {
+        cfg.set("keys", keys);
+    }
+    crate::theme::write_config(&cfg);
+}
+
+/// herdr's shortcuts as Corral ships them (`[[keys.command]]` tables) with your
+/// keys on top: yours replace the default, and an action that ships without a
+/// key gets one. A default on a key you took for another action gives it up.
+pub fn apply_herdr(wanted: Vec<Value>, own: &Value) -> Vec<Value> {
+    let Value::Obj(items) = own else { return wanted };
+    let mine: Vec<(String, String)> = items.iter()
+        .filter_map(|(id, k)| Some((format!("corral.{}", id.strip_prefix("herdr:")?), k.str()?.to_string()))).collect();
+    let mut out: Vec<Value> = wanted.into_iter()
+        .filter(|k| {
+            let command = k.get("command").str().unwrap_or("");
+            mine.iter().any(|(c, _)| c == command) || !mine.iter().any(|(_, key)| Some(key.as_str()) == k.get("key").str())
+        })
+        .collect();
+    let titles = plugin_actions();
+    for (command, key) in &mine {
+        match out.iter_mut().find(|k| k.get("command").str() == Some(command.as_str())) {
+            Some(k) => k.set("key", key.as_str().into()),
+            None => {
+                let id = command.trim_start_matches("corral.");
+                let title = titles.iter().find(|a| a.0 == id).map(|a| a.1.clone()).unwrap_or_else(|| format!("Corral: {id}"));
+                out.push(obj(vec![("key", key.as_str().into()), ("type", "plugin_action".into()),
+                                  ("command", command.as_str().into()), ("description", title.into())]));
+            }
+        }
+    }
+    out
+}
+
+/// The editor's shortcuts as Corral ships them, with your keys on top: an action
+/// you changed keeps only your key, and any other binding on it goes.
+pub fn apply_editor(list: Vec<Value>, own: &Value) -> Vec<Value> {
+    let Value::Obj(items) = own else { return list };
+    let mut out = list;
+    for (id, key) in items {
+        let (Some(action), Some(key)) = (id.strip_prefix("editor:"), key.str()) else { continue };
+        let Ok(binding) = editor_binding(action, key) else { continue };
+        out.retain(|kb| kb.get("action").str() != Some(action) && !same_combo(kb, &binding));
+        out.push(binding);
+    }
+    out
+}
+
+/// Corral's default herdr key for an action (herdr/keys.example.toml), if it has one.
+fn default_herdr_key(action: &str) -> Option<String> {
+    let text = std::fs::read_to_string(env::repo().join("herdr/keys.example.toml")).ok()?;
+    let command = format!("corral.{action}");
+    crate::toml::parse(&text).ok()?.get("keys").get("command").arr().iter()
+        .find(|k| k.get("command").str() == Some(command.as_str()))
+        .and_then(|k| k.get("key").str().map(String::from))
+}
+
+/// Take a Corral action's whole `[[keys.command]]` entry out of herdr's config.
+fn unbind_herdr(action: &str) -> Result<(), String> {
+    let path = herdr_config_path();
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let (_, binds) = herdr_bindings(&text);
+    let command = format!("corral.{action}");
+    let Some(at) = binds.iter().find(|b| b.command == command).and_then(|b| b.key_line) else { return Ok(()) };
+    let mut lines: Vec<&str> = text.lines().collect();
+    let Some(start) = (0..=at).rev().find(|&j| lines[j].trim() == "[[keys.command]]") else { return Ok(()) };
+    let mut end = start + 1;
+    while end < lines.len() && !lines[end].trim().is_empty() && !lines[end].trim_start().starts_with(['[', '#']) {
+        end += 1;
+    }
+    if end < lines.len() && lines[end].trim().is_empty() {
+        end += 1;
+    }
+    lines.drain(start..end);
+    std::fs::write(&path, lines.join("\n") + "\n").map_err(|e| format!("{}: {e}", path.display()))?;
+    let _ = Command::new("herdr").args(["server", "reload-config"]).output();
+    Ok(())
+}
+
+/// Give `id` (herdr:ACTION or editor:ACTION) the key `key`, and remember it.
+pub fn set_key(id: &str, key: &str, force: bool) -> Result<String, String> {
+    let (msg, saved) = match id.split_once(':') {
+        Some(("herdr", a)) if a != "help" => {
+            let (prefix, _) = herdr_bindings(&std::fs::read_to_string(herdr_config_path()).unwrap_or_default());
+            (change_herdr(a, key, force)?, herdr_key_spec(&prefix, key))
+        }
+        Some(("editor", a)) => (change_editor(a, key, force)?, fresh_key(&editor_binding(a, key)?)),
+        _ => return Err(trf!("{id} can't be changed in the configuration: it is part of Corral or of herdr",
+                             "{id} no se cambia desde la configuración: es parte de Corral o de herdr")),
+    };
+    remember(id, Some(&saved));
+    Ok(msg)
+}
+
+/// Back to Corral's default key for `id`, and forget yours.
+pub fn reset_key(id: &str) -> Result<String, String> {
+    let msg = match id.split_once(':') {
+        Some(("herdr", a)) if a != "help" => match default_herdr_key(a) {
+            Some(k) => change_herdr(a, &k, false)?,
+            None => {
+                unbind_herdr(a)?;
+                trf!("{} has no key again, as Corral ships it", "{} vuelve a no tener tecla, como viene en Corral",
+                     action_label(a, a).1)
+            }
+        },
+        Some(("editor", a)) => {
+            let defaults: Vec<Value> = env::read_json(&env::repo().join("fresh/config.json")).get("keybindings").arr().iter()
+                .filter(|kb| kb.get("action").str() == Some(a)).cloned().collect();
+            let path = fresh_config_path();
+            let mut cfg = env::read_json(&path);
+            let mut list: Vec<Value> = cfg.get("keybindings").arr().iter().filter(|kb| kb.get("action").str() != Some(a)).cloned().collect();
+            let back: Vec<Value> = defaults.into_iter().filter(|d| !list.iter().any(|kb| same_combo(kb, d))).collect();
+            let shown = back.iter().map(fresh_key).collect::<Vec<_>>().join(", ");
+            list.extend(back);
+            cfg.set("keybindings", Value::Arr(list));
+            std::fs::write(&path, cfg.to_json_pretty(2)).map_err(|e| format!("{}: {e}", path.display()))?;
+            trf!("{shown} → {} (close the editor with Ctrl+Q and open it again to use it)",
+                 "{shown} → {} (cierra el editor con Ctrl+Q y vuelve a abrirlo para usarlo)", editor_desc(a))
+        }
+        _ => return Err(trf!("{id} can't be changed in the configuration: it is part of Corral or of herdr",
+                             "{id} no se cambia desde la configuración: es parte de Corral o de herdr")),
+    };
+    remember(id, None);
+    Ok(msg)
+}
+
+/// The key you pressed in the palette, as herdr writes it after its prefix
+/// (`herdr`) or as the editor writes a whole shortcut.
+fn pressed(key: &str, herdr: bool) -> Result<String, String> {
+    let ctrl = |c: char| (c as u32) >= 1 && (c as u32) <= 26 && !matches!(c, '\t' | '\n' | '\r' | '\x08');
+    let mut chars = key.chars();
+    let single = match (chars.next(), chars.next()) {
+        (Some(c), None) => Some(c),
+        _ => None,
+    };
+    let spec = match (single, key) {
+        (Some(c), _) if ctrl(c) => format!("ctrl+{}", (b'a' + (c as u8) - 1) as char),
+        (_, k) if k.starts_with("alt+") || (k.starts_with('f') && k.len() > 1 && k[1..].chars().all(|d| d.is_ascii_digit())) => k.to_lowercase(),
+        _ if !herdr => return Err(tr("in the editor, use a key with ctrl or alt, or an F key",
+                                     "en el editor, usa una tecla con ctrl o alt, o una tecla F").into()),
+        (Some('\t'), _) => "tab".into(),
+        (Some(' '), _) => "space".into(),
+        (Some('-'), _) => "minus".into(),
+        (Some(c), _) if c.is_ascii_uppercase() => format!("shift+{}", c.to_ascii_lowercase()),
+        (Some(c), _) if !c.is_control() => c.to_string(),
+        (_, "backtab") => "shift+tab".into(),
+        (_, k @ ("enter" | "up" | "down" | "left" | "right" | "home" | "end" | "pgup" | "pgdn")) => k.into(),
+        _ => return Err(tr("that key can't be used here; try another", "esa tecla no se puede usar aquí; prueba otra").into()),
+    };
+    Ok(spec)
 }
 
 fn open_popup() -> bool {
@@ -685,8 +944,8 @@ fn open_popup() -> bool {
 }
 
 fn usage() -> &'static str {
-    tr("usage: corral keys [--list | --json | --change ID KEY [--force]]",
-       "uso: corral keys [--list | --json | --change ID TECLA [--force]]")
+    tr("usage: corral keys [--list | --json | --change ID KEY [--force] | --reset ID]",
+       "uso: corral keys [--list | --json | --change ID TECLA [--force] | --reset ID]")
 }
 
 pub fn run(args: &[String], popup: bool) -> Result<(), String> {
@@ -709,14 +968,16 @@ pub fn run(args: &[String], popup: bool) -> Result<(), String> {
             return Err(tr("usage: corral keys --change ID KEY [--force]   (corral keys --list shows the IDs)",
                           "uso: corral keys --change ID TECLA [--force]   (los ID salen en corral keys --list)").into());
         };
-        let force = has("--force");
-        let msg = match id.split_once(':') {
-            Some(("herdr", a)) if a != "help" => change_herdr(a, key, force)?,
-            Some(("editor", a)) => change_editor(a, key, force)?,
-            _ => return Err(trf!("{id} can't be changed in the configuration: it is part of Corral or of herdr",
-                                 "{id} no se cambia desde la configuración: es parte de Corral o de herdr")),
+        println!("{}", set_key(id, key, has("--force"))?);
+        return Ok(());
+    }
+    if has("--reset") {
+        let rest: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+        let Some(id) = rest.first() else {
+            return Err(tr("usage: corral keys --reset ID   (corral keys --list shows the IDs)",
+                          "uso: corral keys --reset ID   (los ID salen en corral keys --list)").into());
         };
-        println!("{msg}");
+        println!("{}", reset_key(id)?);
         return Ok(());
     }
     // Inside herdr the palette opens as a popup over everything; here, or from the popup, it runs inline.
@@ -729,6 +990,50 @@ pub fn run(args: &[String], popup: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_key_you_press() {
+        assert_eq!(pressed("u", true).unwrap(), "u");
+        assert_eq!(pressed("U", true).unwrap(), "shift+u");
+        assert_eq!(pressed(" ", true).unwrap(), "space");
+        assert_eq!(pressed("-", true).unwrap(), "minus");
+        assert_eq!(pressed("\t", true).unwrap(), "tab");
+        assert_eq!(pressed("backtab", true).unwrap(), "shift+tab");
+        assert_eq!(pressed("\u{5}", true).unwrap(), "ctrl+e");
+        assert_eq!(pressed("f5", false).unwrap(), "f5");
+        assert_eq!(pressed("alt+x", false).unwrap(), "alt+x");
+        assert_eq!(pressed("\u{12}", false).unwrap(), "ctrl+r");
+        assert!(pressed("u", false).is_err(), "a plain letter would stop you typing it in the editor");
+    }
+
+    fn herdr_entry(key: &str, command: &str) -> Value {
+        obj(vec![("key", key.into()), ("type", "plugin_action".into()), ("command", command.into()), ("description", "d".into())])
+    }
+
+    #[test]
+    fn your_herdr_keys_over_corrals() {
+        let wanted = vec![herdr_entry("prefix+t", "corral.toggle"), herdr_entry("prefix+a", "corral.layout"), herdr_entry("prefix+y", "corral.switch")];
+        let own = crate::json::parse(r#"{"herdr:toggle": "prefix+u", "herdr:switch": "prefix+a", "herdr:new-thing": "prefix+i"}"#).unwrap();
+        let out = apply_herdr(wanted, &own);
+        let key_of = |c: &str| out.iter().find(|k| k.get("command").str() == Some(c)).and_then(|k| k.get("key").str().map(String::from));
+        assert_eq!(key_of("corral.toggle").as_deref(), Some("prefix+u"));
+        assert_eq!(key_of("corral.switch").as_deref(), Some("prefix+a"));
+        assert_eq!(key_of("corral.layout"), None, "layout gives up the key you took for switch");
+        assert_eq!(key_of("corral.new-thing").as_deref(), Some("prefix+i"), "an action without a default key gets yours");
+        assert_eq!(apply_herdr(vec![herdr_entry("prefix+t", "corral.toggle")], &Value::Null).len(), 1);
+    }
+
+    #[test]
+    fn your_editor_keys_over_corrals() {
+        let list = vec![editor_binding("corral_run_line", "ctrl+r").unwrap(), editor_binding("corral_run_line", "ctrl+enter").unwrap(),
+                        editor_binding("corral_insert_pipe", "ctrl+e").unwrap(), editor_binding("corral_save", "ctrl+s").unwrap()];
+        let own = crate::json::parse(r#"{"editor:corral_run_line": "ctrl+e", "herdr:toggle": "prefix+u"}"#).unwrap();
+        let out = apply_editor(list, &own);
+        let keys = |a: &str| out.iter().filter(|kb| kb.get("action").str() == Some(a)).map(fresh_key).collect::<Vec<_>>();
+        assert_eq!(keys("corral_run_line"), ["ctrl+e"]);
+        assert!(keys("corral_insert_pipe").is_empty(), "ctrl+e is yours now");
+        assert_eq!(keys("corral_save"), ["ctrl+s"]);
+    }
 
     #[test]
     fn herdr_keys() {

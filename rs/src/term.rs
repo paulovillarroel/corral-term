@@ -176,6 +176,10 @@ fn tokens(data: &str) -> Vec<String> {
         } else if chars[i] == '\x1b' && i + 2 < chars.len() && chars[i + 1] == 'O' {
             out.push(chars[i..i + 3].iter().collect());
             i += 3;
+        } else if chars[i] == '\x1b' && i + 1 < chars.len() && !matches!(chars[i + 1], '[' | 'O' | '\x1b') && !chars[i + 1].is_control() {
+            // ESC and a key in the same read: Alt+key.
+            out.push(chars[i..i + 2].iter().collect());
+            i += 2;
         } else {
             out.push(chars[i].to_string());
             i += 1;
@@ -210,10 +214,24 @@ fn name(t: &str) -> String {
         "\x1b" => "esc",
         "\x7f" | "\x08" => "backspace",
         "\x03" => "quit",
+        "\x1bOP" | "\x1b[11~" => "f1",
+        "\x1bOQ" | "\x1b[12~" => "f2",
+        "\x1bOR" | "\x1b[13~" => "f3",
+        "\x1bOS" | "\x1b[14~" => "f4",
+        "\x1b[15~" => "f5",
+        "\x1b[17~" => "f6",
+        "\x1b[18~" => "f7",
+        "\x1b[19~" => "f8",
+        "\x1b[20~" => "f9",
+        "\x1b[21~" => "f10",
+        "\x1b[23~" => "f11",
+        "\x1b[24~" => "f12",
         _ => "",
     };
     if !named.is_empty() {
         named.to_string()
+    } else if let Some(k) = t.strip_prefix('\x1b').filter(|k| k.chars().count() == 1) {
+        format!("alt+{k}")
     } else if t.chars().count() == 1 {
         t.to_string()
     } else {
@@ -303,4 +321,20 @@ pub fn clip(s: &str, width: usize) -> String {
 
 pub fn width(s: &str) -> usize {
     s.chars().count()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alt_and_function_keys() {
+        let names = |raw: &str| tokens(raw).iter().map(|t| name(t)).collect::<Vec<_>>();
+        assert_eq!(names("\x1bx"), ["alt+x"]);
+        assert_eq!(names("\x1b[15~"), ["f5"]);
+        assert_eq!(names("\x1bOP"), ["f1"]);
+        assert_eq!(names("\x1b"), ["esc"]);
+        assert_eq!(names("\x1b[Aq"), ["up", "q"]);
+        assert_eq!(names("ab"), ["a", "b"]);
+    }
 }
