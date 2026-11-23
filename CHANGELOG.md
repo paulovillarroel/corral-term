@@ -16,6 +16,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ### Fixes
 
+- A Python console that ended without closing (a crash) left its temporary folder, with the tables `View()` wrote, in /tmp for good. The folder's name now carries the process, and the next Python console removes those of processes that ended.
 - When R crashed in the middle of an agent's request, the agent waited out its whole timeout (5 minutes by default) and was then told the code was still running. It now hears at once that the console ended. The next request used to find the dead session and say the console was busy; it now opens a new one.
 - A kernel that stalled while Corral connected to it left the console waiting forever; Corral now gives up after 10 seconds. A damaged length in a message from the kernel could crash the console.
 - Mirador: a session named `..` reached the folder above the sessions (only with Mirador's token).
