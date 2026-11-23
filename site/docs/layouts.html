@@ -82,26 +82,27 @@
     </table>
     <p><kbd>ctrl+b</kbd> <kbd>t</kbd> expands the script or the console over the space they share, and brings both back (<a href="#expand-the-script-or-the-console">below</a>). Some things open over the panes instead of in one: the table viewer (<code>View()</code>), the plots, and the popup where you approve an agent's request. Mirador, with every plot and table, opens in your browser (<kbd>ctrl+b</kbd> <kbd>f</kbd>).</p>
 
-    <h2>The two layouts</h2>
+    <h2>The three layouts</h2>
     <table>
-    <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+s</kbd>)</th></tr></thead>
+    <thead><tr><th>Where</th><th>Focused on the agent (<kbd>ctrl+b</kbd> <kbd>a</kbd>)</th><th>Focused on the code (<kbd>ctrl+b</kbd> <kbd>shift+s</kbd>)</th><th>Notebook (palette)</th></tr></thead>
     <tbody>
-    <tr><td>Left, 52 % of the width</td><td>Claude Code</td><td>Script</td></tr>
-    <tr><td>Right, top</td><td>Script</td><td>Claude Code</td></tr>
-    <tr><td>Right, middle</td><td>Console</td><td>Console</td></tr>
-    <tr><td>Right, bottom</td><td>Variables</td><td>Variables</td></tr>
+    <tr><td>Left, 52 % of the width</td><td>Claude Code</td><td>Script</td><td>Script, over the console</td></tr>
+    <tr><td>Right, top</td><td>Script</td><td>Claude Code</td><td>Claude Code</td></tr>
+    <tr><td>Right, middle</td><td>Console</td><td>Console</td><td>(the console is on the left)</td></tr>
+    <tr><td>Right, bottom</td><td>Variables</td><td>Variables</td><td>Variables</td></tr>
     </tbody>
     </table>
     <p>On the right, the two upper panes share 73 % of the height, 57/43, and the variables take the other 27 %. The editor opens with the file explorer in view.</p>
-    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+s</kbd> when you spend more time in the code; it needs the editor (Fresh). The first one you press opens the layout in a new tab. Once it's open, the other one rearranges it in place: the agent and the script swap sides, and the console, its objects, the draft and the agent's conversation stay as they are. Only closing Corral (<kbd>ctrl+b</kbd> <kbd>shift+q</kbd>) ends them. Both are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts and panes» group.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>a</kbd> is the default: the agent gets the big pane. Use <kbd>ctrl+b</kbd> <kbd>shift+s</kbd> when you spend more time in the code; it needs the editor (Fresh). <strong>Notebook</strong> puts the script over the console on the left, like RStudio or Positron, and the agent over the variables on the right; it also needs the editor. It has no key of its own: it's "Layout: notebook" in the palette, and <kbd>Tab</kbd> there gives it one. The first layout you open goes in a new tab. Once it's open, the others rearrange it in place: the agent and the script swap sides, or the console moves under the script, and the console, its objects, the draft and the agent's conversation stay as they are. Only closing Corral (<kbd>ctrl+b</kbd> <kbd>shift+q</kbd>) ends them. All three are in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), in the «Layouts and panes» group.</p>
 
     <h3>From the command line</h3>
     <pre><code><span class="p">$ </span>corral layout
 <span class="p">$ </span>corral layout --focus code
+<span class="p">$ </span>corral layout --focus notebook
 <span class="p">$ </span>corral layout --shell
 <span class="p">$ </span>corral layout --ratio 0.6
 <span class="p">$ </span>corral layout --lang python</code></pre>
-    <p><code>--focus code</code> opens the layout focused on the code. <code>--lang python</code> starts it with the Python console and a Python draft instead of R; to make that the rule, use <code>corral config start python</code>, or "Layout: start with Python" in the palette. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
+    <p><code>--focus code</code> opens the layout focused on the code, and <code>--focus notebook</code> the notebook. <code>--lang python</code> starts it with the Python console and a Python draft instead of R; to make that the rule, use <code>corral config start python</code>, or "Layout: start with Python" in the palette. <code>--shell</code> adds a shell next to the variables. <code>--ratio</code> changes the width of the left pane (0.516 by default). <code>--editor ''</code> leaves out the script and <code>--agent ''</code> leaves a shell where Claude would be. <a href="commands.html#corral-layout">Commands</a> has the rest of the options.</p>
 
     <h3>Another agent</h3>
     <p>The agent pane runs Claude Code. To run another agent there every time, set its command:</p>
@@ -109,7 +110,7 @@
     <p><code>--agent</code> and the <code>CORRAL_AGENT</code> variable win over this setting.</p>
 
     <h2>Expand the script or the console</h2>
-    <p><kbd>ctrl+b</kbd> <kbd>t</kbd> expands the pane you are in (the script or the console) to the whole area they share, above the variables. In the layout focused on the code, it expands Claude or the console. <kbd>ctrl+b</kbd> <kbd>t</kbd> again brings both back, with the same proportion as before.</p>
+    <p><kbd>ctrl+b</kbd> <kbd>t</kbd> expands the pane you are in (the script or the console) to the whole area they share, above the variables. In the layout focused on the code, it expands Claude or the console; in the notebook, the script or the console, in the left column. <kbd>ctrl+b</kbd> <kbd>t</kbd> again brings both back, with the same proportion as before.</p>
     <p>herdr doesn't shrink a pane below 10 %, so the pane that makes room moves to a tab of its own, "corral (hidden)", where it keeps running. <kbd>Ctrl</kbd>+<kbd>R</kbd> and Claude keep running code in the console even while you can't see it.</p>
     <pre><code><span class="p">$ </span>corral toggle script
 <span class="p">$ </span>corral toggle console
