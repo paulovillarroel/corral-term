@@ -217,6 +217,9 @@
     }
   ],
   "default_language": "r",
+  "file_explorer": {
+    "width": "31"
+  },
   "editor": {
     "completion_popup_auto_show": true,
     "quick_suggestions": true,
