@@ -737,6 +737,12 @@ fn fresh(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
                 add_unique(done, "fresh_keys_user", theirs);
                 let added: Vec<Value> = ours.get("keybindings").arr().iter().filter(|b| !user.get("keybindings").arr().contains(b)).cloned().collect();
                 add_unique(done, "fresh_keys_corral", added);
+                // Corral's explorer width is where it starts: one you set stays.
+                if !user.get("file_explorer").get("width").is_null() {
+                    let mut explorer = ours.get("file_explorer").clone();
+                    explorer.remove("width");
+                    ours.set("file_explorer", explorer);
+                }
                 let merged = merge(&user, &ours);
                 if merged != user {
                     backup(&cfg, saved);
