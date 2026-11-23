@@ -892,3 +892,36 @@ fn hidden_characters_show_in_the_popup_and_the_console() {
     assert!(text.contains("False 1"), "{text}");
     assert!(!text.contains("written out"), "{text}");
 }
+
+/// A sensitive session stays sensitive after a crash: its objects come back into a
+/// session that is marked too, so agents still need approval (here nobody can give
+/// it, so nothing runs) and never get the values. R and Python.
+#[test]
+#[ignore]
+fn sensitive_sessions_stay_sensitive_after_a_crash() {
+    let live = Live::start("sensitive");
+    assert_eq!(live.eval(&["secret <- 42"]).0, 0);
+    live.wait_checkpoint("r", &["secret"]);
+    // Marked after the checkpoint was written: the mark reaches it at once.
+    assert_eq!(live.eval(&["corral_sensitive()"]).0, 0);
+    std::thread::sleep(Duration::from_secs(5)); // older than 5 s: the console starts R again by itself
+    let old = live.kernel_pid();
+    Command::new("kill").args(["-9", &old.to_string()]).status().unwrap();
+    wait_for(Duration::from_secs(60), "a new R session", || live.session("r").is_some_and(|(p, _)| p != old));
+    let (status, text) = live.eval(&["cat(secret, \"\\n\")"]);
+    assert_eq!(status, 3, "it ran without approval: {text}");
+    assert!(!text.contains("42"), "{text}");
+    // The console shows the notice a moment later, wrapped to the pane.
+    let says = |pane: &str| { let s: String = live.screen(pane).split_whitespace().collect(); s.contains("Restored") && s.contains("markedsensitive") };
+    wait_for(Duration::from_secs(10), "R's notice", || says(&live.console));
+
+    assert_eq!(live.eval(&["--lang", "python", "s = 42"]).0, 0);
+    live.wait_checkpoint("python", &["s"]);
+    assert_eq!(live.eval(&["--lang", "python", "corral_sensitive()"]).0, 0);
+    let (pid, pane) = live.session("python").unwrap();
+    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
+    let (status, text) = live.eval(&["--lang", "python", "print(s)"]);
+    assert_eq!(status, 3, "it ran without approval: {text}\nscreen:\n{}", live.screen(&pane));
+    assert!(!text.contains("42"), "{text}");
+    wait_for(Duration::from_secs(10), "Python's notice", || says(&pane));
+}

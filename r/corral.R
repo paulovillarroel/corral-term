@@ -352,6 +352,10 @@ local({
       dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE, mode = "0700")
       closed <- file.path(checkpoint_dir, "closed")
       if (file.exists(closed)) return(FALSE)
+      # A sensitive session's objects come back sensitive. corral_sensitive() sets
+      # and lifts this mark at once; here it is only ever added, so a race can only
+      # leave it on.
+      if (file.exists(file.path(session_dir, "sensitive"))) writeLines("1", file.path(checkpoint_dir, "sensitive"))
       index_file <- file.path(checkpoint_dir, "index.json")
       old <- if (file.exists(index_file)) tryCatch(jsonlite::read_json(index_file), error = function(e) list()) else list()
       objects <- if (is.list(old$objects)) old$objects else list()
@@ -449,6 +453,13 @@ local({
     }
     if (is.null(best)) return(invisible())
     idx <- best$idx
+    # Marked sensitive before loading anything: an agent never reaches these objects
+    # in a session that isn't.
+    sensitive <- file.exists(file.path(best$dir, "sensitive"))
+    if (sensitive) {
+      dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
+      writeLines("1", file.path(session_dir, "sensitive"))
+    }
     for (p in rev(unlist(idx$packages))) {
       if (!p %in% .packages()) try(suppressPackageStartupMessages(library(p, character.only = TRUE)), silent = TRUE)
     }
@@ -474,6 +485,10 @@ local({
     if (length(left)) {
       lines <- c(lines, trf("[corral] Not kept: %s.", "[corral] No se conservaron: %s.",
                             paste(sprintf("%s (%s)", left, why), collapse = ", ")))
+    }
+    if (sensitive) {
+      lines <- c(lines, tr("[corral] That session was marked sensitive, and so is this one: agents need your approval and only see the structure of results.",
+                           "[corral] Esa sesi\u00f3n estaba marcada como sensible, y esta tambi\u00e9n: los agentes necesitan tu aprobaci\u00f3n y solo ven la estructura de los resultados."))
     }
     # Under Ark, what R prints while starting doesn't reach the console: Corral's
     # console shows this file instead.
@@ -606,16 +621,19 @@ local({
 
   # A sensitive session: every request from an agent waits for your approval, and
   # the agent sees only whether it worked and the shape of the objects, never values.
-  # It lasts until this R ends; corral_sensitive(FALSE) lifts it.
+  # It lasts until this R ends, or comes back with the objects after a crash;
+  # corral_sensitive(FALSE) lifts it.
   env$corral_sensitive <- function(on = TRUE) {
     flag <- file.path(session_dir, "sensitive")
+    mark <- file.path(checkpoint_dir, "sensitive")
     if (isTRUE(on)) {
       dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
       writeLines("1", flag)
+      if (dir.exists(checkpoint_dir)) writeLines("1", mark)
       message(tr("Sensitive session: agents need your approval for each request and only see the structure of results, not values.",
                  "Sesi\u00f3n sensible: los agentes necesitan tu aprobaci\u00f3n en cada petici\u00f3n y solo ven la estructura de los resultados, no los valores."))
     } else {
-      unlink(flag)
+      unlink(c(flag, mark))
       message(tr("This session is no longer marked sensitive.", "Esta sesi\u00f3n ya no est\u00e1 marcada como sensible."))
     }
     invisible(isTRUE(on))
