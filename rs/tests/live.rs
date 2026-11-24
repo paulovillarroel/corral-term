@@ -1006,7 +1006,10 @@ fn update_from_the_palette_runs_in_a_popup() {
     live.run("herdr", &["pane", "run", &pane, "corral _update"]);
     live.wait_screen(&pane, &["Press Enter to close."]);
     let screen = live.screen(&pane);
-    assert!(screen.contains("is the latest version") || screen.contains("update it there"), "{screen}");
+    // A version commit runs these tests before its tag: then this corral is newer
+    // than the latest published one, and saying so is the right answer too.
+    assert!(screen.contains("is the latest version") || screen.contains("update it there")
+            || screen.contains("newer than the latest"), "{screen}");
     live.run("herdr", &["pane", "send-text", &pane, "\r"]);
     wait_for(Duration::from_secs(10), "the popup to close on Enter", || !live.screen(&pane).trim_end().ends_with("Press Enter to close."));
 
