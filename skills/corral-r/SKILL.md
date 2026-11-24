@@ -16,7 +16,7 @@ test "${HERDR_ENV:-}" = 1 && corral eval --check
 test "${HERDR_ENV:-}" = 1 && corral eval --check --lang python
 ```
 
-Exit 0 prints the console and session as JSON (`active` tells whether it is the one showing). For R, anything else means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activate()` in that R). For Python, no console yet is normal: `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
+Exit 0 prints the console and session as JSON (`active` tells whether it is the one showing). For R, anything else means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` or by typing `corral` in a herdr pane (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activate()` in that R). For Python, no console yet is normal: `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
 
 If `corral` itself is not found, Corral is not installed: `corral install --check` (once installed) or `sh install.sh --check` from a clone lists what is missing and what to run; the install line is `curl -LsSf https://corral-term.dev/install.sh | sh`.
 
