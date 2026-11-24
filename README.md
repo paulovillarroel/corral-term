@@ -49,7 +49,7 @@ The installer downloads the latest published version, says which, and checks its
 
 ### Then
 
-Open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>: your agent, the script, the R console and the variables. <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a line, <kbd>ctrl+b</kbd> <kbd>y</kbd> switches to Python, <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut. [Quick start](https://corral-term.dev/docs/quickstart.html).
+Open herdr in a project folder and type `corral` (or press <kbd>ctrl+b</kbd> <kbd>a</kbd>): your agent, the script, the R console and the variables. <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a line, <kbd>ctrl+b</kbd> <kbd>y</kbd> switches to Python, <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut. [Quick start](https://corral-term.dev/docs/quickstart.html).
 
 ## Performance
 
