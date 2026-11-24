@@ -2,10 +2,12 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.17
+
+Corral opens with one word: type `corral` in herdr.
 
 - `corral` alone, typed in a herdr pane, opens the workspace, like ctrl+b a. Outside herdr, or when an agent runs it without a terminal, it still shows the list of commands, which now says so. The installer's last steps say it too.
-- On an update, the anonymous install ping also says which version it replaced (just the number, like `0.1.15`), so the project can see which versions people update from. Nothing else was added to it, and `CORRAL_NO_TELEMETRY=1` still turns it off.
+- On an update, the anonymous install ping also says which version it replaced (just the number, like `0.1.16`), so the project can see which versions people update from. Nothing else was added to it, and `CORRAL_NO_TELEMETRY=1` still turns it off.
 
 ## 0.1.16
 
