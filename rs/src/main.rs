@@ -31,9 +31,12 @@ mod workspace;
 mod zip;
 mod zmtp;
 
+use std::io::IsTerminal;
+
 const HELP: &str = "corral: R and Python consoles, tables and plots next to your agents, in herdr.
 
-Usage: corral COMMAND [OPTIONS]   (corral COMMAND --help for its options)
+Usage: corral                     in a herdr pane, opens the workspace (like ctrl+b a)
+       corral COMMAND [OPTIONS]   (corral COMMAND --help for its options)
 
 Workspace
   layout       opens the workspace (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
@@ -67,7 +70,8 @@ Setup
 
 const HELP_ES: &str = "corral: consolas de R y Python, tablas y gráficos junto a tus agentes, en herdr.
 
-Uso: corral COMANDO [OPCIONES]   (corral COMANDO --help para sus opciones)
+Uso: corral                     en un panel de herdr, abre el espacio de trabajo (como ctrl+b a)
+     corral COMANDO [OPCIONES]   (corral COMANDO --help para sus opciones)
 
 Espacio de trabajo
   layout       abre el espacio de trabajo (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
@@ -98,6 +102,22 @@ Instalación y ajustes
   update       instala la última versión (--check solo dice si hay una)
   uninstall    quita Corral de herdr, R, el editor y tus agentes
 ";
+
+/// `corral` alone, typed in a herdr pane: opens the workspace, as ctrl+b a does
+/// (it runs `corral layout`, without the JSON that prints for agents). Outside
+/// herdr, or with no terminal (an agent's command), `corral` prints the help.
+fn launch() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let status = std::process::Command::new(exe).arg("layout")
+        .stdout(std::process::Stdio::null())
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        // `corral layout` already said why on stderr.
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -144,6 +164,7 @@ fn main() {
             println!("corral {} ({})", env!("CARGO_PKG_VERSION"), env::repo().display());
             Ok(())
         }
+        None if env::in_herdr() && std::io::stdin().is_terminal() && std::io::stdout().is_terminal() => launch(),
         None | Some("--help" | "-h" | "help") => {
             print!("{}", i18n::tr(HELP, HELP_ES));
             Ok(())

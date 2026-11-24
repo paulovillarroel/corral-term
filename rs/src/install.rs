@@ -972,8 +972,8 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         n += 1;
     }
     println!("  {n}. {}", tr("Open herdr and go to a project folder.", "Abre herdr y entra a la carpeta de un proyecto."));
-    println!("  {}. {}", n + 1, trf!("{bold}ctrl+b a{off} opens the workspace: the agent, the script, the R console and the variables.",
-                                     "{bold}ctrl+b a{off} abre el espacio de trabajo: el agente, el script, la consola de R y las variables."));
+    println!("  {}. {}", n + 1, trf!("Type {bold}corral{off} (or press {bold}ctrl+b a{off}) to open the workspace: the agent, the script, the R console and the variables.",
+                                     "Escribe {bold}corral{off} (o presiona {bold}ctrl+b a{off}) para abrir el espacio de trabajo: el agente, el script, la consola de R y las variables."));
     println!("  {}. {}", n + 2, trf!("{bold}ctrl+b space{off} shows every shortcut.", "{bold}ctrl+b space{off} muestra todos los atajos."));
     let copies: Vec<String> = saved[earlier..].iter().map(|b| short(Path::new(b))).collect();
     if !copies.is_empty() {
