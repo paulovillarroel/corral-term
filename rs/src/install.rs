@@ -985,25 +985,24 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         println!("{}{}{}", s.dim, tr("Corral speaks English; corral config language es switches it to Spanish.",
                                      "Corral habla inglés por defecto; corral config language es lo deja en español."), s.off);
     }
-    count_install(before.get("version").str().is_some(), in_place);
+    count_install(before.get("version").str(), in_place);
     Ok(())
 }
 
 /// One anonymous ping after a successful install, so the project knows how many
 /// people install Corral and from which countries: the version, the system (linux or
-/// wsl), new install or update, and published package or clone. The site adds the
-/// country from Vercel's geolocation and stores no IP (api/installed.js).
-/// CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1 turns it off; CORRAL_TELEMETRY_URL points it
-/// elsewhere (tests). It waits 5 seconds at most and never fails the install.
-fn count_install(update: bool, in_place: bool) {
+/// wsl), new install or update (and on an update, the version it replaced), and
+/// published package or clone. The site adds the country from Vercel's geolocation
+/// and stores no IP (api/installed.js). CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1 turns
+/// it off; CORRAL_TELEMETRY_URL points it elsewhere (tests). It waits 5 seconds at
+/// most and never fails the install.
+fn count_install(previous: Option<&str>, in_place: bool) {
     let set = |var: &str| std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0");
     if set("CORRAL_NO_TELEMETRY") || set("DO_NOT_TRACK") {
         return;
     }
     let Some(curl) = env::which("curl") else { return };
-    let body = format!(r#"{{"version":"{VERSION}","system":"{}","kind":"{}","source":"{}"}}"#,
-                       if is_wsl() { "wsl" } else { "linux" }, if update { "update" } else { "new" },
-                       if in_place { "clone" } else { "release" });
+    let body = ping_body(previous, is_wsl(), in_place);
     let url = std::env::var("CORRAL_TELEMETRY_URL").unwrap_or_else(|_| "https://corral-term.dev/api/installed".into());
     let sent = Command::new(curl)
         .args(["-fsS", "-m", "5", "-X", "POST", "-H", "Content-Type: application/json", "--data", &body, &url])
@@ -1016,6 +1015,18 @@ fn count_install(update: bool, in_place: bool) {
         println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
                                      "Conté esta instalación de forma anónima (versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
     }
+}
+
+/// The ping's JSON. `previous` is the version install.json had, if any: then it is an
+/// update, and the ping says which version it replaced when that reads as one (digits
+/// and dots only), so whatever install.json holds can't break the JSON.
+fn ping_body(previous: Option<&str>, wsl: bool, in_place: bool) -> String {
+    let from = previous.filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'));
+    format!(r#"{{"version":"{VERSION}","system":"{}","kind":"{}","source":"{}"{}}}"#,
+            if wsl { "wsl" } else { "linux" },
+            if previous.is_some() { "update" } else { "new" },
+            if in_place { "clone" } else { "release" },
+            from.map(|v| format!(r#","from":"{v}""#)).unwrap_or_default())
 }
 
 // The installer (install.sh) also passes --from, --in-place and --rerun.
@@ -1332,6 +1343,18 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_ping_says_which_version_an_update_replaced() {
+        assert_eq!(ping_body(None, true, false),
+                   format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release"}}"#));
+        assert_eq!(ping_body(Some("0.1.15"), false, true),
+                   format!(r#"{{"version":"{VERSION}","system":"linux","kind":"update","source":"clone","from":"0.1.15"}}"#));
+        // A version that doesn't read as one is left out, and it is still an update.
+        let odd = ping_body(Some(r#"0.1"}x"#), true, false);
+        assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
+        assert!(!ping_body(Some(""), true, false).contains("from"));
+    }
 
     #[test]
     fn update_reads_the_latest_tag() {
