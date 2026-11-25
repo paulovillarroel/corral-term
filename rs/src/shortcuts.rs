@@ -187,7 +187,7 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("start-python", Group::Layout, "Layout: start with Python", "Layout: partir con Python"),
     ("toggle", Group::Layout, "Layout: expand the script (or agent) or the console", "Layout: expandir el script (o el agente) o la consola"),
     ("script", Group::Layout, "Layout: add the script editor above the console", "Layout: agregar el editor de scripts sobre la consola"),
-    ("close", Group::Layout, "Layout: close (keeps the agent and the rest of the tab)", "Layout: cerrar (deja al agente y el resto de la pestaña)"),
+    ("close", Group::Layout, "Layout: close (the agent and the terminal tab too, when idle)", "Layout: cerrar (también el agente y la pestaña terminal, si están libres)"),
     ("switch", Group::Console, "Console: R or Python", "Consola: R o Python"),
     ("r-version", Group::Console, "Console: R version (rig)", "Consola: versión de R (rig)"),
     ("python-version", Group::Console, "Console: Python version (uv)", "Consola: versión de Python (uv)"),

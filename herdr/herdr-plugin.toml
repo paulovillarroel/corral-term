@@ -70,7 +70,7 @@ command = ["../rs/target/release/corral", "console"]
 
 [[actions]]
 id = "close"
-title = "Corral: close (keeps the agent and the rest of the tab)"
+title = "Corral: close (the agent and the terminal tab too, when idle)"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "close"]
 

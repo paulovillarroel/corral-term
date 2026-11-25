@@ -139,15 +139,24 @@ const TERMINAL_TAB: &str = "terminal";
 /// A tab named terminal next to a new layout, with a shell in the project folder,
 /// since the layout has none of its own. It opens behind Corral's tab, once per
 /// workspace (an existing terminal tab is kept), and never fails the layout.
-/// `corral config terminal_tab off` leaves it out.
-fn terminal_tab(ws: &str, cwd: &str) {
+/// `corral config terminal_tab off` leaves it out. The tab it opened, if any.
+fn terminal_tab(ws: &str, cwd: &str) -> Option<String> {
     if env::config().get("terminal_tab").str() == Some("off") {
-        return;
+        return None;
     }
     let has_one = herdr::tabs(ws).map(|t| t.iter().any(|t| t.get("label").str() == Some(TERMINAL_TAB))).unwrap_or(true);
-    if !has_one {
-        let _ = herdr::cli(&["tab", "create", "--workspace", ws, "--label", TERMINAL_TAB, "--cwd", cwd, "--no-focus"]);
+    if has_one {
+        return None;
     }
+    let made = herdr::cli(&["tab", "create", "--workspace", ws, "--label", TERMINAL_TAB, "--cwd", cwd, "--no-focus"]).ok()?;
+    made.get("tab").get("tab_id").str().map(String::from)
+}
+
+/// True when the pane's shell waits at its prompt: nothing runs in it.
+fn shell_idle(pane: &str) -> bool {
+    let Ok(info) = herdr::cli(&["pane", "process-info", "--pane", pane]) else { return false };
+    let p = info.get("process_info");
+    matches!((p.get("foreground_process_group_id").num(), p.get("shell_pid").num()), (Some(job), Some(shell)) if job == shell)
 }
 
 /// The workspace whose Corral layout runs in `cwd`: one of its panes is Corral's
@@ -276,6 +285,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         state.set("agent", agent_pane.as_str().into());
     }
     state.set("active", lang.into());
+    // What closing (ctrl+b shift+q) takes back with it: the agent this layout started.
+    state.set("agent_pane", agent_pane.as_str().into());
     if let Some(t) = &from_tab {
         state.set("from_tab", t.as_str().into());
     }
@@ -296,7 +307,14 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     if !agent.is_empty() {
         herdr::start(&agent_pane, &agent)?;
     }
-    terminal_tab(&ws, &cwd);
+    // The terminal tab this layout opened closes with it too, when nothing runs there.
+    if let Some(t) = terminal_tab(&ws, &cwd) {
+        let (mut saved, key) = layout_state();
+        let mut opened = saved.get(&key).clone();
+        opened.set("terminal_tab", t.as_str().into());
+        saved.set(&key, opened);
+        env::write_json(&env::layout_file(), &saved);
+    }
     println!("{}", obj(vec![
         ("tab", tab.get("tab").get("tab_id").clone()), ("agent", agent_pane.as_str().into()),
         ("console", console_pane.as_str().into()),
@@ -652,7 +670,8 @@ pub fn close(args: &[String]) -> Result<(), String> {
     layout::remember_open(ws.as_deref()); // the sizes you left, for the next layout
     let (mut saved, key) = layout_state();
     let had_state = !saved.get(&key).is_null();
-    let from_tab = saved.get(&key).get("from_tab").str().map(String::from);
+    let opened = saved.get(&key).clone();
+    let from_tab = opened.get("from_tab").str().map(String::from);
     if targets.is_empty() {
         env::notify("Corral", tr("no Corral panes in this tab", "no hay paneles de Corral en esta pestaña"));
         return Ok(());
@@ -670,8 +689,8 @@ pub fn close(args: &[String]) -> Result<(), String> {
         saved.remove(&key);
         env::write_json(&env::layout_file(), &saved);
     }
-    // Back to the tab Corral was opened from, if it is still there; the agent keeps
-    // running in its own tab.
+    let kept = close_what_it_opened(&opened, &all, from_tab.as_deref(), tab.as_deref());
+    // Back to the tab Corral was opened from, if it is still there.
     if let (Some(ws), Some(from)) = (&ws, &from_tab) {
         let open = herdr::tabs(ws).map(|t| t.iter().any(|t| t.get("tab_id").str() == Some(from.as_str()))).unwrap_or(false);
         if open && tab.as_deref() != Some(from.as_str()) {
@@ -679,10 +698,53 @@ pub fn close(args: &[String]) -> Result<(), String> {
         }
     }
     let n = targets.len();
-    let note = trf!("{n} panes closed; the unsaved draft was discarded", "{n} paneles cerrados; el borrador sin guardar se descartó");
+    let mut note = trf!("{n} panes closed; the unsaved draft was discarded", "{n} paneles cerrados; el borrador sin guardar se descartó");
+    if !kept.is_empty() {
+        note.push_str(&trf!("; still open: {}", "; siguen abiertos: {}", kept.join(", ")));
+    }
     env::notify(tr("Corral closed", "Corral cerrado"), &note);
     println!("{note}");
     Ok(())
+}
+
+/// What the layout opened besides Corral's panes, closed when nothing runs there:
+/// the agent it started, when herdr says it is idle (or it is a shell at its
+/// prompt), and the terminal tab it opened, when its shell waits at the prompt.
+/// A tab you opened Corral from is never closed. What stays, said in words.
+fn close_what_it_opened(opened: &Value, all: &[Value], from_tab: Option<&str>, corral_tab: Option<&str>) -> Vec<String> {
+    let mut kept = Vec::new();
+    if let Some(agent) = opened.get("agent_pane").str() {
+        if let Some(p) = all.iter().find(|p| herdr::pane_id(p) == agent) {
+            let idle = match p.get("agent_status").str() {
+                Some("idle") => true,
+                Some("working") | Some("blocked") => false,
+                _ => shell_idle(agent),
+            };
+            if idle {
+                let _ = herdr::cli(&["pane", "close", agent]);
+                // Nothing else of yours in that tab: it goes too.
+                if let Some(t) = corral_tab.filter(|t| Some(*t) != from_tab) {
+                    let rest = herdr::panes(None).map(|ps| ps.iter().any(|p| herdr::tab_id(p) == t)).unwrap_or(true);
+                    if !rest {
+                        let _ = herdr::cli(&["tab", "close", t]);
+                    }
+                }
+            } else {
+                kept.push(tr("the agent, which is busy", "el agente, que está trabajando").to_string());
+            }
+        }
+    }
+    if let Some(t) = opened.get("terminal_tab").str().filter(|t| Some(*t) != from_tab) {
+        let panes: Vec<&Value> = all.iter().filter(|p| herdr::tab_id(p) == t).collect();
+        if !panes.is_empty() {
+            if panes.iter().all(|p| shell_idle(herdr::pane_id(p))) {
+                let _ = herdr::cli(&["tab", "close", t]);
+            } else {
+                kept.push(tr("the terminal tab, where a command runs", "la pestaña terminal, donde corre un comando").to_string());
+            }
+        }
+    }
+    kept
 }
 
 // ----------------------------------------------------------------------- console

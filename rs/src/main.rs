@@ -41,7 +41,7 @@ Usage: corral                     opens the workspace here: in herdr, like ctrl+
 
 Workspace
   layout       opens the workspace (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
-  close        closes the script, the console and the variables; keeps the agent (ctrl+b shift+q)
+  close        closes the layout, and the agent and terminal tab when idle (ctrl+b shift+q)
   toggle       expands the script (or the agent) or the console (ctrl+b t)
   switch       switches the console between R and Python (ctrl+b y)
   script       adds the editor, or reads, saves or writes the draft
@@ -76,7 +76,7 @@ Uso: corral                     abre el espacio de trabajo aquí: en herdr, como
 
 Espacio de trabajo
   layout       abre el espacio de trabajo (ctrl+b a; --focus code, ctrl+b shift+s; --focus notebook)
-  close        cierra el script, la consola y las variables; deja al agente (ctrl+b shift+q)
+  close        cierra el layout, y el agente y la pestaña terminal si están libres (ctrl+b shift+q)
   toggle       expande el script (o el agente) o la consola (ctrl+b t)
   switch       la consola pasa a R o a Python (ctrl+b y)
   script       agrega el editor, o lee, guarda o escribe el borrador
