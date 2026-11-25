@@ -426,7 +426,7 @@
     <h2>Questions people ask.</h2>
     <details>
       <summary>Which agents does it work with?</summary>
-      <p>Any agent that can run shell commands: Claude Code, Codex, Gemini CLI, opencode and others. They run code in your console with <code>corral eval</code>, and Corral's skill follows the open Agent Skills standard, so the installer puts it where they look for it (<code>~/.agents/skills</code>, and <code>~/.claude/skills</code> for Claude Code).</p>
+      <p>Any agent that can run shell commands: Claude Code, Codex, Gemini CLI, opencode and others. They run code in your console with <code>corral eval</code>, and Corral's skill follows the open Agent Skills standard, so the installer puts it where they look for it (<code>~/.agents/skills</code>, <code>~/.claude/skills</code> for Claude Code and <code>~/.gemini/skills</code> for Gemini CLI).</p>
     </details>
     <details>
       <summary>Does it replace Positron, RStudio or VS Code?</summary>
@@ -447,7 +447,7 @@
     </details>
     <details>
       <summary>Does my data leave my machine?</summary>
-      <p>Your data and code never leave it: Corral runs everything locally, and Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does. The one thing Corral sends is an anonymous ping when an installation finishes (version, system and country, no IP), to count installs; <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>).</p>
+      <p>Your data and code never leave it: Corral runs everything locally, and Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does. Corral sends two things. The installer sends an anonymous ping when it installs, updates, stops or uninstalls (version, system, country and coarse categories such as the agent and herdr's version, no IP); <code>corral config telemetry off</code> or <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>). And once a day, opening the workspace asks GitHub which version is the latest, which carries nothing about you; <code>corral config update_check off</code> stops it.</p>
     </details>
     <details>
       <summary>Can I use it with sensitive data?</summary>
