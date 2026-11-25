@@ -88,6 +88,19 @@ GROUP BY ALL;</code></pre>
     <h2 id="speed">Speed</h2>
     <p>DuckDB loads with the first query of a session, about 0.2 seconds in R and 0.1 in Python, so a session that never runs SQL doesn't pay for it and the console starts as fast as ever. After that the time is the query's own: a <code>GROUP BY</code> over a million rows takes about 20 ms, the same as DuckDB on its own. <a href="performance.html#sql">Performance</a> has the measurements.</p>
 
+    <h2 id="two-duckdbs">Two DuckDBs</h2>
+    <p>Corral uses DuckDB in two places, and they don't have to be the same version:</p>
+    <table>
+    <thead><tr><th>Where</th><th>Which DuckDB</th><th>Who picks the version</th></tr></thead>
+    <tbody>
+    <tr><td>The table viewer and Mirador (<code>View()</code>)</td><td>The DuckDB command line, a program of its own that the viewer starts</td><td>Corral: the installer brings 1.5.6 and checks its SHA-256. DuckDB 2.0.1 starts three times slower (22 ms against 8 ms), so the viewer stays on 1.x for now.</td></tr>
+    <tr><td>SQL in R</td><td>The duckdb package, inside your R session</td><td>Your R library: whatever version is installed there, the latest from Posit's package manager when the installer adds it</td></tr>
+    <tr><td>SQL in Python</td><td>The duckdb package, inside your Python session</td><td>uv: the latest, or the version your project pins</td></tr>
+    </tbody>
+    </table>
+    <p>They never share a database file. <code>View()</code> hands the viewer a Parquet file (CSV as a last resort), which every DuckDB version reads the same way; SQL results live in your session as data frames. The one place they share is <code>~/.duckdb</code>, where downloaded extensions go, and DuckDB keeps a folder per version there.</p>
+    <p>If you create a DuckDB database file from R or Python (<code>ATTACH 'project.duckdb'</code>) and open it by hand with the <code>duckdb</code> command, an older command line may not read a file a newer package wrote. Corral itself never opens such a file with the command line.</p>
+
     <h2 id="needs">What it needs</h2>
     <p>In R, the duckdb and DBI packages: the installer puts them in your R library, already compiled, on Ubuntu and Debian; elsewhere duckdb has to compile for a while, so the installer shows the command instead. The Python console brings duckdb with it. R's duckdb keeps its extensions in <code>~/.duckdb</code> when that folder exists, shared with the DuckDB command line, and in a temporary folder for the session otherwise.</p>
   </main>
