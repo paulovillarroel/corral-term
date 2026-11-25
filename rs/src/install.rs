@@ -1071,34 +1071,48 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
 
 /// One anonymous ping after a successful install, so the project knows how many
 /// people install Corral and from which countries: the version, the system (linux or
-/// wsl), new install or update (and on an update, the version it replaced), and
-/// published package or clone. The site adds the country from Vercel's geolocation
-/// and stores no IP (api/installed.js). telemetry_off() says what turns it off;
-/// CORRAL_TELEMETRY_URL points it elsewhere (tests). It waits 5 seconds at most and
-/// never fails the install.
+/// wsl), new install or update (and on an update, the version it replaced), published
+/// package or clone, and where it runs in categories (ping_env). The site adds the
+/// country from Vercel's geolocation and stores no IP (api/installed.js).
+/// telemetry_off() says what turns it off; CORRAL_TELEMETRY_URL points it elsewhere
+/// (tests). It waits 5 seconds at most and never fails the install.
 fn count_install(previous: Option<&str>, in_place: bool) {
     if telemetry_off() {
         return;
     }
-    if send_ping(&ping_body(previous, is_wsl(), in_place)) {
+    if send_ping(&ping_body(previous, is_wsl(), in_place, &ping_env())) {
         let s = style();
-        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system and country). corral config telemetry off turns it off.",
-                                     "Conté esta instalación de forma anónima (versión, sistema y país). corral config telemetry off lo desactiva."), s.off);
+        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system, country and the tools it found). corral config telemetry off turns it off.",
+                                     "Conté esta instalación de forma anónima (versión, sistema, país y las herramientas que encontré). corral config telemetry off lo desactiva."), s.off);
     }
 }
 
 /// One anonymous ping when the installation stops because something required is
 /// missing, so the project learns what keeps people out: which checks failed, by
-/// name (herdr, herdr_old, r, r_packages, folder), plus what every ping says. The
+/// name (herdr, herdr_old, r, r_packages, folder), plus what an install's ping says. The
 /// same switches turn it off; `--check` never sends it.
 fn count_stop(missing: &[&str], in_place: bool) {
     if telemetry_off() {
         return;
     }
-    if send_ping(&stop_body(missing, is_wsl(), in_place)) {
+    if send_ping(&stop_body(missing, is_wsl(), in_place, &ping_env())) {
         let s = style();
-        println!("\n{}{}{}", s.dim, tr("Counted this stop anonymously (what was missing, version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
-                                       "Conté esta detención de forma anónima (qué faltó, versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
+        println!("\n{}{}{}", s.dim, tr("Counted this stop anonymously (what was missing, version, system, country and the tools it found). CORRAL_NO_TELEMETRY=1 turns it off.",
+                                       "Conté esta detención de forma anónima (qué faltó, versión, sistema, país y las herramientas que encontré). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
+    }
+}
+
+/// One anonymous ping when Corral is uninstalled: the version, the system and
+/// published package or clone, so the project sees who leaves, and after which
+/// version. The same switches turn it off (the settings stay after uninstalling).
+fn count_uninstall(in_place: bool) {
+    if telemetry_off() {
+        return;
+    }
+    if send_ping(&uninstall_body(is_wsl(), in_place)) {
+        let s = style();
+        println!("{}{}{}", s.dim, tr("Counted this uninstall anonymously (version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
+                                     "Conté esta desinstalación de forma anónima (versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
     }
 }
 
@@ -1122,23 +1136,85 @@ fn send_ping(body: &str) -> bool {
         .is_ok_and(|st| st.success())
 }
 
-/// The stop ping's JSON: the failed checks' ids, which Corral names itself.
-fn stop_body(missing: &[&str], wsl: bool, in_place: bool) -> String {
-    let list: Vec<String> = missing.iter().map(|m| format!(r#""{m}""#)).collect();
-    format!(r#"{{"version":"{VERSION}","system":"{}","kind":"stopped","source":"{}","missing":[{}]}}"#,
-            if wsl { "wsl" } else { "linux" }, if in_place { "clone" } else { "release" }, list.join(","))
+/// Where Corral runs, in categories that name no person, machine or path: the agent
+/// the layout opens, the Ubuntu or Debian release, herdr's version, R's major
+/// version, and whether uv is there for the Python console. Unknown values say so.
+fn ping_env() -> Vec<(&'static str, String)> {
+    let agent = agent_kind(env::config().get("agent").str(), |c| which(c).is_some());
+    let distro = linux_codename().filter(|c| (1..=16).contains(&c.len()) && c.chars().all(|ch| ch.is_ascii_lowercase()))
+        .unwrap_or_else(|| "other".into());
+    let herdr = which("herdr").map(|h| version_of(&h, "--version"))
+        .map(|v| if plain_version(&v) { v } else { "unknown".into() }).unwrap_or_else(|| "none".into());
+    let r = crate::versions::rscript().or_else(|| which("Rscript")).map(|r| major_minor(&version_of(&r, "--version")))
+        .unwrap_or_else(|| "none".into());
+    let python = if which("uv").is_some() { "uv" } else { "none" };
+    vec![("agent", agent), ("distro", distro), ("herdr", herdr), ("r", r), ("python", python.into())]
 }
 
-/// The ping's JSON. `previous` is the version install.json had, if any: then it is an
-/// update, and the ping says which version it replaced when that reads as one (digits
-/// and dots only), so whatever install.json holds can't break the JSON.
-fn ping_body(previous: Option<&str>, wsl: bool, in_place: bool) -> String {
-    let from = previous.filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'));
-    format!(r#"{{"version":"{VERSION}","system":"{}","kind":"{}","source":"{}"{}}}"#,
-            if wsl { "wsl" } else { "linux" },
-            if previous.is_some() { "update" } else { "new" },
-            if in_place { "clone" } else { "release" },
-            from.map(|v| format!(r#","from":"{v}""#)).unwrap_or_default())
+/// The agent as a category: claude, codex, gemini, opencode, none, or other for any
+/// other command. The one chosen (corral config agent), else the first installed.
+fn agent_kind(chosen: Option<&str>, installed: impl Fn(&str) -> bool) -> String {
+    let cmd = match chosen {
+        Some(c) => c.split_whitespace().next().unwrap_or("").rsplit('/').next().unwrap_or("").to_string(),
+        None => env::first_agent(installed).unwrap_or("none").to_string(),
+    };
+    match cmd.as_str() {
+        "" | "none" => "none".into(),
+        c if env::AGENTS.iter().any(|(a, _)| *a == c) => c.into(),
+        _ => "other".into(),
+    }
+}
+
+/// 0.9.5: digits and dots, two or three parts.
+fn plain_version(v: &str) -> bool {
+    let parts: Vec<&str> = v.split('.').collect();
+    (2..=3).contains(&parts.len()) && parts.iter().all(|p| !p.is_empty() && p.len() <= 4 && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// 4.6.1 → 4.6; anything else, unknown.
+fn major_minor(v: &str) -> String {
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.len() >= 2 && plain_version(&format!("{}.{}", parts[0], parts[1])) {
+        format!("{}.{}", parts[0], parts[1])
+    } else {
+        "unknown".into()
+    }
+}
+
+/// What every ping starts with: the version, the system, its kind and the source.
+fn ping_base(kind: &str, wsl: bool, in_place: bool) -> Value {
+    json::obj(vec![("version", VERSION.into()), ("system", (if wsl { "wsl" } else { "linux" }).into()),
+                   ("kind", kind.into()), ("source", (if in_place { "clone" } else { "release" }).into())])
+}
+
+fn with_env(mut v: Value, envs: &[(&str, String)]) -> Value {
+    for (k, val) in envs {
+        v.set(k, val.as_str().into());
+    }
+    v
+}
+
+/// The stop ping's JSON: the failed checks' ids, which Corral names itself.
+fn stop_body(missing: &[&str], wsl: bool, in_place: bool, envs: &[(&str, String)]) -> String {
+    let mut v = ping_base("stopped", wsl, in_place);
+    v.set("missing", Value::Arr(missing.iter().map(|m| Value::from(*m)).collect()));
+    with_env(v, envs).to_json()
+}
+
+/// The uninstall ping's JSON: what every ping says, nothing more.
+fn uninstall_body(wsl: bool, in_place: bool) -> String {
+    ping_base("uninstall", wsl, in_place).to_json()
+}
+
+/// The install ping's JSON. `previous` is the version install.json had, if any: then
+/// it is an update, and the ping says which version it replaced when that reads as
+/// one (digits and dots only).
+fn ping_body(previous: Option<&str>, wsl: bool, in_place: bool, envs: &[(&str, String)]) -> String {
+    let mut v = ping_base(if previous.is_some() { "update" } else { "new" }, wsl, in_place);
+    if let Some(from) = previous.filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.')) {
+        v.set("from", from.into());
+    }
+    with_env(v, envs).to_json()
 }
 
 // The installer (install.sh) also passes --from, --in-place and --rerun.
@@ -1449,6 +1525,7 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
         println!("{}{}{}{}", s.dim, tr("Copies of the files I changed: ", "Copias de los archivos que cambié: "),
                  saved.iter().map(|b| short(Path::new(b))).collect::<Vec<_>>().join(", "), s.off);
     }
+    count_uninstall(in_place);
     Ok(())
 }
 
@@ -1529,14 +1606,33 @@ mod tests {
 
     #[test]
     fn the_ping_says_which_version_an_update_replaced() {
-        assert_eq!(ping_body(None, true, false),
+        let none: [(&str, String); 0] = [];
+        assert_eq!(ping_body(None, true, false, &none),
                    format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release"}}"#));
-        assert_eq!(ping_body(Some("0.1.15"), false, true),
+        assert_eq!(ping_body(Some("0.1.15"), false, true, &none),
                    format!(r#"{{"version":"{VERSION}","system":"linux","kind":"update","source":"clone","from":"0.1.15"}}"#));
         // A version that doesn't read as one is left out, and it is still an update.
-        let odd = ping_body(Some(r#"0.1"}x"#), true, false);
+        let odd = ping_body(Some(r#"0.1"}x"#), true, false, &none);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
-        assert!(!ping_body(Some(""), true, false).contains("from"));
+        assert!(!ping_body(Some(""), true, false, &none).contains("from"));
+    }
+
+    #[test]
+    fn the_ping_carries_where_corral_runs_in_categories() {
+        let envs = [("agent", "claude".to_string()), ("distro", "noble".to_string()), ("herdr", "0.9.5".to_string()),
+                    ("r", "4.6".to_string()), ("python", "uv".to_string())];
+        assert_eq!(ping_body(None, true, false, &envs),
+                   format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release","agent":"claude","distro":"noble","herdr":"0.9.5","r":"4.6","python":"uv"}}"#));
+        assert_eq!(uninstall_body(false, false), format!(r#"{{"version":"{VERSION}","system":"linux","kind":"uninstall","source":"release"}}"#));
+        let installed = |c: &str| c == "codex";
+        assert_eq!(agent_kind(None, installed), "codex");
+        assert_eq!(agent_kind(None, |_: &str| false), "none");
+        assert_eq!(agent_kind(Some("none"), installed), "none");
+        assert_eq!(agent_kind(Some("/usr/local/bin/claude --model x"), installed), "claude");
+        assert_eq!(agent_kind(Some("my-own-agent --flag"), installed), "other");
+        assert_eq!(major_minor("4.6.1"), "4.6");
+        assert_eq!(major_minor("R version"), "unknown");
+        assert!(plain_version("0.9.5") && plain_version("1.4") && !plain_version("0.9.5-beta") && !plain_version("1.2.3.4"));
     }
 
     #[test]
@@ -1570,7 +1666,8 @@ mod tests {
 
     #[test]
     fn the_stop_ping_says_what_was_missing() {
-        assert_eq!(stop_body(&["herdr", "r_packages"], true, false),
+        let none: [(&str, String); 0] = [];
+        assert_eq!(stop_body(&["herdr", "r_packages"], true, false, &none),
                    format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"stopped","source":"release","missing":["herdr","r_packages"]}}"#));
     }
 
