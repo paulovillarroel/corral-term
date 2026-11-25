@@ -4,6 +4,8 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- Closing Corral (ctrl+b shift+q) closes what the layout opened, so no tabs are left behind: the agent when herdr says it is idle (`claude --continue` picks the conversation up again), and the terminal tab when nothing runs there. An agent at work or waiting for you, or a command running, stays, and the message says so; a tab you opened Corral from is never closed.
+- SQL in R splits statements the way DuckDB does: `$$…$$` and `$tag$…$tag$` strings, `E'…'` strings with backslashes, and comments inside comments no longer cut a query in two. A live test runs one SQL file in R and in Python and checks they give the same results.
 - SQL from an agent is recorded as SQL. The audit log keeps `lang: "sql"` and the console it ran in (`console`), and the approval and review popups say SQL; `code` is still exactly what ran in the console. Before, such a request showed as R or Python.
 
 ## 0.1.18
