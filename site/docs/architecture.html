@@ -88,7 +88,7 @@
       </svg>
     </figure>
     <ul>
-      <li><strong>herdr</strong> is the terminal workspace. The agent, the script, the console and the variables are herdr panes, so closing the window loses nothing. Corral talks to herdr through its socket: one JSON request, one JSON reply, no CLI process per call.</li>
+      <li><strong>herdr</strong> is the terminal workspace. The agent, the script, the console and the variables are herdr panes, so closing the window loses nothing. Corral talks to herdr through its socket, one JSON request and one JSON reply, for the frequent calls (listing panes, sending code, focus); splits, renames, new tabs and starting commands go through herdr's command line.</li>
       <li><strong>corral</strong> is one Rust binary that depends only on the C library. The short commands (a layout, sending code, <code>corral eval</code>) run and exit in milliseconds; the long-lived ones are the viewers (the variables pane, the table viewer) and Mirador's server, a few MB each.</li>
       <li><strong>The engines.</strong> Ark runs R, and corral talks to it over ZeroMQ with the Jupyter protocol, implemented in corral itself. IPython runs Python in your project's uv environment. DuckDB answers the table viewer's queries. Mirador, written from scratch for Corral and exclusive to it, shows plots, and tables when you ask, in your browser: its server is part of the <code>corral</code> binary, in Rust, and its tables run on DuckDB.</li>
     </ul>
@@ -98,13 +98,15 @@
       <thead><tr><th>Modules</th><th>What they do</th></tr></thead>
       <tbody>
         <tr><td><code>ark</code>, <code>zmtp</code>, <code>sha256</code></td><td>The R console in front of Ark: ZeroMQ, Jupyter messages and their signatures, a line editor with history and completion. Every message from Ark must carry its HMAC-SHA256 signature or it is dropped; a channel that drops while Ark runs is opened again, and a crashed R starts again in the same console.</td></tr>
-        <tr><td><code>lsp</code></td><td>Connects the editor to Ark's language server, inside your live R session.</td></tr>
+        <tr><td><code>lsp</code></td><td>The editor's language servers: the bridge to Ark's, inside your live R session (or <code>languageserver</code> with plain R), ty (or pylsp) and Ruff.</td></tr>
         <tr><td><code>console</code>, <code>workspace</code>, <code>layout</code></td><td>The layouts, which pane gets the space, and finding, starting or bringing in a console.</td></tr>
         <tr><td><code>send</code>, <code>eval</code></td><td>Code from the editor (<kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>) and from agents into the console.</td></tr>
-        <tr><td><code>vars</code>, <code>table</code></td><td>The variables pane and the table viewer, which asks DuckDB only for what is on screen.</td></tr>
+        <tr><td><code>approve</code>, <code>audit</code></td><td>The popup that asks you about an agent's request, and the audit log.</td></tr>
+        <tr><td><code>vars</code>, <code>table</code>, <code>duckdb</code></td><td>The variables pane and the table viewer, which asks DuckDB only for what is on screen; one DuckDB stays open for it and Mirador, and closes after 30 seconds without queries.</td></tr>
         <tr><td><code>plots</code>, <code>mirador</code></td><td><code>View()</code>, plots, and Mirador's server and page.</td></tr>
         <tr><td><code>shortcuts</code>, <code>theme</code></td><td>The shortcut palette, and one palette of colors taken from herdr's theme.</td></tr>
-        <tr><td><code>install</code>, <code>setup</code>, <code>zip</code></td><td>The installer, Ark's download, and unzip and inflate for the releases.</td></tr>
+        <tr><td><code>install</code>, <code>setup</code>, <code>zip</code>, <code>versions</code></td><td>The installer and updates, Ark's download, unzip and inflate for the releases, and the R (rig) and Python (uv) versions the consoles run.</td></tr>
+        <tr><td><code>editor</code>, <code>i18n</code></td><td>The script pane, which throws the draft away when the editor ends, and Corral's messages in English and Spanish.</td></tr>
         <tr><td><code>herdr</code>, <code>term</code>, <code>json</code>, <code>toml</code>, <code>env</code></td><td>herdr's socket, the terminal, the config and state files, and the helpers the rest share.</td></tr>
       </tbody>
     </table>
@@ -163,17 +165,17 @@
         <tr><td>Ark and your R session</td><td>Rust and R (<code>r/corral.R</code> runs inside R)</td><td>Your R console</td></tr>
         <tr><td>IPython</td><td>Python (<code>py/corral_py.py</code>)</td><td>Your Python console</td></tr>
         <tr><td>Fresh and Corral's plugin</td><td>Rust and TypeScript</td><td>The script pane</td></tr>
-        <tr><td>DuckDB</td><td>C++</td><td>One short run per query</td></tr>
+        <tr><td>DuckDB</td><td>C++</td><td>While a table is open in the viewer or Mirador; it closes 30 seconds after the last query</td></tr>
         <tr><td>Your agent</td><td>Any</td><td>Its own pane</td></tr>
       </tbody>
     </table>
 
     <h2>State on disk</h2>
-    <p>Corral keeps no database and no daemon of its own. What it remembers is in plain files:</p>
+    <p>Corral keeps no database, and nothing of its own stays in the background except Mirador's server once you open it. What it remembers is in plain files:</p>
     <ul>
       <li><code>~/.local/state/corral/sessions/&lt;id&gt;/</code>: one folder per R or Python session, with <code>meta.json</code>, <code>vars.json</code>, the plot server's address and what <code>corral eval</code> exchanges. It is removed when the session ends.</li>
-      <li><code>~/.local/state/corral/</code>: Mirador's address and token, the script drafts, the R console's history and the installer's record of what it changed.</li>
-      <li><code>~/.config/corral/config.json</code>: what <code>corral config</code> sets. Keys and the theme live in herdr's own <code>config.toml</code>.</li>
+      <li><code>~/.local/state/corral/</code>: Mirador's address and token, the list of script drafts (the drafts themselves are in the project's <code>.corral/</code> folder), the R console's history, the objects' checkpoints (<code>checkpoints/</code>), the last update check (<code>update-check.json</code>) and the installer's record of what it changed (<code>install.json</code>).</li>
+      <li><code>~/.config/corral/config.json</code>: what <code>corral config</code> sets. It keeps the shortcuts you changed (<code>keys</code>) and the Corral theme you chose (<code>theme</code>); herdr's own shortcuts and colors are in its <code>config.toml</code>, and the editor's in Fresh's <code>config.json</code>.</li>
     </ul>
 
     <nav class="pager" aria-label="Pages"></nav>

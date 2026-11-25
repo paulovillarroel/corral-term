@@ -94,7 +94,7 @@
     <tbody>
     <tr><td><code>corral eval</code></td><td>What the code printed, errors, warnings and new plots as PNG; with review, what you choose to share; with restricted output, only whether it worked and the shape of the objects</td><td>The code runs in your console, in view, and its objects stay</td><td>You: <code>agents</code>, <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
     <tr><td><code>corral eval --check</code></td><td>Which console, R or Python, its version and whether it is in view</td><td>Nothing</td><td>—</td></tr>
-    <tr><td><code>corral vars --json</code></td><td>Names, classes, dimensions and short previews of your objects (no previews of values with restricted output)</td><td>Nothing: it reads, it doesn't run code</td><td>You: <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
+    <tr><td><code>corral vars --json</code></td><td>Names, classes, dimensions and short previews of your objects (no previews of values with review or restricted output)</td><td>Nothing: it reads, it doesn't run code</td><td>You: <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
     <tr><td><code>corral script --read</code>, <code>--write</code>, <code>--save</code></td><td>Your draft's text; a way to write into it or save it in the project</td><td>Changes to the draft show in your editor, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes them</td><td>The skill asks you first; the agent's own permissions</td></tr>
     <tr><td><code>View(df)</code>, through <code>corral eval</code></td><td>Nothing back: it shows you a table</td><td>The table viewer opens next to your console</td><td>Same as <code>corral eval</code></td></tr>
     <tr><td><code>corral toggle</code>, <code>switch</code>, <code>layout</code></td><td>Nothing back</td><td>The panes you see change</td><td>The skill asks you first</td></tr>
@@ -132,12 +132,13 @@
     <tr><td>0</td><td>It ran without errors.</td></tr>
     <tr><td>1</td><td>Error. The message is the last line; statements before the failing one already ran.</td></tr>
     <tr><td>2</td><td>The console was still busy after <code>--wait-idle</code>, it had a half-typed line, or <code>--timeout</code> ran out (the code may still be running).</td></tr>
+    <tr><td>3</td><td>Nothing ran: agents can't run code (<code>agents off</code>), you refused the request, or it couldn't be approved (no answer within 5 minutes).</td></tr>
     </tbody>
     </table>
 
     <h3>Plots</h3>
     <p>Each new plot is saved as a PNG and reported as <code>[corral] plot N saved to &lt;path&gt;</code>, numbered as you see it in Mirador. That way the agent can look at what it drew.</p>
-    <p>Claude looks at each plot it draws, and sometimes fixes it: it moves labels or changes a scale. So that you don't end up with near-identical versions in Mirador, the fix goes with <code>corral eval --replace</code>, and the new plot replaces the ones from the previous request. If you ask for a different plot, or want to compare versions, it is added to the history as usual.</p>
+    <p>An agent that reads images looks at each plot it draws, and sometimes fixes it: it moves labels or changes a scale. So that you don't end up with near-identical versions in Mirador, the fix goes with <code>corral eval --replace</code>, and the new plot replaces the ones from the previous request. If you ask for a different plot, or want to compare versions, it is added to the history as usual.</p>
 
     <h3>Waiting and taking turns</h3>
     <p>If the console is busy, <code>corral eval</code> waits up to 20 seconds (<code>--wait-idle</code>). If you have a half-typed line, it runs nothing and says so. Several agents can use the same console: their requests run one at a time.</p>
@@ -163,7 +164,7 @@
     </table>
 
     <h2>Corral's skill</h2>
-    <p>Corral's skill, <code>skills/corral</code> in Corral's folder, follows the open Agent Skills standard. The installer links it into <code>~/.agents/skills/corral</code>, where Codex, opencode and other agents look for skills, into <code>~/.claude/skills/corral</code> for Claude Code, and into <code>~/.gemini/skills/corral</code> for Gemini CLI. With it, Claude runs its code in your console instead of opening an R or a Python of its own. It switches on when Claude works inside herdr and a Corral layout exists.</p>
+    <p>Corral's skill, <code>skills/corral</code> in Corral's folder, follows the open Agent Skills standard. The installer links it into <code>~/.agents/skills/corral</code>, where Codex, opencode and other agents look for skills, into <code>~/.claude/skills/corral</code> for Claude Code, and into <code>~/.gemini/skills/corral</code> for Gemini CLI. With it, your agent runs its code in your console instead of opening an R or a Python of its own. It switches on when the agent works inside herdr and a Corral layout exists.</p>
 
     <h3>What it does</h3>
     <ul>
@@ -195,7 +196,7 @@
     <p>They act on the draft of the console in view: <code>draft.R</code> or <code>draft.py</code> in a session that uses both. <code>--read</code> prints the draft, unsaved edits included. <code>--write</code> adds text at the end, as one edit you can undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>; with <code>--replace</code> it replaces everything. <code>--save</code> writes the draft into your project, and refuses to replace a file unless you add <code>--force</code>. <a href="editor.html#agents-in-the-draft">The script editor</a> has the details.</p>
 
     <h2>Without a Corral console</h2>
-    <p>Claude uses your console only if the workspace has an active Corral console. Otherwise, it works as usual. If Claude opens its own R instead of using yours, <code>corral eval --check</code> should answer with your console; if it doesn't, switch Corral on in that R with <kbd>ctrl+b</kbd> <kbd>m</kbd>.</p>
+    <p>Your agent uses your console only if the workspace has an active Corral console. Otherwise, it works as usual. If it opens its own R instead of using yours, <code>corral eval --check</code> should answer with your console; if it doesn't, switch Corral on in that R with <kbd>ctrl+b</kbd> <kbd>m</kbd>.</p>
 
     <nav class="pager" aria-label="Pages"></nav>
   </main>

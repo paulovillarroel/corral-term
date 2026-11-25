@@ -89,7 +89,7 @@
     <tr><td><code>ark_frontend</code></td><td><code>corral</code>, <code>jupyter</code></td><td><code>corral</code></td><td>Ark's front end: Corral's console, or <code>jupyter-console</code>.</td></tr>
     <tr><td><code>ark_bin</code></td><td>a path</td><td>the newest Ark in <code>~/.local/share/corral/ark</code></td><td>A specific Ark binary to use.</td></tr>
     <tr><td><code>python_version</code></td><td>a version uv has, such as <code>3.13</code></td><td>uv's default</td><td>The Python of the console outside uv projects (<code>uv run --python</code>). Inside a project, its <code>.python-version</code> decides, and <code>corral versions python</code> writes it with <code>uv python pin</code>.</td></tr>
-    <tr><td><code>python_console</code></td><td>a command</td><td><code>uv run --with ipython ipython --no-banner -i …/py/startup.py</code></td><td>The command that starts the Python console. See <a href="consoles.html#another-python-command">Consoles</a>.</td></tr>
+    <tr><td><code>python_console</code></td><td>a command</td><td><code>uv run --with ipython --with cloudpickle --with pyarrow --with duckdb ipython --no-banner -i …/py/startup.py</code>, with <code>--python VERSION</code> outside a uv project</td><td>The command that starts the Python console. See <a href="consoles.html#another-python-command">Consoles</a>.</td></tr>
     <tr><td><code>python_lsp</code></td><td><code>ty</code>, <code>pylsp</code></td><td><code>ty</code></td><td>The editor's Python language server. Applies when the editor opens again.</td></tr>
     <tr><td><code>images</code></td><td><code>auto</code>, <code>kitty</code>, <code>symbols</code></td><td><code>auto</code></td><td>How to draw plots inside herdr: detect the terminal, Kitty images, or block characters.</td></tr>
     <tr><td><code>mirador_window</code></td><td><code>right</code>, <code>free</code></td><td><code>right</code></td><td><code>right</code> puts each new Mirador window on the right of the screen; <code>free</code> leaves its size and position alone. Windows with WSL only.</td></tr>
@@ -124,6 +124,7 @@
     <tr><td><code>CORRAL_NO_ATTESTATION</code></td><td>Set to <code>1</code> so <code>install.sh</code> doesn't check the build provenance attestation, for when <code>gh</code> doesn't work on that machine. The SHA-256 is still checked</td><td>unset</td></tr>
     <tr><td><code>CORRAL_BIN</code></td><td>The <code>corral</code> command that R and Python call</td><td>the one on the <code>PATH</code></td></tr>
     <tr><td><code>CORRAL_REPO</code></td><td>Corral's folder, for the files the binary reads (the plugin, the R and Python sides)</td><td>the folder the binary sits in</td></tr>
+    <tr><td><code>CORRAL_TIMING</code></td><td>A file where R and Python write how many milliseconds Corral's work kept the prompt waiting after each command, for measuring Corral (<a href="performance.html">Performance</a>)</td><td>unset</td></tr>
     </tbody>
     </table>
 
@@ -134,6 +135,7 @@
     <tbody>
     <tr><td><code>CORRAL</code></td><td><code>1</code> in the consoles Corral starts. It is what switches Corral on in R (<code>CORRAL=1 R</code> does it by hand).</td></tr>
     <tr><td><code>CORRAL_SESSION</code></td><td>The id of the session a command should use.</td></tr>
+    <tr><td><code>CORRAL_REQUEST</code></td><td>The agent's request an approval or review popup shows.</td></tr>
     <tr><td><code>CORRAL_SESSION_DIR</code>, <code>CORRAL_PLOT_ID</code>, <code>CORRAL_FILE</code>, <code>CORRAL_TITLE</code></td><td>What a popup shows: the session, the plot, the table file and its title.</td></tr>
     <tr><td><code>CORRAL_ARK_CONNECTION</code></td><td>Ark's connection file, so the editor's language server can reach the console's R.</td></tr>
     </tbody>
@@ -159,7 +161,7 @@
     <tbody>
     <tr><td><code>~/.config/corral/config.json</code></td><td>The settings of <code>corral config</code>.</td></tr>
     <tr><td><code>~/.config/corral/palette.json</code></td><td>The palette in use, which the viewers, VisiData and Mirador read.</td></tr>
-    <tr><td><code>~/.local/state/corral/</code></td><td>Only you can open it (<a href="security.html#on-disk">what is there and for how long</a>). Sessions, the audit log (<code>audit.jsonl</code>), the R console's history (<code>history-r.jsonl</code>), Mirador's address and token (<code>mirador.json</code>), the pane sizes you left in each layout (<code>sizes.json</code>), and the logs <code>ark.log</code> and <code>mirador.log</code>.</td></tr>
+    <tr><td><code>~/.local/state/corral/</code></td><td>Only you can open it (<a href="security.html#on-disk">what is there and for how long</a>). Sessions, the audit log (<code>audit.jsonl</code>), the R console's history (<code>history-r.jsonl</code>), Mirador's address and token (<code>mirador.json</code>), the pane sizes you left in each layout (<code>sizes.json</code>), the objects' checkpoints (<code>checkpoints/</code>), the last update check (<code>update-check.json</code>), and the logs <code>ark.log</code> and <code>mirador.log</code>.</td></tr>
     <tr><td><code>~/.local/share/corral/</code></td><td>Ark and the programs the installer downloaded.</td></tr>
     <tr><td><code>~/.local/share/corral-term/</code></td><td>Corral itself.</td></tr>
     </tbody>

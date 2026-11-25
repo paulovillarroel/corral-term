@@ -77,7 +77,7 @@
     <p>An IDE is for working all day, not for opening and closing, so what counts most is that Corral behaves the same in the evening as in the morning: <code>View()</code> as fast the twentieth time as the first, R's memory steady, and temporary files that don't pile up.</p>
 
     <h2>Processes and files, not libraries</h2>
-    <p>Corral leans on engines that already do their job well (herdr, Ark, Fresh, DuckDB, uv) and talks to them through processes and plain formats: herdr's socket, the Jupyter protocol, Parquet and JSON files. The table viewer and Mirador run outside your session, so if one of them fails, your session doesn't. The same care goes for your machine: the installer never uses <code>sudo</code>, keeps a copy of each file it changes, and <code>corral uninstall</code> takes everything out.</p>
+    <p>Corral leans on engines that already do their job well (herdr, Ark, Fresh, DuckDB, uv) and talks to them through processes and plain formats: herdr's socket, the Jupyter protocol, Parquet and JSON files. SQL is the exception: DuckDB loads inside your R or Python session at the first query. The table viewer and Mirador run outside your session, so if one of them fails, your session doesn't. The same care goes for your machine: the installer never uses <code>sudo</code>, keeps a copy of each file it changes, and <code>corral uninstall</code> takes Corral out, leaving your settings and sessions.</p>
 
     <h2>Where Corral fits</h2>
     <p>An analysis usually goes through five stages:</p>

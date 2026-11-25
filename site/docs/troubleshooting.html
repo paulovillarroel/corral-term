@@ -88,8 +88,8 @@
     <li>Tables from <code>View()</code> are saved in R's (or Python's) temporary folder and go away when you close the console.</li>
     <li>The Python console needs IPython. <kbd>ctrl+b</kbd> <kbd>m</kbd> on a <code>python</code> without IPython marks the pane, but doesn't switch Corral on.</li>
     <li>Python figures are saved when they are drawn (PNG and SVG), and Mirador scales them. They aren't drawn again when the window changes size, as httpgd does in R.</li>
-    <li>Objects with more than a million elements don't show their size in memory, because computing it after every command would be slow.</li>
-    <li>If the herdr server stops (a Windows restart, <code>wsl --shutdown</code>), the R and Python sessions are lost. herdr restores the panes, but not their memory.</li>
+    <li>In R, objects with more than a million elements don't show their size in memory, because computing it after every command would be slow.</li>
+    <li>If the herdr server stops (a Windows restart, <code>wsl --shutdown</code>), the R and Python sessions end. herdr restores the panes, and with checkpoints on, the next console in the project gets the objects back (<a href="consoles.html">Consoles</a>).</li>
     <li>Ark is still a 0.1 version, and Corral talks to its language server over an internal Positron channel (<code>positron.lsp</code>) that can change between versions. That is why <code>corral ark --install</code> installs the tested version. If a new version fails, <code>corral config r_console r</code> goes back to plain R.</li>
     <li>Debugging with <code>browser()</code> hasn't been tested with Ark yet.</li>
     <li>Ark's console counts every character as one column. With emoji or East Asian characters in a long line, the cursor can end up out of place until the line is drawn again.</li>
