@@ -65,7 +65,7 @@
       <li><strong>A variables pane</strong> that updates after every command, and a <strong>table viewer</strong> for <code>View()</code> that pages through millions of rows with DuckDB.</li>
       <li><strong>SQL in your session.</strong> In a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query on DuckDB in the console: your data frames are its tables, and the result is a data frame (<a href="sql.html">SQL</a>).</li>
       <li><strong>Plots</strong> in Mirador, a light page in your browser that shows each new plot about 80 ms after it is drawn.</li>
-      <li><strong>Agents in the same session.</strong> Claude Code runs code in your console with <code>corral eval</code>, so its objects land where you can see them.</li>
+      <li><strong>Agents in the same session.</strong> Your agent (Claude Code, Codex, Gemini CLI or opencode) runs code in your console with <code>corral eval</code>, so its objects land where you can see them.</li>
     </ul>
 
     <h2>R and Python, both first-class</h2>
@@ -109,7 +109,7 @@
         <tr><td><a href="https://github.com/posit-dev/ark">Ark</a></td><td>The R kernel from Positron: the console and the language server, which knows your live objects.</td></tr>
         <tr><td><a href="https://getfresh.dev">Fresh</a></td><td>The script editor, with a Corral plugin for running code and keeping the draft.</td></tr>
         <tr><td>Mirador</td><td>Corral's own viewer in the browser, written from scratch and exclusive to Corral: a Rust server inside the <code>corral</code> binary, with DuckDB behind its tables. Your plots, and tables when you send them there.</td></tr>
-        <tr><td><a href="https://duckdb.org">DuckDB</a></td><td>Queries the tables you open with <code>View()</code>, one page at a time.</td></tr>
+        <tr><td><a href="https://duckdb.org">DuckDB</a></td><td>Queries the tables you open with <code>View()</code>, one page at a time, and runs SQL in your session.</td></tr>
         <tr><td><a href="https://docs.astral.sh/uv/">uv</a>, ty, Ruff</td><td>Python: the console's environment, completion and diagnostics.</td></tr>
       </tbody>
     </table>
@@ -119,7 +119,7 @@
     <p>Corral stays out of the way of everything you already have:</p>
     <ul>
       <li><strong>In R</strong>, it only switches on in the console a Corral layout opens, or in an R where you turn it on (<kbd>ctrl+b</kbd> <kbd>m</kbd>, or <code>corral_activate()</code>). Any other R works as always, with its own <code>View()</code> and graphics device.</li>
-      <li><strong>The layout</strong> (script, console and variables) only appears when you ask for it with <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+s</kbd>.</li>
+      <li><strong>The layout</strong> (script, console and variables) only appears when you ask for it: <code>corral</code>, <kbd>ctrl+b</kbd> <kbd>a</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+s</kbd>.</li>
       <li><strong>Agents</strong> use your console only when the workspace has an active Corral console; otherwise they work as usual.</li>
     </ul>
 

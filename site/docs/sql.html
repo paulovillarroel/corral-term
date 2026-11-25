@@ -94,7 +94,7 @@ GROUP BY ALL;</code></pre>
     </ul>
 
     <h2 id="agents">Agents</h2>
-    <p>Agents run SQL with <code>corral eval --lang sql</code>, through the same <a href="agents.html#the-agent-harness">harness</a> as R and Python: it asks before running when you set it to, the audit log records it, and the limits you set on what agents see apply. Corral's skill tells them to prefer it for joins and aggregations over big tables.</p>
+    <p>Agents run SQL with <code>corral eval --lang sql</code>, through the same <a href="agents.html#the-agent-harness">harness</a> as R and Python: it asks before running unless you set <code>agents on</code>, the audit log records it, and the limits you set on what agents see apply. Corral's skill tells them to prefer it for joins and aggregations over big tables.</p>
     <pre><code><span class="p">$ </span>corral eval --lang sql 'SELECT region, count(*) FROM sales GROUP BY 1'</code></pre>
 
     <h2 id="speed">Speed</h2>

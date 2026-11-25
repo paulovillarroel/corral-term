@@ -62,12 +62,17 @@
 
     <h2>The palette</h2>
     <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Agents:</code>, <code>Theme:</code>…), so typing a category lists just that. Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 9 of 81 entries, the Agents group, each starting with Agents:">
+    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 14 of 100 entries, the Agents group, each starting with Agents:">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                               <span style="color:#5c5c5c;">9 of 81</span>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                              <span style="color:#5c5c5c;">14 of 100</span>
 <span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
   <span style="color:#a0a0a0;font-weight:700;">AGENTS</span>
-<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Agents: ask before each request ↵                                                              </span><span style="color:#ffc799;background:#343434;"></span>
+<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Agents: use Claude Code in the agent pane ↵                                                    </span><span style="color:#ffc799;background:#343434;"></span>
+   <span style="color:#ffffff;">Agents: use Codex in the agent pane</span>                                                            <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: use Gemini CLI in the agent pane</span>                                                       <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: use opencode in the agent pane</span>                                                         <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: none, a shell in the agent pane</span>                                                        <span style="color:#ffc799;"></span>
+   <span style="color:#ffffff;">Agents: ask before each request</span>                                                                <span style="color:#ffc799;"></span>
    <span style="color:#ffffff;">Agents: run code without asking</span>                                                                <span style="color:#ffc799;"></span>
    <span style="color:#ffffff;">Agents: can&#x27;t run code</span>                                                                         <span style="color:#ffc799;"></span>
    <span style="color:#ffffff;">Agents: see full results</span>                                                                       <span style="color:#ffc799;"></span>
@@ -116,7 +121,7 @@
     <thead><tr><th>Shortcut</th><th>Also</th><th>Action</th></tr></thead>
     <tbody>
     <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>Run the selection or, without one, the whole statement under the cursor (including <code>|&gt;</code> or <code>+</code> chains over several lines), and move to the next one</td></tr>
-    <tr><td><kbd>F5</kbd></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Run the whole file (<code>source(echo = TRUE)</code> in R, <code>%run -i</code> in Python)</td></tr>
+    <tr><td><kbd>F5</kbd></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Run the whole file (<code>source(echo = TRUE)</code> in R, <code>%run -i</code> in Python, every query in a <code>.sql</code> file)</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td><kbd>Alt</kbd>+<kbd>-</kbd></td><td>Insert <code>&lt;-</code></td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>U</kbd></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td><td>Insert <code>|&gt;</code></td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Comment or uncomment</td></tr>
@@ -128,7 +133,7 @@
     <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td></td><td>Close the editor (the drafts are discarded)</td></tr>
     </tbody>
     </table>
-    <p><kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd> do nothing in a <code>.py</code> file.</p>
+    <p><kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd> do nothing in a <code>.py</code> or <code>.sql</code> file.</p>
 
     <h2>Console (R and Python)</h2>
     <table>
@@ -201,6 +206,7 @@
     <tr><td><kbd>ctrl+b</kbd> <kbd>shift+m</kbd></td><td>Open Mirador, in your browser</td></tr>
     </tbody>
     </table>
+    <p>The size Mirador draws plots at is in the palette, without a key: "Plots: Mirador fits them to its window" (<code>corral config plot_size window</code>, the default), or draws them at 800 × 500, 1000 × 650 or 1200 × 800 (<code>corral config plot_size 1000x650</code>, for example).</p>
 
     <h3>In Mirador</h3>
     <table>
@@ -230,6 +236,11 @@
     <table>
     <thead><tr><th>In the palette</th><th>What it sets</th></tr></thead>
     <tbody>
+    <tr><td>Agents: use Claude Code in the agent pane</td><td><code>corral config agent claude</code></td></tr>
+    <tr><td>Agents: use Codex in the agent pane</td><td><code>corral config agent codex</code></td></tr>
+    <tr><td>Agents: use Gemini CLI in the agent pane</td><td><code>corral config agent gemini</code></td></tr>
+    <tr><td>Agents: use opencode in the agent pane</td><td><code>corral config agent opencode</code></td></tr>
+    <tr><td>Agents: none, a shell in the agent pane</td><td><code>corral config agent none</code>. With no agent set, the pane runs the first of the four that is installed</td></tr>
     <tr><td>Agents: ask before each request</td><td><code>corral config agents ask</code>, the default</td></tr>
     <tr><td>Agents: run code without asking</td><td><code>corral config agents on</code></td></tr>
     <tr><td>Agents: can't run code</td><td><code>corral config agents off</code></td></tr>
@@ -287,7 +298,7 @@
     <li><code>editor:</code> IDs are the editor's. The key is the whole shortcut (<code>ctrl+e</code>, <code>f6</code>, <code>ctrl+shift+enter</code>). Close the editor with <kbd>Ctrl</kbd>+<kbd>Q</kbd> and open it again to use it.</li>
     <li>The keys of the console, the variables pane, the tables and Mirador are part of Corral and can't be changed this way.</li>
     </ul>
-    <p>It refuses keys herdr already uses (<kbd>ctrl+b</kbd> <kbd>?</kbd> lists them) and keys another shortcut has, unless you add <code>--force</code> (from a terminal), which takes the key from the other shortcut. Claude can read and change your shortcuts if you ask it.</p>
+    <p>It refuses keys herdr already uses (<kbd>ctrl+b</kbd> <kbd>?</kbd> lists them) and keys another shortcut has, unless you add <code>--force</code> (from a terminal), which takes the key from the other shortcut. Your agent can read and change your shortcuts if you ask it.</p>
 
     <h3 id="terminals-that-drop-keys">Terminals that drop keys</h3>
     <p>From Warp, through herdr, only <kbd>Ctrl</kbd> plus a letter and the function keys reach the editor intact: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> arrives as <kbd>Enter</kbd>, and shortcuts with <kbd>Ctrl</kbd>+<kbd>Shift</kbd> or <kbd>Alt</kbd> are cut. That is why Corral's main keys are <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd>.</p>

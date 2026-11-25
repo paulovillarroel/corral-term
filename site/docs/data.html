@@ -58,7 +58,7 @@
     <p class="intro">The variables pane lists the objects in your session after every command. <code>View()</code> opens any table in a viewer that asks DuckDB for one page at a time, so a table with millions of rows opens at once.</p>
 
     <h2>The variables pane</h2>
-    <p>The pane under the console updates after every command, yours or Claude's, and follows the console when you restart R or switch to Python. It lists your objects, including plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>).</p>
+    <p>The pane under the console updates after every command, yours or your agent's, and follows the console when you restart R or switch to Python. It lists your objects, including plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>).</p>
     <p>The objects are sorted into five tabs: Data (data frames), Plots (plot objects), Values, Functions and Other. Move between them with <kbd>←</kbd> <kbd>→</kbd>, <kbd>Tab</kbd>, the keys <kbd>1</kbd> to <kbd>5</kbd>, or a click. <kbd>/</kbd> searches.</p>
 
     <h3>Enter on an object</h3>
@@ -76,12 +76,12 @@
 
     <h3>A bigger view</h3>
     <p><kbd>ctrl+b</kbd> <kbd>d</kbd> (<code>corral vars</code>) opens the variables over the terminal, with the same keys; <kbd>q</kbd> closes it. If your layout has no variables pane, <code>corral vars --split</code> adds one under the R console.</p>
-    <p>Objects with more than a million elements don't show their size in memory, because computing it after every command would be slow. To stay fast, Corral describes a variable again only when the object changed (another address in memory, another length, other dimensions or, in tables, other column types).</p>
+    <p>In R, objects with more than a million elements don't show their size in memory, because computing it after every command would be slow. To stay fast, Corral describes a variable again only when the object changed (another address in memory, another length, other dimensions or, in tables, other column types).</p>
 
     <h2>Variables for agents</h2>
     <pre><code><span class="p">$ </span>corral vars --json
 <span class="p">$ </span>corral vars --json --lang python</code></pre>
-    <p>This prints the objects in the session (name, kind, class, dimensions or a preview, size) as JSON, without typing anything in the console. Without <code>--lang</code> it lists the console in view. Corral's skill tells Claude to use it before running code, so it doesn't guess names or overwrite your objects.</p>
+    <p>This prints the objects in the session (name, kind, class, dimensions or a preview, size) as JSON, without typing anything in the console. Without <code>--lang</code> it lists the console in view. Corral's skill tells agents to use it before running code, so it doesn't guess names or overwrite your objects.</p>
 
     <h2>The table viewer</h2>
     <p><code>View(df)</code> (in R or in Python), <kbd>Enter</kbd> on a data frame in the variables pane, or <code>corral view</code> on a file open the table over the terminal, in a viewer that queries the file with <a href="https://duckdb.org">DuckDB</a>.</p>
@@ -116,7 +116,7 @@
  <span style="color:#5c5c5c;">/ search · f filter · = equal to the cell · x clear filters · s sort · Enter row · i summary · m Mirador · Sh…</span></pre>
     </figure>
     <pre><code><span class="p">$ </span>corral view data/sales.parquet</code></pre>
-    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables and saves them as parquet: the console comes with pyarrow, so pandas tables do too. In R, it writes parquet with nanoparquet, which the installer adds, or arrow; without either, it uses CSV, which is much slower with big tables (about 15 s for ten million rows, and close to a second each screen).</p>
+    <p><code>corral view</code> opens parquet, CSV and JSON files; <code>--title</code> sets the title. In Python, <code>View()</code> takes pandas, polars or pyarrow tables and saves them as parquet: the console comes with pyarrow, so pandas tables do too. In R, it writes parquet with nanoparquet, which the installer adds, or arrow; without either, it uses CSV, which is much slower with big tables (about 13 s for ten million rows, and up to three quarters of a second each screen).</p>
     <p>Each <code>View()</code> saves a temporary copy of the table, so a long session doesn't fill your disk: a new <code>View()</code> of the same object replaces its copy, and each session keeps the copies of its latest 20 tables, up to 2 GB in all. Mirador closes the tab of a table whose copy is gone. A file you open with <code>corral view</code> is never deleted.</p>
 
     <h3>Keys</h3>
