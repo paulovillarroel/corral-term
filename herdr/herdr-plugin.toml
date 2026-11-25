@@ -55,6 +55,13 @@ title = "Corral: send the selection to the console (R or Python)"
 contexts = ["selection", "pane"]
 command = ["../rs/target/release/corral", "send"]
 
+# The selection as SQL, in the console in view (R or Python), on DuckDB.
+[[actions]]
+id = "send-sql"
+title = "Corral: run the selection as SQL"
+contexts = ["selection", "pane"]
+command = ["../rs/target/release/corral", "send", "--lang", "sql"]
+
 [[actions]]
 id = "console"
 title = "Corral: use this pane as the console"
