@@ -3,7 +3,7 @@
 <h1 align="center">Corral</h1>
 
 <p align="center"><b>An agentic Data Science IDE that opens in milliseconds.</b><br>
-A terminal-native data science workspace for R and Python, built for working alongside AI agents:<br>
+A terminal-native data science workspace for R, Python and SQL, built for working alongside AI agents:<br>
 you and your agent share one live session, under your control.<br>
 Written in Rust. DuckDB for your data.</p>
 
@@ -42,11 +42,11 @@ curl -LsSf https://corral-term.dev/install.sh | sh
 
 The installer downloads the latest published version, says which, and checks its SHA-256 before opening it and, if you have the GitHub CLI, its [build provenance attestation](https://corral-term.dev/docs/install.html#how-the-download-is-checked); it never falls back to unreleased code. It prints a checklist of everything above and, for anything missing, the command that fixes it; if something required is missing it stops without changing anything. Then it:
 
-- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, each checked against a SHA-256 written into Corral's code; installs the R package nanoparquet in your R library, and with uv puts the Python console's packages (IPython, cloudpickle, pyarrow) in uv's cache;
-- links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
+- puts `corral` (already compiled) in `~/.local/bin`, and downloads what you don't have: [Fresh](https://getfresh.dev), [DuckDB](https://duckdb.org), [Air](https://posit-dev.github.io/air/) and Ark, each checked against a SHA-256 written into Corral's code; installs the R packages nanoparquet (and duckdb with DBI, where they come already compiled) in your R library, and with uv puts the Python console's packages (IPython, cloudpickle, pyarrow, duckdb) in uv's cache;
+- links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills`, `~/.claude/skills` and, with Gemini CLI, `~/.gemini/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
-`sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes everything out again. When it finishes or stops, and when Corral is uninstalled, it sends one anonymous ping (version, system, country and the tools it found, in categories; no IP) to count installs; `corral config telemetry off` or `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
+`sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes Corral out again, leaving your settings and sessions. When it finishes or stops, and when Corral is uninstalled, it sends one anonymous ping (version, system, country and the tools it found, in categories; no IP) to count installs; `corral config telemetry off` or `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
 
 ### Then
 
@@ -91,7 +91,7 @@ flowchart TB
 | `corral` | Layouts, sending code, `corral eval`, variables pane, table viewer, palette, Mirador's server, installer | Rust, no crates |
 | [Ark](https://github.com/posit-dev/ark) | R kernel and language server (Positron's) | Rust |
 | [Fresh](https://getfresh.dev) | Script editor, with Corral's plugin | Rust (plugin in TypeScript) |
-| [DuckDB](https://duckdb.org) | Queries the tables `View()` opens | C++ |
+| [DuckDB](https://duckdb.org) | Queries the tables `View()` opens, and runs SQL in your session | C++ |
 | [httpgd](https://github.com/nx10/httpgd) | R's graphics device that Mirador reads | R / C++ |
 | [uv](https://docs.astral.sh/uv/), IPython, [ty](https://github.com/astral-sh/ty), [Ruff](https://docs.astral.sh/ruff/) | The Python console, completion and formatting | Rust / Python |
 | [Air](https://posit-dev.github.io/air/) | Formats R on save | Rust |
@@ -108,7 +108,7 @@ If something doesn't work, or you have an idea, please [open an issue](https://g
 
 ## Telemetry
 
-For transparency: the installer sends one anonymous ping when an installation finishes or stops, and when Corral is uninstalled, only to measure how many times Corral is installed, from which countries, on what, and what keeps people out. It carries the version, the system (Linux or WSL; macOS or another when the installer stops there), whether it is a new install, an update (and the version it replaced), a stop (and which requirements were missing, by name: herdr, R…, or which check of the download failed: SHA-256 or attestation) or an uninstall, and whether it came from the published package or a clone. Except on an uninstall, it also says where Corral runs, in coarse categories: the agent (Claude Code, Codex, Gemini CLI, opencode, another or none), the Ubuntu or Debian release (noble…), herdr's version, R's major version (4.6) and whether uv is there; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Besides that, Corral asks GitHub which version is the latest, at most once a day when you open the workspace, to tell you when there is a new one; that request carries nothing about you, and `corral config update_check off` stops it. Corral sends nothing else. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `corral config telemetry off`, `CORRAL_NO_TELEMETRY=1` or `DO_NOT_TRACK=1` turns the ping off; the code that receives it is [`api/installed.js`](api/installed.js).
+For transparency: the installer sends one anonymous ping when an installation finishes or stops, and when Corral is uninstalled, only to measure how many times Corral is installed, from which countries, on what, and what keeps people out. It carries the version, the system (Linux or WSL; macOS or another when the installer stops there), whether it is a new install, an update (and the version it replaced), a stop (and which requirements were missing, by name: herdr, R…, or which check of the download failed: SHA-256 or attestation) or an uninstall, and whether it came from the published package or a clone. The pings from `corral install` (not the uninstall's, nor install.sh's) also say where Corral runs, in coarse categories: the agent (Claude Code, Codex, Gemini CLI, opencode, another or none), the Ubuntu or Debian release (noble…), herdr's version, R's major version (4.6) and whether uv is there; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Besides that, Corral asks GitHub which version is the latest, at most once a day when you open the workspace, to tell you when there is a new one; that request carries nothing about you, and `corral config update_check off` stops it. Corral sends nothing else. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `corral config telemetry off`, `CORRAL_NO_TELEMETRY=1` or `DO_NOT_TRACK=1` turns the ping off; the code that receives it is [`api/installed.js`](api/installed.js).
 
 ---
 
