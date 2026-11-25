@@ -10,6 +10,7 @@
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Corral: the agentic Data Science IDE for R, Python and SQL</title>
 <meta name="description" content="A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session. Open source.">
+<link rel="canonical" href="https://corral-term.dev/">
 <!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Corral">
@@ -21,6 +22,45 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Corral, an agentic Data Science IDE that opens in milliseconds: R, Python and SQL in your terminal, next to your agent">
 <meta name="twitter:card" content="summary_large_image">
+<!-- What search engines read about the site and Corral (schema.org). -->
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebSite",
+   "@id": "https://corral-term.dev/#website",
+   "name": "Corral",
+   "alternateName": "corral-term",
+   "url": "https://corral-term.dev/"
+  },
+  {
+   "@type": "SoftwareApplication",
+   "name": "Corral",
+   "alternateName": "corral-term",
+   "url": "https://corral-term.dev/",
+   "description": "A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session. Open source.",
+   "applicationCategory": "DeveloperApplication",
+   "applicationSubCategory": "Data science IDE",
+   "operatingSystem": "Linux, Windows (WSL)",
+   "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+   },
+   "license": "https://opensource.org/licenses/MIT",
+   "image": "https://corral-term.dev/assets/og.png",
+   "screenshot": "https://corral-term.dev/assets/shots/hero.webp",
+   "downloadUrl": "https://corral-term.dev/docs/install.html",
+   "softwareRequirements": "herdr; R or Python",
+   "keywords": "data science IDE, R, Python, SQL, DuckDB, terminal, AI agents, Claude Code, Codex, Gemini CLI, opencode, Rust",
+   "sameAs": [
+    "https://github.com/paulovillarroel/corral-term"
+   ]
+  }
+ ]
+}
+</script>
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

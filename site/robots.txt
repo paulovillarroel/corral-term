@@ -1,0 +1,6 @@
+# corral-term.dev: every page may be indexed; the install counter is not a page.
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://corral-term.dev/sitemap.xml
