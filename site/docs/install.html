@@ -39,7 +39,7 @@
 <header class="top">
   <a class="logo" href="../">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
-    corral <span class="tag">docs</span>
+    corral <span class="tag">docs · 0.1.20</span>
   </a>
   <nav class="nav">
     <button class="menu-toggle" type="button">Menu</button>
@@ -232,7 +232,7 @@ Optional
     <p>Your settings and sessions stay in <code>~/.config/corral</code> and <code>~/.local/state/corral</code>, in case you come back. Delete them if you won't.</p>
 
     <h2>Publish a version</h2>
-    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>, and publishes it with its SHA-256 and a build provenance attestation. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, and write its section in <code>CHANGELOG.md</code> (<code>## 0.1.21</code>): it becomes the release notes, and without it nothing is published. Run the live tests too, which check Corral with a real herdr, R and Python: in GitHub, Actions → Live tests → Run workflow, or on your machine <code>cargo test --release --test live -- --ignored --test-threads 1</code>. Then tag it with that number:</p>
+    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>, and publishes it with its SHA-256 and a build provenance attestation. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, and write its section in <code>CHANGELOG.md</code> (<code>## 0.1.21</code>): it becomes the release notes, and without it nothing is published. The README, the sample output on this page and the header of every docs page name the version too; <code>rs/tests/version.rs</code> fails until they all say the new one. Run the live tests too, which check Corral with a real herdr, R and Python: in GitHub, Actions → Live tests → Run workflow, or on your machine <code>cargo test --release --test live -- --ignored --test-threads 1</code>. Then tag it with that number:</p>
     <pre><code><span class="p">$ </span>git tag v0.1.21
 <span class="p">$ </span>git push origin v0.1.21</code></pre>
     <p>The binary is static (musl), so it runs on any x86_64 Linux, WSL included.</p>
