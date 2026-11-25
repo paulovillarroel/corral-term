@@ -219,6 +219,8 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("language-en", Group::Settings, "Language: English", "Language: English"),
     ("language-es", Group::Settings, "Idioma: español", "Idioma: español"),
     ("update", Group::Settings, "Update: install the latest version of Corral", "Actualizar: instalar la última versión de Corral"),
+    ("telemetry-on", Group::Settings, "Install count: count my installs anonymously", "Conteo de instalaciones: contar las mías de forma anónima"),
+    ("telemetry-off", Group::Settings, "Install count: don't count my installs", "Conteo de instalaciones: no contar las mías"),
     ("keys", Group::Help, "Help: shortcuts and actions (this palette)", "Ayuda: atajos y acciones (esta paleta)"),
 ];
 

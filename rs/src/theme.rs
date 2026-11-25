@@ -698,7 +698,7 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("checkpoints", &["on", "off"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"]),
-                                         ("start", &["r", "python"])];
+                                         ("start", &["r", "python"]), ("telemetry", &["on", "off"])];
     if let Some((_, values)) = allowed.iter().find(|(k, _)| k == key) {
         if !values.contains(&value.as_str()) {
             let mut v = values.to_vec();
@@ -715,6 +715,8 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados").to_string(), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola.").to_string())),
         ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R").to_string(), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R.").to_string())),
         ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python").to_string(), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python.").to_string())),
+        ("telemetry", "on") => Some((tr("Install count: on", "Conteo de instalaciones: activado").to_string(), tr("The installer counts each install, update or stop with one anonymous ping (version, system and country).", "El instalador cuenta cada instalación, actualización o detención con un ping anónimo (versión, sistema y país).").to_string())),
+        ("telemetry", "off") => Some((tr("Install count: off", "Conteo de instalaciones: desactivado").to_string(), tr("The installer sends nothing when it installs, updates or stops, in any shell.", "El instalador no envía nada al instalar, actualizar o detenerse, en ninguna shell.").to_string())),
         _ => None,
     });
     match meaning {

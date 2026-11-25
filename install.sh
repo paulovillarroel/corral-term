@@ -55,7 +55,34 @@ stop() {
     shift
     for line in "$@"; do printf '  %s\n' "$line" >&2; done
     printf '\n%s\n' "$(t 'Nothing was changed.' 'No cambié nada.')" >&2
+    if [ "$counted" = 1 ]; then
+        printf '\n%s\n' "$(t 'Counted this stop anonymously (the system and what was missing). CORRAL_NO_TELEMETRY=1 turns it off.' \
+                              'Conté esta detención de forma anónima (el sistema y qué faltó). CORRAL_NO_TELEMETRY=1 lo desactiva.')" >&2
+    fi
     exit 1
+}
+
+# count_stop SYSTEM MISSING: one anonymous ping when the installer stops before
+# Corral is on this machine (a Mac, another system or processor, no tar), so the
+# project learns who it leaves out: the system and what was missing, nothing else
+# (api/installed.js). CORRAL_NO_TELEMETRY=1, DO_NOT_TRACK=1 or `corral config
+# telemetry off` turn it off, and --check never sends it. 5 seconds at most.
+counted=0
+check_only=0
+count_stop() {
+    case "${CORRAL_NO_TELEMETRY:-0}${DO_NOT_TRACK:-0}" in 00 | 0 | "") ;; *) return 0 ;; esac
+    if [ "$check_only" = 1 ] || ! command -v curl >/dev/null 2>&1; then return 0; fi
+    if [ -f "$config" ] && grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"' "$config" 2>/dev/null; then return 0; fi
+    if curl -fsS -m 5 -X POST -H 'Content-Type: application/json' \
+        --data "{\"version\":\"unknown\",\"system\":\"$1\",\"kind\":\"stopped\",\"source\":\"release\",\"missing\":[\"$2\"]}" \
+        "${CORRAL_TELEMETRY_URL:-https://corral-term.dev/api/installed}" >/dev/null 2>&1; then
+        counted=1
+    fi
+}
+
+# linux or wsl: the system field of the ping.
+system_name() {
+    if grep -qi microsoft /proc/version 2>/dev/null; then printf wsl; else printf linux; fi
 }
 
 # corral_of DIR AGAIN: make sure DIR has the `corral` command, compiling it if needed:
@@ -139,21 +166,25 @@ latest_tag() {
 }
 
 main() {
+    for arg in "$@"; do case "$arg" in --check) check_only=1 ;; esac; done
     case "$(uname -s)" in
         Linux) ;;
-        Darwin) stop "$(t "Corral doesn't work on macOS yet." "Corral todavía no funciona en macOS.")" \
+        Darwin) count_stop macos system
+                stop "$(t "Corral doesn't work on macOS yet." "Corral todavía no funciona en macOS.")" \
                      "$(t "herdr does work on a Mac, but several parts of Corral use features only Linux has." \
                           "herdr sí funciona en Mac, pero varias piezas de Corral usan funciones propias de Linux.")" \
                      "$(t "For now Corral works on Linux and on Windows with WSL." \
                           "Por ahora Corral funciona en Linux y en Windows con WSL.")" ;;
-        *) stop "$(t "Corral works on Linux and on Windows with WSL, and this system is $(uname -s)." \
+        *) count_stop other system
+           stop "$(t "Corral works on Linux and on Windows with WSL, and this system is $(uname -s)." \
                      "Corral funciona en Linux y en Windows con WSL, y este sistema es $(uname -s).")" \
                 "$(t "On Windows, open a WSL (Ubuntu) terminal and run the installation there." \
                      "En Windows, abre una terminal de WSL (Ubuntu) y corre ahí la instalación.")" ;;
     esac
     case "$(uname -m)" in
         x86_64 | amd64) ;;
-        *) stop "$(t "For now Corral only installs on x86_64 machines (Intel or AMD), and this one is $(uname -m)." \
+        *) count_stop "$(system_name)" arch
+           stop "$(t "For now Corral only installs on x86_64 machines (Intel or AMD), and this one is $(uname -m)." \
                      "Corral por ahora se instala solo en equipos x86_64 (Intel o AMD), y este es $(uname -m).")" ;;
     esac
 
@@ -162,6 +193,7 @@ main() {
         command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
     done
     if [ -n "$missing" ]; then
+        count_stop "$(system_name)" basics
         stop "$(t "Some basic programs are missing:" "Faltan programas básicos:")$missing" \
              "$(t "On Ubuntu or Debian:" "En Ubuntu o Debian:")  ${bold}sudo apt install$missing$off" \
              "" "$(t "Then run the installation again:" "Después vuelve a correr la instalación:")" "  $LINE"

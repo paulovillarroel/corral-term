@@ -282,6 +282,19 @@ title = "Corral: update to the latest version"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "update"]
 
+# The installer's anonymous install count (corral config telemetry).
+[[actions]]
+id = "telemetry-on"
+title = "Corral: count my installs anonymously"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "telemetry", "on"]
+
+[[actions]]
+id = "telemetry-off"
+title = "Corral: don't count my installs"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "telemetry", "off"]
+
 [[actions]]
 id = "open-url"
 title = "Corral: open a local link in the browser"

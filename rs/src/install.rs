@@ -267,6 +267,8 @@ fn on_path(dir: &Path) -> bool {
 
 struct Check {
     group: &'static str, // required | installer | optional
+    /// A required check's name for the stop ping (herdr, r…), the same in any language.
+    id: &'static str,
     state: State,
     name: String,
     detail: String,
@@ -274,7 +276,14 @@ struct Check {
 }
 
 fn check(group: &'static str, state: State, name: &str, detail: impl Into<String>, fix: &[&str]) -> Check {
-    Check { group, state, name: name.into(), detail: detail.into(), fix: fix.iter().map(|s| s.to_string()).collect() }
+    Check { group, id: "", state, name: name.into(), detail: detail.into(), fix: fix.iter().map(|s| s.to_string()).collect() }
+}
+
+impl Check {
+    fn id(mut self, id: &'static str) -> Check {
+        self.id = id;
+        self
+    }
 }
 
 fn checks(in_place: bool, src: &Path) -> Vec<Check> {
@@ -286,19 +295,19 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     match which("herdr") {
         None => out.push(check("required", State::Missing, "herdr", tr("not installed", "no está instalado"),
                                &[tr("Install herdr, the terminal Corral lives in:", "Instala herdr, la terminal donde vive Corral:"),
-                                 "  curl -fsSL https://herdr.dev/install.sh | sh"])),
+                                 "  curl -fsSL https://herdr.dev/install.sh | sh"]).id("herdr")),
         Some(h) => {
             let v = version_of(&h, "--version");
             let ok = !v.is_empty() && as_tuple(&v) >= HERDR_MIN;
             let update = [tr("Corral needs herdr 0.9.5 or newer. Update it:", "Corral necesita herdr 0.9.5 o más nuevo. Actualízalo:"), "  herdr update"];
             out.push(check("required", if ok { State::Ok } else { State::Missing }, "herdr",
-                           if v.is_empty() { tr("unknown version", "versión desconocida").into() } else { v }, if ok { &[] } else { &update }));
+                           if v.is_empty() { tr("unknown version", "versión desconocida").into() } else { v }, if ok { &[] } else { &update }).id("herdr_old"));
         }
     }
     match crate::versions::rscript().or_else(|| which("Rscript")) {
         None => out.push(check("required", State::Missing, "R", tr("not installed", "no está instalado"),
                                &[tr("Install R from https://cran.r-project.org (on Ubuntu: sudo apt install r-base).",
-                                    "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")])),
+                                    "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")]).id("r")),
         Some(r) => {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
             let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang"];
@@ -311,7 +320,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                 let list = missing.join(", ");
                 out.push(check("required", State::Missing, tr("R packages", "Paquetes de R"), trf!("missing {list}", "faltan {list}"),
                                &[tr("Install the R packages (httpgd draws the plots, jsonlite carries the variables):",
-                                    "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]));
+                                    "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]).id("r_packages"));
             }
             // nanoparquet even with arrow there: View() with arrow is slower, and in a
             // long session R's memory keeps growing with each table (bench/repeat.R).
@@ -336,7 +345,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
         out.push(check("required", State::Missing, tr("Folder", "Carpeta"),
                        trf!("{} already exists and isn't Corral's", "{} ya existe y no es de Corral", short(&target)),
                        &[tr("Move it, or pick another folder with CORRAL_DIR=/other/folder before installing.",
-                            "Muévela, o elige otra carpeta con CORRAL_DIR=/otra/carpeta antes de instalar.")]));
+                            "Muévela, o elige otra carpeta con CORRAL_DIR=/otra/carpeta antes de instalar.")]).id("folder"));
     }
 
     // What the installer brings -------------------------------------------------
@@ -912,7 +921,11 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let s = style();
     println!("{}Corral {VERSION}{}: {}", s.bold, s.off,
              tr("checking what it needs, without changing anything yet.", "reviso lo que necesita, sin cambiar nada todavía."));
-    if !report(&checks(in_place, src), again) {
+    let rows = checks(in_place, src);
+    if !report(&rows, again) {
+        let missing: Vec<&str> = rows.iter().filter(|r| r.state == State::Missing)
+            .map(|r| if r.id.is_empty() { "other" } else { r.id }).collect();
+        count_stop(&missing, in_place);
         std::process::exit(1);
     }
     println!("\n{}{}{}", s.bold, tr("Installing", "Instalando"), s.off);
@@ -993,28 +1006,60 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
 /// people install Corral and from which countries: the version, the system (linux or
 /// wsl), new install or update (and on an update, the version it replaced), and
 /// published package or clone. The site adds the country from Vercel's geolocation
-/// and stores no IP (api/installed.js). CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1 turns
-/// it off; CORRAL_TELEMETRY_URL points it elsewhere (tests). It waits 5 seconds at
-/// most and never fails the install.
+/// and stores no IP (api/installed.js). telemetry_off() says what turns it off;
+/// CORRAL_TELEMETRY_URL points it elsewhere (tests). It waits 5 seconds at most and
+/// never fails the install.
 fn count_install(previous: Option<&str>, in_place: bool) {
-    let set = |var: &str| std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0");
-    if set("CORRAL_NO_TELEMETRY") || set("DO_NOT_TRACK") {
+    if telemetry_off() {
         return;
     }
-    let Some(curl) = env::which("curl") else { return };
-    let body = ping_body(previous, is_wsl(), in_place);
+    if send_ping(&ping_body(previous, is_wsl(), in_place)) {
+        let s = style();
+        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system and country). corral config telemetry off turns it off.",
+                                     "Conté esta instalación de forma anónima (versión, sistema y país). corral config telemetry off lo desactiva."), s.off);
+    }
+}
+
+/// One anonymous ping when the installation stops because something required is
+/// missing, so the project learns what keeps people out: which checks failed, by
+/// name (herdr, herdr_old, r, r_packages, folder), plus what every ping says. The
+/// same switches turn it off; `--check` never sends it.
+fn count_stop(missing: &[&str], in_place: bool) {
+    if telemetry_off() {
+        return;
+    }
+    if send_ping(&stop_body(missing, is_wsl(), in_place)) {
+        let s = style();
+        println!("\n{}{}{}", s.dim, tr("Counted this stop anonymously (what was missing, version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
+                                       "Conté esta detención de forma anónima (qué faltó, versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
+    }
+}
+
+/// The install count is off with CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or with
+/// `corral config telemetry off`, which holds where no .bashrc is read too (an
+/// agent's shell, a script).
+fn telemetry_off() -> bool {
+    let set = |var: &str| std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0");
+    set("CORRAL_NO_TELEMETRY") || set("DO_NOT_TRACK") || env::config().get("telemetry").str() == Some("off")
+}
+
+/// POSTs one ping to the site (api/installed.js): 5 seconds at most, never an error.
+fn send_ping(body: &str) -> bool {
+    let Some(curl) = env::which("curl") else { return false };
     let url = std::env::var("CORRAL_TELEMETRY_URL").unwrap_or_else(|_| "https://corral-term.dev/api/installed".into());
-    let sent = Command::new(curl)
-        .args(["-fsS", "-m", "5", "-X", "POST", "-H", "Content-Type: application/json", "--data", &body, &url])
+    Command::new(curl)
+        .args(["-fsS", "-m", "5", "-X", "POST", "-H", "Content-Type: application/json", "--data", body, &url])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .is_ok_and(|st| st.success());
-    if sent {
-        let s = style();
-        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system and country). CORRAL_NO_TELEMETRY=1 turns it off.",
-                                     "Conté esta instalación de forma anónima (versión, sistema y país). CORRAL_NO_TELEMETRY=1 lo desactiva."), s.off);
-    }
+        .is_ok_and(|st| st.success())
+}
+
+/// The stop ping's JSON: the failed checks' ids, which Corral names itself.
+fn stop_body(missing: &[&str], wsl: bool, in_place: bool) -> String {
+    let list: Vec<String> = missing.iter().map(|m| format!(r#""{m}""#)).collect();
+    format!(r#"{{"version":"{VERSION}","system":"{}","kind":"stopped","source":"{}","missing":[{}]}}"#,
+            if wsl { "wsl" } else { "linux" }, if in_place { "clone" } else { "release" }, list.join(","))
 }
 
 /// The ping's JSON. `previous` is the version install.json had, if any: then it is an
@@ -1354,6 +1399,12 @@ mod tests {
         let odd = ping_body(Some(r#"0.1"}x"#), true, false);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
         assert!(!ping_body(Some(""), true, false).contains("from"));
+    }
+
+    #[test]
+    fn the_stop_ping_says_what_was_missing() {
+        assert_eq!(stop_body(&["herdr", "r_packages"], true, false),
+                   format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"stopped","source":"release","missing":["herdr","r_packages"]}}"#));
     }
 
     #[test]
