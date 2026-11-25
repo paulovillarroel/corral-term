@@ -13,7 +13,6 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -143,15 +142,9 @@ pub(crate) fn sql_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// The rows of one query, from the DuckDB this process keeps open (duckdb.rs).
 pub(crate) fn duck(sql: &str) -> Result<Value, String> {
-    let out = Command::new("duckdb").args(["-json", "-c", sql]).output()
-        .map_err(|_| tr("DuckDB isn't on the PATH", "DuckDB no está en el PATH").to_string())?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return Err(if err.is_empty() { tr("DuckDB failed", "DuckDB falló").into() } else { err });
-    }
-    let text = String::from_utf8_lossy(&out.stdout);
-    if text.trim().is_empty() { Ok(Value::Arr(Vec::new())) } else { json::parse(text.trim()) }
+    crate::duckdb::query(sql)
 }
 
 pub(crate) fn table_source(path: &str) -> String {

@@ -7,6 +7,7 @@ mod approve;
 mod ark;
 mod audit;
 mod console;
+mod duckdb;
 mod editor;
 mod env;
 mod eval;
