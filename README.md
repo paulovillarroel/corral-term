@@ -45,11 +45,11 @@ The installer downloads the latest published version, says which, and checks its
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills` and `~/.claude/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
-`sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes everything out again. At the end it sends one anonymous ping (version, system, country; no IP) to count installs; `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
+`sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes everything out again. When it finishes, or stops because something is missing, it sends one anonymous ping (version, system, country; no IP) to count installs; `corral config telemetry off` or `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
 
 ### Then
 
-Open herdr in a project folder and type `corral` (or press <kbd>ctrl+b</kbd> <kbd>a</kbd>): your agent, the script, the R console and the variables. <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a line, <kbd>ctrl+b</kbd> <kbd>y</kbd> switches to Python, <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut. [Quick start](https://corral-term.dev/docs/quickstart.html).
+In a project folder, type `corral`: herdr opens with your agent, the script, the R console and the variables, and a `terminal` tab with a shell (inside herdr, <kbd>ctrl+b</kbd> <kbd>a</kbd> does the same). <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a line, <kbd>ctrl+b</kbd> <kbd>y</kbd> switches to Python, <kbd>ctrl+b</kbd> <kbd>space</kbd> lists every shortcut. [Quick start](https://corral-term.dev/docs/quickstart.html).
 
 ## Performance
 
@@ -107,7 +107,7 @@ If something doesn't work, or you have an idea, please [open an issue](https://g
 
 ## Telemetry
 
-For transparency: the installer sends one anonymous ping when an installation finishes, only to measure how many times Corral is installed and from which countries. It carries the version, the system (Linux or WSL), whether it is a new install or an update (and on an update, the version it replaced), and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Corral itself sends nothing else, ever. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `CORRAL_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) turns it off; the code that receives it is [`api/installed.js`](api/installed.js).
+For transparency: the installer sends one anonymous ping when an installation finishes, or stops because something required is missing, only to measure how many times Corral is installed, from which countries, and what keeps people out. It carries the version, the system (Linux or WSL; macOS or another when the installer stops there), whether it is a new install, an update (and the version it replaced) or a stop (and which requirements were missing, by name: herdr, R…), and whether it came from the published package or a clone; the country comes from Vercel's geolocation of the request, and the IP address is never stored. It counts installations, not people: installing again or updating counts again. Besides that, Corral asks GitHub which version is the latest, at most once a day when you open the workspace, to tell you when there is a new one; that request carries nothing about you, and `corral config update_check off` stops it. Corral sends nothing else. Working with an agent is a separate matter: whatever the agent reads (results, plots, errors) goes to its model provider, with the risks that come with using that agent; the [Security model](https://corral-term.dev/docs/security.html) explains what reaches it and how to limit it. `corral config telemetry off`, `CORRAL_NO_TELEMETRY=1` or `DO_NOT_TRACK=1` turns the ping off; the code that receives it is [`api/installed.js`](api/installed.js).
 
 ---
 

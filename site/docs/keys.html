@@ -91,6 +91,7 @@
     <tr><td>palette</td><td>Layout: notebook: the script over the console on the left, the agent over the variables on the right. It has no key; <kbd>Tab</kbd> on it in the palette gives it one</td></tr>
     <tr><td>palette</td><td>Layout: back to Corral's sizes: forgets the pane sizes you left in each layout</td></tr>
     <tr><td>palette</td><td>Layout: start with R, or start with Python (the console and draft a new layout opens)</td></tr>
+    <tr><td>palette</td><td>Layout: open a terminal tab with it, or no terminal tab (<code>corral config terminal_tab</code>)</td></tr>
     <tr><td><kbd>ctrl+b</kbd> <kbd>t</kbd></td><td>Expand the script or the console (the pane you are in; the agent or the console in the layout focused on the code); again, both</td></tr>
     <tr><td>palette</td><td>Layout: add the script editor above the console</td></tr>
     <tr><td><kbd>ctrl+b</kbd> <kbd>shift+q</kbd></td><td>Close Corral (Q for quit): closes the script, the console and the variables, and leaves the agent as a normal pane. <kbd>ctrl+b</kbd> <kbd>q</kbd>, without shift, is herdr's own detach: it leaves everything running</td></tr>
@@ -235,6 +236,18 @@
     <tr><td>Theme: Dark 2026 (VS Code's and Positron's)</td><td><code>corral config theme dark-2026</code> (<a href="themes.html">Themes</a>)</td></tr>
     <tr><td>Theme: back to herdr's</td><td><code>corral config theme herdr</code></td></tr>
     <tr><td>Language: English, Idioma: español</td><td><code>corral config language en</code> or <code>es</code></td></tr>
+    </tbody>
+    </table>
+
+    <h2>Updates and the install count</h2>
+    <table>
+    <thead><tr><th>In the palette</th><th>What it does</th></tr></thead>
+    <tbody>
+    <tr><td>Update: install the latest version of Corral</td><td><code>corral update</code>, in a popup</td></tr>
+    <tr><td>Update: tell me when there is a new version</td><td><code>corral config update_check on</code>, the default (<a href="install.html#new-versions">New versions</a>)</td></tr>
+    <tr><td>Update: don't check for new versions</td><td><code>corral config update_check off</code></td></tr>
+    <tr><td>Install count: count my installs anonymously</td><td><code>corral config telemetry on</code>, the default (<a href="install.html#install-count">Install count</a>)</td></tr>
+    <tr><td>Install count: don't count my installs</td><td><code>corral config telemetry off</code></td></tr>
     </tbody>
     </table>
 

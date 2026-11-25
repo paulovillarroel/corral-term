@@ -155,7 +155,7 @@ Optional
 
     <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there; if it isn't, add this line at the end of <code>~/.bashrc</code> (or <code>~/.zshrc</code>) and open a new terminal:</p>
     <pre><code>export PATH="$HOME/.local/bin:$PATH"</code></pre>
-    <p>When it finishes, open herdr in a project folder and press <kbd>ctrl+b</kbd> <kbd>a</kbd>. The <a href="quickstart.html">quick start</a> takes it from there.</p>
+    <p>When it finishes, go to a project folder and type <code>corral</code>: herdr opens with the workspace. The <a href="quickstart.html">quick start</a> takes it from there.</p>
 
     <h2>What changes on your machine</h2>
     <p>Before it touches a file of yours, the installer saves a copy next to it, named <code>*.before-corral-DATE</code>.</p>
@@ -170,16 +170,22 @@ Optional
     <pre><code>if (interactive()) try(source("~/.local/share/corral-term/r/corral.R"))  # Corral</code></pre>
 
     <h2 id="install-count">Anonymous install count</h2>
-    <p>When an installation finishes, the installer sends one anonymous ping to <code>corral-term.dev</code>, so the project knows how many people install Corral and from which countries. The ping says only:</p>
+    <p>When an installation finishes, or stops because something required is missing, the installer sends one anonymous ping to <code>corral-term.dev</code>, so the project knows how many people install Corral, from which countries, and what keeps people out. The ping says only:</p>
     <ul>
       <li>the version of Corral (<code>0.1.17</code>);</li>
-      <li>the system: Linux or WSL;</li>
-      <li>whether it is a new install or an update, and on an update, the version it replaced (<code>0.1.16</code>);</li>
+      <li>the system: Linux or WSL (macOS, or another system, when the installer stops because Corral doesn't run there yet);</li>
+      <li>whether it is a new install, an update or a stop; on an update, the version it replaced (<code>0.1.16</code>);</li>
+      <li>on a stop, which requirements were missing, by the names Corral gives them: <code>herdr</code>, <code>herdr_old</code>, <code>r</code>, <code>r_packages</code>, <code>folder</code>, or <code>system</code>, <code>arch</code> and <code>basics</code> when the installer stops before Corral is on the machine;</li>
       <li>whether it came from the published package or a clone.</li>
     </ul>
     <p>The country comes from the request itself, through Vercel's geolocation; the IP address is never stored. No names, paths, hostnames or anything about your data or code. The code that receives it is <a href="https://github.com/paulovillarroel/corral-term/blob/main/api/installed.js"><code>api/installed.js</code></a>. Checking (<code>--check</code>) sends nothing.</p>
     <p>To install without it, set <code>CORRAL_NO_TELEMETRY=1</code> (<code>DO_NOT_TRACK=1</code> works too):</p>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | CORRAL_NO_TELEMETRY=1 sh</code></pre>
+    <p>Once Corral is installed, <code>corral config telemetry off</code> (in the palette, Install count: don't count my installs) turns it off for good, in every shell. The environment variable only holds where it is set, and an agent's shell doesn't read your <code>.bashrc</code>.</p>
+
+    <h2 id="new-versions">New versions</h2>
+    <p>When you open the workspace, Corral asks GitHub which version is the latest, at most once a day and in the background, so the layout never waits. When there is a newer one, herdr shows a notice once: <code>corral update</code> installs it, and so does Update in the palette. The request is the one the installer makes too (GitHub's link to the latest release) and carries nothing about you.</p>
+    <p><code>corral config update_check off</code> (in the palette, Update: don't check for new versions) stops it; <code>corral update</code> still checks when you run it.</p>
 
     <h2>Check without installing</h2>
     <p>To see the checklist without changing anything, add <code>--check</code>:</p>
