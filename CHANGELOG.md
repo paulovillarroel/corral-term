@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.21
+
+`corral vars --json` follows the console in view.
 
 - `corral vars --json` without `--lang` lists the console in view, as the docs and Corral's skill say. Before, it always listed R, so an agent working with Python in view got R's objects. A live test switches between the two consoles and checks it.
 
