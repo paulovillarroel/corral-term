@@ -9,13 +9,13 @@
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Overview · Corral docs</title>
-<meta name="description" content="Corral, an agentic data science IDE for R, Python and SQL in your terminal: what it is, the pieces it is made of, and when it acts.">
+<meta name="description" content="Corral, an agentic data science IDE for R, Python and SQL in your terminal: what it is, how it controls agents, what it is made of and when it acts.">
 <link rel="canonical" href="https://corral-term.dev/docs/">
 <!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Corral">
 <meta property="og:title" content="Overview · Corral docs">
-<meta property="og:description" content="Corral, an agentic data science IDE for R, Python and SQL in your terminal: what it is, the pieces it is made of, and when it acts.">
+<meta property="og:description" content="Corral, an agentic data science IDE for R, Python and SQL in your terminal: what it is, how it controls agents, what it is made of and when it acts.">
 <meta property="og:url" content="https://corral-term.dev/docs/">
 <meta property="og:image" content="https://corral-term.dev/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -65,8 +65,20 @@
       <li><strong>A variables pane</strong> that updates after every command, and a <strong>table viewer</strong> for <code>View()</code> that pages through millions of rows with DuckDB.</li>
       <li><strong>SQL in your session.</strong> In a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query on DuckDB in the console: your data frames are its tables, and the result is a data frame (<a href="sql.html">SQL</a>).</li>
       <li><strong>Plots</strong> in Mirador, a light page in your browser that shows each new plot about 80 ms after it is drawn.</li>
-      <li><strong>Agents in the same session.</strong> Your agent (Claude Code, Codex, Gemini CLI or opencode) runs code in your console with <code>corral eval</code>, so its objects land where you can see them.</li>
+      <li><strong>Agents in the same session.</strong> Your agent (Claude Code, Codex, Gemini CLI or opencode) runs code in your console with <code>corral eval</code>, so its objects land where you can see them. By default, each request waits for your approval.</li>
+      <li><strong>Objects that outlive a crash.</strong> If R or Python crashes, the next console gets your tables, models and functions back by itself (<a href="#approval-audit-and-recovery">below</a>).</li>
     </ul>
+
+    <h2 id="approval-audit-and-recovery">Approval, audit and recovery</h2>
+    <p>An agent working on real data runs under rules you set. They live in Corral's code, not in the agent's instructions, so they apply whatever the model decides:</p>
+    <ul>
+      <li><strong>Approval before it runs.</strong> With <code>agents ask</code>, the default, every request opens a popup with the exact code, which agent asked and what it will see back. <kbd>Enter</kbd> runs it and <kbd>n</kbd> refuses it; with no answer in 5 minutes, nothing runs. Loosening these settings from an agent's pane needs your yes too.</li>
+      <li><strong>What the agent reads.</strong> Full results, your review of each one first (<code>agent_output review</code>), or only whether the code worked and the shape of the objects, without their values (<code>agent_output structure</code>).</li>
+      <li><strong>Sensitive sessions.</strong> <code>corral_sensitive()</code>, in R or Python, makes one session stricter than the rest: every request needs your approval, and results never go back in full. It lasts until that console ends, and a session brought back after a crash stays sensitive.</li>
+      <li><strong>An audit log.</strong> Every request is recorded on your machine, readable only by you: when, which agent, the code, and whether it ran, was refused or went unanswered. <code>corral audit</code> shows it; entries are kept 90 days by default.</li>
+      <li><strong>Recovery after a crash.</strong> Corral keeps a checkpoint of each console's objects. If R or Python crashes, or herdr or WSL closes, the next console in the project gets back the tables, the models, the functions you wrote and the packages you loaded, about 1.2 seconds after R crashes. Keeping the checkpoint costs the prompt a few milliseconds (<a href="consoles.html#checkpoints">Consoles</a>).</li>
+    </ul>
+    <p>Corral is not a sandbox: approved code runs with your permissions, and what the agent reads goes to its model provider. The <a href="security.html">Security model</a> says what each control covers and what it doesn't, and has a checklist for sensitive data such as health records.</p>
 
     <h2>R and Python, both first-class</h2>
     <p>Both languages get the whole workbench: the editor with completion and formatting (Air for R, Ruff for Python), the console, the variables pane, <code>View()</code>, plots in Mirador and agents running code in your session. R comes first: it is the default console, and its language server is Ark's, which knows your live objects.</p>
