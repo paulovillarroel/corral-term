@@ -447,6 +447,57 @@ fn sql_runs_in_the_session_in_r_and_python() {
     assert!(text.contains('2'), "{text}");
 }
 
+/// One SQL file gives the same results in R and in Python. R splits statements
+/// with its own expression and Python with DuckDB's parser, so the file holds what
+/// could tell them apart: a semicolon in every kind of string, escaped quotes,
+/// nested block comments, a CTE, DDL, a file written and read back, and several
+/// `-- name:` results.
+#[test]
+#[ignore]
+fn sql_gives_the_same_results_in_r_and_python() {
+    let live = Live::start("sqlsame");
+    let dir = live.dir.join("proj");
+    let file = dir.join("battery.sql");
+    std::fs::write(&file, format!(r#"-- A semicolon in every kind of string, and in a name.
+-- name: strings
+SELECT 'a;b' AS plain, 'it''s; here' AS doubled, $$c;d$$ AS dollar, $tag$e;f$tag$ AS tagged,
+       E'g\'h;i' AS escaped, "col;name" FROM (SELECT 1 AS "col;name");
+/* a block comment; with a semicolon
+   over two lines /* and one inside; */ still the comment; */
+-- name: cte
+WITH x AS (SELECT range AS n FROM range(5))
+SELECT sum(n)::BIGINT AS total, count(*)::BIGINT AS n FROM x;
+CREATE TABLE t AS SELECT range::BIGINT AS id, 'r' || range AS label FROM range(3);
+COPY t TO '{dir}/t.parquet' (FORMAT parquet);
+-- name: from_file
+SELECT * FROM '{dir}/t.parquet' ORDER BY id;
+-- name: last
+SELECT count(*)::BIGINT AS n FROM t;
+"#, dir = dir.display())).unwrap();
+    let names = ["strings", "cte", "from_file", "last"];
+    let json_of = |text: &str| text.lines().find_map(|l| l.strip_prefix("JSON:")).map(str::trim).unwrap_or("").to_string();
+
+    let (code, text) = live.eval(&["--lang", "sql", "--file", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{text}");
+    let list = names.iter().map(|n| format!("'{n}'")).collect::<Vec<_>>().join(", ");
+    let (_, text) = live.eval(&["--lang", "r", &format!("cat('JSON:', jsonlite::toJSON(mget(c({list})), dataframe = 'rows', digits = NA), '\\n')")]);
+    let in_r = json_of(&text);
+
+    let (code, text) = live.eval(&["--lang", "python", "1"]);
+    assert_eq!(code, 0, "{text}");
+    let (code, text) = live.eval(&["--lang", "sql", "--file", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{text}");
+    let rows = "(lambda v: v.to_pylist() if hasattr(v, 'to_pylist') else (v.to_dicts() if hasattr(v, 'to_dicts') else v.to_dict('records')))";
+    let (_, text) = live.eval(&["--lang", "python", &format!("import json; print('JSON:', json.dumps({{n: {rows}(globals()[n]) for n in [{list}]}}, default=str))")]);
+    let in_python = json_of(&text);
+
+    assert!(!in_r.is_empty() && !in_python.is_empty(), "R: {in_r}\nPython: {in_python}");
+    let same = Command::new("python3").args(["-I", "-c", "import json, sys; sys.exit(0 if json.loads(sys.argv[1]) == json.loads(sys.argv[2]) else 1)", &in_r, &in_python])
+        .status().unwrap().success();
+    assert!(same, "different results\nR:      {in_r}\nPython: {in_python}");
+    assert!(in_r.contains(r#""escaped":"g'h;i""#) && in_r.contains(r#""total":10"#), "{in_r}");
+}
+
 /// Python: past the timeout the code keeps running; Ctrl+C stops it and the
 /// objects stay.
 #[test]
