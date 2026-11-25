@@ -659,7 +659,17 @@ local({
       stop(tr("SQL needs the duckdb package: install.packages(\"duckdb\")",
               "SQL necesita el paquete duckdb: install.packages(\"duckdb\")"), call. = FALSE)
     }
-    sql_db <<- suppressMessages(DBI::dbConnect(duckdb::duckdb()))
+    # duckdb 2 asks in an interactive R whether to create ~/.duckdb, and the console
+    # would wait for the answer (an agent too): use it when it is there, shared with
+    # the DuckDB CLI, else a folder for this session. A place you set yourself
+    # (the duckdb.home option, DUCKDB_R_HOME) still wins.
+    drv <- list()
+    if ("shared_home" %in% names(formals(duckdb::duckdb)) &&
+        is.null(getOption("duckdb.home")) && !nzchar(Sys.getenv("DUCKDB_R_HOME"))) {
+      home <- Sys.getenv("HOME", path.expand("~"))
+      drv$shared_home <- dir.exists(file.path(home, ".duckdb"))
+    }
+    sql_db <<- suppressMessages(DBI::dbConnect(do.call(duckdb::duckdb, drv)))
     sql_ours <<- character()
     sql_compile()
     sql_db
