@@ -166,7 +166,7 @@ Optional
     <li><strong>herdr</strong>: it links Corral's plugin and adds its shortcuts at the end of <code>~/.config/herdr/config.toml</code>, between two Corral comments. If you already use one of those keys, it leaves yours and tells you; <code>corral keys --change</code> gives the Corral action another key (see <a href="keys.html">Keyboard shortcuts</a>).</li>
     <li><strong>R</strong>: one line in <code>~/.Rprofile</code> that loads Corral. It only switches on in the consoles Corral opens; your other R sessions don't change.</li>
     <li><strong>Fresh</strong>: it adds Corral's shortcuts and language servers to <code>~/.config/fresh/config.json</code> without removing your settings, and links its plugin.</li>
-    <li><strong>Agents</strong>: it links Corral's skill in <code>~/.agents/skills/corral-r</code>, the shared folder of the open Agent Skills standard, which Codex and other agents read, and in <code>~/.claude/skills/corral-r</code> if you have Claude Code. If you already have a folder of your own with that name, it leaves it alone.</li>
+    <li><strong>Agents</strong>: it links Corral's skill in <code>~/.agents/skills/corral</code>, the shared folder of the open Agent Skills standard, which Codex and other agents read, and in <code>~/.claude/skills/corral</code> if you have Claude Code. If you already have a folder of your own with that name, it leaves it alone.</li>
     </ul>
     <p>The line in <code>~/.Rprofile</code> looks like this, with the full path to your copy of Corral:</p>
     <pre><code>if (interactive()) try(source("~/.local/share/corral-term/r/corral.R"))  # Corral</code></pre>
