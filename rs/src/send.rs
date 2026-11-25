@@ -9,8 +9,8 @@ use crate::json::Value;
 use std::io::{IsTerminal, Read};
 
 fn usage() -> &'static str {
-    tr("usage: corral send [--lang r|python] [--source] [--name FILE] [--clipboard] [CODE…]",
-       "uso: corral send [--lang r|python] [--source] [--name ARCHIVO] [--clipboard] [CÓDIGO…]")
+    tr("usage: corral send [--lang r|python|sql] [--source] [--name FILE] [--clipboard] [CODE…]",
+       "uso: corral send [--lang r|python|sql] [--source] [--name ARCHIVO] [--clipboard] [CÓDIGO…]")
 }
 
 pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
@@ -33,14 +33,15 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
                 println!("{}", usage());
                 return Ok(());
             }
-            s if s.starts_with("--") => {
+            // An option has no spaces; `-- name: x` is a comment of the SQL to send.
+            s if s.starts_with("--") && !s.contains(char::is_whitespace) => {
                 let usage = usage();
                 return Err(trf!("unknown option {s}\n{usage}", "opción desconocida {s}\n{usage}"));
             }
             _ => parts.push(a.clone()),
         }
     }
-    if lang.as_deref().is_some_and(|l| l != "r" && l != "python") {
+    if lang.as_deref().is_some_and(|l| l != "r" && l != "python" && l != "sql") {
         return Err(usage().into());
     }
 
@@ -72,6 +73,12 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
     let ws = env::current_workspace();
     let panes = herdr::panes(ws.as_deref())?;
     let current = env::active_lang(ws.as_deref(), &panes);
+    // SQL runs in the console in view, R or Python, as a corral_sql() call; a whole
+    // .sql file too, as one call.
+    let (lang, text, source) = match lang.as_deref() {
+        Some("sql") => (Some(current.clone()), console::sql_call(&current, &text), false),
+        _ => (lang, text, source),
+    };
     let lang = lang.unwrap_or_else(|| current.clone());
     // The usual case: the console is there, in view and running.
     let target = herdr::labeled(&panes, &console::label(&lang)).map(|t| herdr::pane_id(t).to_string());

@@ -137,13 +137,35 @@ pub fn program() -> String {
     }
 }
 
+/// SQL as a call in the console's language: corral_sql() runs it in that session,
+/// on DuckDB (r/corral.R, py/corral_py.py). The SQL goes in a raw string, so the
+/// console shows it as written: r"(…)" in R, with dashes when the SQL holds `)"`,
+/// and r"""…""" in Python, or a plain string when the SQL holds `"""`.
+pub fn sql_call(lang: &str, sql: &str) -> String {
+    let sql = sql.trim();
+    if lang == "python" {
+        if !sql.contains("\"\"\"") {
+            // A line break before the closing quotes when the SQL ends in a quote.
+            let end = if sql.ends_with('"') { "\n" } else { "" };
+            return format!("corral_sql(r\"\"\"{sql}{end}\"\"\")");
+        }
+        return format!("corral_sql({})", crate::json::Value::from(sql).to_json());
+    }
+    let mut dashes = String::new();
+    while sql.contains(&format!("){dashes}\"")) {
+        dashes.push('-');
+    }
+    format!("corral_sql(r\"{dashes}({sql}){dashes}\")")
+}
+
 /// How a pane starts its console: `corral _console <lang>`.
 /// What the Python console runs with, on top of the project's own packages (a
 /// version the project pins wins): IPython; cloudpickle, which keeps functions
-/// defined in the session in its checkpoints; and pyarrow, so View() writes pandas
-/// tables as parquet, six times faster than CSV and with their types. The installer
-/// puts them in uv's cache, so the first Python console starts at once.
-pub const PYTHON_PACKAGES: [&str; 3] = ["ipython", "cloudpickle", "pyarrow"];
+/// defined in the session in its checkpoints; pyarrow, so View() writes pandas
+/// tables as parquet, six times faster than CSV and with their types; and duckdb,
+/// for SQL in the session (corral_sql), imported only with the first query. The
+/// installer puts them in uv's cache, so the first Python console starts at once.
+pub const PYTHON_PACKAGES: [&str; 4] = ["ipython", "cloudpickle", "pyarrow", "duckdb"];
 
 pub fn command(lang: &str) -> String {
     format!("{} _console {lang}", program())
@@ -395,4 +417,18 @@ pub fn ready(lang: &str) -> Result<String, String> {
         wait_for_prompt(&pane, 60.0, lang, None)?;
     }
     Ok(pane)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sql_goes_in_a_raw_string_of_the_console_language() {
+        assert_eq!(sql_call("r", "SELECT 1;\n"), r#"corral_sql(r"(SELECT 1;)")"#);
+        assert_eq!(sql_call("r", r#"SELECT count(")") AS "a)""#), r#"corral_sql(r"-(SELECT count(")") AS "a)")-")"#);
+        assert_eq!(sql_call("python", r#"SELECT "x""#), "corral_sql(r\"\"\"SELECT \"x\"\n\"\"\")");
+        assert_eq!(sql_call("python", "SELECT 1"), "corral_sql(r\"\"\"SELECT 1\"\"\")");
+        assert_eq!(sql_call("python", r#"SELECT '"""' AS q"#), r#"corral_sql("SELECT '\"\"\"' AS q")"#);
+    }
 }

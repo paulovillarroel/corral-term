@@ -44,8 +44,8 @@ struct Opts {
 }
 
 fn usage() -> &'static str {
-    tr("usage: corral eval [--lang r|python] [--file FILE] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CODE…]",
-       "uso: corral eval [--lang r|python] [--file ARCHIVO] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CÓDIGO…]")
+    tr("usage: corral eval [--lang r|python|sql] [--file FILE] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CODE…]",
+       "uso: corral eval [--lang r|python|sql] [--file ARCHIVO] [--timeout S] [--wait-idle S] [--max-chars N] [--check] [--replace] [CÓDIGO…]")
 }
 
 fn parse(args: &[String]) -> Opts {
@@ -77,14 +77,15 @@ fn parse(args: &[String]) -> Opts {
                 println!("{}", usage());
                 std::process::exit(0)
             }
-            s if s.starts_with("--") => {
+            // An option has no spaces; `-- name: x` is a comment of the SQL (or R) to run.
+            s if s.starts_with("--") && !s.contains(char::is_whitespace) => {
                 let usage = usage();
                 fail(2, &trf!("unknown option {s}\n{usage}", "opción desconocida {s}\n{usage}"))
             }
             _ => o.code.push(a.clone()),
         }
     }
-    if o.lang != "r" && o.lang != "python" {
+    if o.lang != "r" && o.lang != "python" && o.lang != "sql" {
         fail(2, usage());
     }
     o
@@ -308,8 +309,13 @@ fn remove_old_requests(edir: &Path) {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let o = parse(args);
+    let mut o = parse(args);
     let ws = env::current_workspace();
+    // SQL runs in the console in view, R or Python, as a corral_sql() call.
+    let sql = o.lang == "sql";
+    if sql {
+        o.lang = env::active_lang(ws.as_deref(), &herdr::panes(ws.as_deref()).unwrap_or_default());
+    }
     if o.check {
         let (pane, s) = console::session(&o.lang, ws.as_deref()).unwrap_or_else(|e| fail(1, &e));
         let panes = herdr::panes(ws.as_deref()).unwrap_or_default();
@@ -334,6 +340,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if code.trim().is_empty() {
         fail(1, tr("no code to run", "no hay código que ejecutar"));
     }
+    let code = if sql { console::sql_call(&o.lang, &code) } else { code };
     let access = access_mode();
     if access == "off" {
         audit::record(audit_entry(&o, &code, access, "-", "blocked"));
