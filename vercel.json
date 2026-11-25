@@ -18,5 +18,18 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.corral-term.dev"
+        }
+      ],
+      "destination": "https://corral-term.dev/:path*",
+      "permanent": true
+    }
   ]
 }
