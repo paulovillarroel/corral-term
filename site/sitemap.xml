@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Every page of corral-term.dev, for search engines. Add a new docs page here too. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://corral-term.dev/</loc></url>
+  <url><loc>https://corral-term.dev/docs/agents.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/architecture.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/commands.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/config.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/consoles.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/data.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/editor.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/</loc></url>
+  <url><loc>https://corral-term.dev/docs/install.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/keys.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/layouts.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/performance.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/philosophy.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/plots.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/quickstart.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/security.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/sql.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/themes.html</loc></url>
+  <url><loc>https://corral-term.dev/docs/troubleshooting.html</loc></url>
+</urlset>
