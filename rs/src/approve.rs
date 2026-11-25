@@ -50,7 +50,11 @@ pub fn run(_args: &[String]) -> Result<(), String> {
     let reviewing = r.get("kind").str() == Some("review");
     let setting = r.get("setting").clone();
     let changing = !setting.is_null();
-    let lang = if r.get("lang").str() == Some("python") { "Python" } else { "R" };
+    let lang = match r.get("lang").str() {
+        Some("python") => "Python",
+        Some("sql") => "SQL",
+        _ => "R",
+    };
     let agent = who(r.get("agent_pane").str());
     // What goes on screen: the code to approve, the result to review, or the setting.
     let mut body = if changing {

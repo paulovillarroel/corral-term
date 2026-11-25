@@ -34,7 +34,10 @@ const LOCK_NB: i32 = 4;
 
 struct Opts {
     code: Vec<String>,
+    /// The console's language, r or python: SQL runs in one of them.
     lang: String,
+    /// The request was SQL (--lang sql): the audit log and the popups say so.
+    sql: bool,
     file: Option<String>,
     timeout: f64,
     wait_idle: f64,
@@ -49,7 +52,7 @@ fn usage() -> &'static str {
 }
 
 fn parse(args: &[String]) -> Opts {
-    let mut o = Opts { code: Vec::new(), lang: "r".into(), file: None, timeout: 300.0, wait_idle: 20.0,
+    let mut o = Opts { code: Vec::new(), lang: "r".into(), sql: false, file: None, timeout: 300.0, wait_idle: 20.0,
                        max_chars: 20000, check: false, replace: false };
     let mut it = args.iter();
     let mut rest = false;
@@ -155,10 +158,25 @@ fn access_from(setting: Option<&str>) -> &'static str {
 }
 
 /// What every audit line of this request carries.
+/// The language the agent asked for: sql, or the console's.
+fn asked_lang(o: &Opts) -> &str {
+    if o.sql { "sql" } else { &o.lang }
+}
+
+/// One audit entry. `code` is what ran in the console; for SQL that is the
+/// corral_sql() call, and `console` says which console it ran in.
 fn audit_entry(o: &Opts, code: &str, access: &str, output: &str, decision: &str) -> Value {
+    let mut e = audit_fields(o, code, access, output, decision);
+    if o.sql {
+        e.set("console", o.lang.as_str().into());
+    }
+    e
+}
+
+fn audit_fields(o: &Opts, code: &str, access: &str, output: &str, decision: &str) -> Value {
     obj(vec![
         ("decision", decision.into()),
-        ("lang", o.lang.as_str().into()),
+        ("lang", asked_lang(o).into()),
         ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(Value::from).unwrap_or(Value::Null)),
         ("workspace", env::current_workspace().map(Value::from).unwrap_or(Value::Null)),
         ("access", access.into()),
@@ -312,8 +330,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let mut o = parse(args);
     let ws = env::current_workspace();
     // SQL runs in the console in view, R or Python, as a corral_sql() call.
-    let sql = o.lang == "sql";
-    if sql {
+    if o.lang == "sql" {
+        o.sql = true;
         o.lang = env::active_lang(ws.as_deref(), &herdr::panes(ws.as_deref()).unwrap_or_default());
     }
     if o.check {
@@ -340,7 +358,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if code.trim().is_empty() {
         fail(1, tr("no code to run", "no hay código que ejecutar"));
     }
-    let code = if sql { console::sql_call(&o.lang, &code) } else { code };
+    let code = if o.sql { console::sql_call(&o.lang, &code) } else { code };
     let access = access_mode();
     if access == "off" {
         audit::record(audit_entry(&o, &code, access, "-", "blocked"));
@@ -391,7 +409,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let secs = now() as u64;
     let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
     if access == "ask" {
-        match approve(&edir, &rid, &code, &o.lang, output_mode) {
+        match approve(&edir, &rid, &code, asked_lang(&o), output_mode) {
             Ok(true) => {}
             Ok(false) => {
                 audit::record(audit_entry(&o, &code, access, output_mode, "refused"));
@@ -509,7 +527,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let share = match output_mode {
         "structure" => false,
         "review" if !prints_something(&output, &code) && result.get("warnings").arr().is_empty() && new_plots == 0 => true,
-        "review" => review(&edir, &rid, &full_text, &o.lang, new_plots),
+        "review" => review(&edir, &rid, &full_text, asked_lang(&o), new_plots),
         _ => true,
     };
     let restricted = !share;
