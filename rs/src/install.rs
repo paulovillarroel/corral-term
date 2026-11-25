@@ -985,10 +985,9 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
                                    "Agrega {bold}{line}{off} al final de ~/.bashrc y abre una terminal nueva."));
         n += 1;
     }
-    println!("  {n}. {}", tr("Open herdr and go to a project folder.", "Abre herdr y entra a la carpeta de un proyecto."));
-    println!("  {}. {}", n + 1, trf!("Type {bold}corral{off} (or press {bold}ctrl+b a{off}) to open the workspace: the agent, the script, the R console and the variables.",
-                                     "Escribe {bold}corral{off} (o presiona {bold}ctrl+b a{off}) para abrir el espacio de trabajo: el agente, el script, la consola de R y las variables."));
-    println!("  {}. {}", n + 2, trf!("{bold}ctrl+b space{off} shows every shortcut.", "{bold}ctrl+b space{off} muestra todos los atajos."));
+    println!("  {n}. {}", trf!("Go to a project folder and type {bold}corral{off}: herdr opens with the agent, the script, the R console and the variables.",
+                               "Entra a la carpeta de un proyecto y escribe {bold}corral{off}: herdr se abre con el agente, el script, la consola de R y las variables."));
+    println!("  {}. {}", n + 1, trf!("{bold}ctrl+b space{off} shows every shortcut.", "{bold}ctrl+b space{off} muestra todos los atajos."));
     let copies: Vec<String> = saved[earlier..].iter().map(|b| short(Path::new(b))).collect();
     if !copies.is_empty() {
         println!("\n{}{}{}{}", s.dim, tr("Copies of the files I changed: ", "Copias de los archivos que cambié: "), copies.join(", "), s.off);

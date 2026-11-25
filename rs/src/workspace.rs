@@ -15,6 +15,10 @@ use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+extern "C" {
+    fn setsid() -> i32;
+}
+
 const CORRAL_LABELS: [&str; 5] = ["corral:script", "corral:r", "corral:python", "corral:vars", "corral:shell"];
 const SCRATCH_MAX_AGE: u64 = 2 * 86400;
 /// The draft's file name, in English and Spanish, for an R or a Python draft;
@@ -87,6 +91,48 @@ fn layout_usage() -> &'static str {
 /// variables on the right. The script and the console share their area; ctrl+b t
 /// gives it to one or the other.
 /// It starts with R, or with Python: `--lang`, else `corral config start`.
+/// `corral` typed in a terminal outside herdr: herdr opens on this folder's
+/// workspace, with the layout. A herdr server already running keeps all it has;
+/// otherwise Corral starts one the way herdr does, in a session of its own, so it
+/// outlives this terminal. The workspace is the one whose Corral layout runs in this
+/// folder, or a new one; then this terminal becomes herdr's.
+pub fn launch_herdr() -> Result<(), String> {
+    let Some(herdr_bin) = env::which("herdr") else {
+        return Err(tr("Corral runs inside herdr, and herdr isn't installed: curl -fsSL https://herdr.dev/install.sh | sh",
+                      "Corral funciona dentro de herdr, y herdr no está instalado: curl -fsSL https://herdr.dev/install.sh | sh").into());
+    };
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?.to_string_lossy().into_owned();
+    if herdr::call("workspace.list", Value::obj()).is_err() {
+        start_server(&herdr_bin)?;
+    }
+    let panes = herdr::call("pane.list", Value::obj())?;
+    let ws = match layout_workspace(panes.get("panes").arr(), &cwd) {
+        Some(ws) => ws,
+        None => {
+            let made = herdr::call("workspace.create", obj(vec![("cwd", cwd.as_str().into()), ("focus", true.into())]))?;
+            // Its own shell tab is the terminal tab, instead of a second shell.
+            if let Some(tab) = made.get("tab").get("tab_id").str() {
+                if env::config().get("terminal_tab").str() != Some("off") {
+                    let _ = herdr::cli(&["tab", "rename", tab, TERMINAL_TAB]);
+                }
+            }
+            made.get("workspace").get("workspace_id").str().map(String::from)
+                .ok_or(tr("herdr didn't create the workspace", "herdr no creó el workspace"))?
+        }
+    };
+    // The layout, as ctrl+b a opens it, in that workspace.
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let status = std::process::Command::new(exe).args(["layout", "--cwd", &cwd]).env("HERDR_WORKSPACE_ID", &ws)
+        .stdout(std::process::Stdio::null()).status().map_err(|e| e.to_string())?;
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1)); // `corral layout` said why
+    }
+    let _ = herdr::call("workspace.focus", obj(vec![("workspace_id", ws.as_str().into())]));
+    use std::os::unix::process::CommandExt;
+    let err = std::process::Command::new(&herdr_bin).exec(); // returns only if herdr didn't start
+    Err(trf!("couldn't open herdr: {err}", "no pude abrir herdr: {err}"))
+}
+
 /// The label of the shell tab that opens next to the layout.
 const TERMINAL_TAB: &str = "terminal";
 
@@ -102,6 +148,37 @@ fn terminal_tab(ws: &str, cwd: &str) {
     if !has_one {
         let _ = herdr::cli(&["tab", "create", "--workspace", ws, "--label", TERMINAL_TAB, "--cwd", cwd, "--no-focus"]);
     }
+}
+
+/// The workspace whose Corral layout runs in `cwd`: one of its panes is Corral's
+/// (labeled corral:…) and started there.
+fn layout_workspace(panes: &[Value], cwd: &str) -> Option<String> {
+    panes.iter().find(|p| p.get("label").str().is_some_and(|l| l.starts_with("corral:")) && p.get("cwd").str() == Some(cwd))
+        .and_then(|p| p.get("workspace_id").str().map(String::from))
+}
+
+/// herdr's server, started as herdr starts it: a session of its own, no terminal.
+fn start_server(herdr_bin: &Path) -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = std::process::Command::new(herdr_bin);
+    cmd.arg("server").current_dir(env::home())
+        .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    // SAFETY: setsid only changes this child's session; it allocates nothing.
+    unsafe {
+        cmd.pre_exec(|| {
+            setsid();
+            Ok(())
+        });
+    }
+    cmd.spawn().map_err(|e| trf!("couldn't start herdr: {e}", "no pude iniciar herdr: {e}"))?;
+    let until = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < until {
+        if herdr::call("workspace.list", Value::obj()).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(tr("herdr's server didn't start; run herdr to see why", "el servidor de herdr no arrancó; corre herdr para ver por qué").into())
 }
 
 pub fn layout(args: &[String]) -> Result<(), String> {

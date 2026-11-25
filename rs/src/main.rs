@@ -35,7 +35,7 @@ use std::io::IsTerminal;
 
 const HELP: &str = "corral: R and Python consoles, tables and plots next to your agents, in herdr.
 
-Usage: corral                     in a herdr pane, opens the workspace (like ctrl+b a)
+Usage: corral                     opens the workspace here: in herdr, like ctrl+b a; elsewhere, herdr with it
        corral COMMAND [OPTIONS]   (corral COMMAND --help for its options)
 
 Workspace
@@ -70,7 +70,7 @@ Setup
 
 const HELP_ES: &str = "corral: consolas de R y Python, tablas y gráficos junto a tus agentes, en herdr.
 
-Uso: corral                     en un panel de herdr, abre el espacio de trabajo (como ctrl+b a)
+Uso: corral                     abre el espacio de trabajo aquí: en herdr, como ctrl+b a; afuera, herdr con él
      corral COMANDO [OPCIONES]   (corral COMANDO --help para sus opciones)
 
 Espacio de trabajo
@@ -103,10 +103,14 @@ Instalación y ajustes
   uninstall    quita Corral de herdr, R, el editor y tus agentes
 ";
 
-/// `corral` alone, typed in a herdr pane: opens the workspace, as ctrl+b a does
-/// (it runs `corral layout`, without the JSON that prints for agents). Outside
-/// herdr, or with no terminal (an agent's command), `corral` prints the help.
+/// `corral` alone, typed in a terminal: in a herdr pane it opens the workspace, as
+/// ctrl+b a does (it runs `corral layout`, without the JSON that prints for
+/// agents); in any other terminal, herdr opens with it. With no terminal (an
+/// agent's command, a script), `corral` prints the help.
 fn launch() -> Result<(), String> {
+    if !env::in_herdr() {
+        return workspace::launch_herdr();
+    }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let status = std::process::Command::new(exe).arg("layout")
         .stdout(std::process::Stdio::null())
@@ -165,7 +169,7 @@ fn main() {
             println!("corral {} ({})", env!("CARGO_PKG_VERSION"), env::repo().display());
             Ok(())
         }
-        None if env::in_herdr() && std::io::stdin().is_terminal() && std::io::stdout().is_terminal() => launch(),
+        None if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() => launch(),
         None | Some("--help" | "-h" | "help") => {
             print!("{}", i18n::tr(HELP, HELP_ES));
             Ok(())
