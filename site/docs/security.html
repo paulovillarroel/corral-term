@@ -131,7 +131,7 @@
     <h3>Audit log</h3>
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
-    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, R or Python, the access level and output mode, whether it ran, was refused, blocked, left unanswered or never got to run (no console, busy, its turn didn't come), its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
+    <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, the language (R, Python, or SQL with the console it ran in), the access level and output mode, whether it ran, was refused, blocked, left unanswered or never got to run (no console, busy, its turn didn't come), its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
 
     <h3>Limits that are always on</h3>
     <ul>
