@@ -133,17 +133,22 @@ fn claude_dir() -> PathBuf {
     std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| env::home().join(".claude"))
 }
 
+/// Corral's skill, by the name agents see. Until 0.1.18 it was corral-r, from when
+/// Corral was R only; the installer takes the old links away (old_skill_links).
+const SKILL: &str = "corral";
+const OLD_SKILL: &str = "corral-r";
+
 /// Where Corral's skill goes. It follows the open Agent Skills standard
 /// (agentskills.io): ~/.agents/skills is the shared place (Codex, opencode and
 /// others read it), and Claude Code and Gemini CLI read their own folders.
 fn skill_places() -> Vec<(PathBuf, &'static str)> {
-    let mut places = vec![(env::home().join(".agents/skills/corral-r"),
+    let mut places = vec![(env::home().join(".agents/skills").join(SKILL),
                            tr("~/.agents/skills (Codex, opencode and other agents)", "~/.agents/skills (Codex, opencode y otros agentes)"))];
     if which("claude").is_some() || claude_dir().is_dir() {
-        places.push((claude_dir().join("skills/corral-r"), "~/.claude/skills (Claude Code)"));
+        places.push((claude_dir().join("skills").join(SKILL), "~/.claude/skills (Claude Code)"));
     }
     if which("gemini").is_some() || gemini_dir().is_dir() {
-        places.push((gemini_dir().join("skills/corral-r"), "~/.gemini/skills (Gemini CLI)"));
+        places.push((gemini_dir().join("skills").join(SKILL), "~/.gemini/skills (Gemini CLI)"));
     }
     places
 }
@@ -818,9 +823,27 @@ fn fresh(dest: &Path, done: &mut Value, saved: &mut Vec<String>) {
     let _ = link(&dest.join("fresh/plugins/corral.ts"), &fresh_dir().join("plugins/corral.ts"));
 }
 
+/// The links an older Corral made under the skill's old name, in the places agents read.
+fn old_skill_links() -> Vec<PathBuf> {
+    old_skill_links_in(&[env::home().join(".agents/skills"), claude_dir().join("skills"), gemini_dir().join("skills")])
+}
+
+/// In these folders: links (never a folder of yours) that lead to a skills/corral-r folder.
+fn old_skill_links_in(dirs: &[PathBuf]) -> Vec<PathBuf> {
+    dirs.iter().map(|dir| dir.join(OLD_SKILL))
+        .filter(|at| at.is_symlink() && std::fs::read_link(at).is_ok_and(|t| t.ends_with(Path::new("skills").join(OLD_SKILL))))
+        .collect()
+}
+
 /// Corral's skill (the Agent Skills standard) where agents look for skills.
 fn skill(dest: &Path) {
-    let source = dest.join("skills/corral-r");
+    let source = dest.join("skills").join(SKILL);
+    // The old name goes, so agents don't see Corral's skill twice.
+    for old in old_skill_links() {
+        if std::fs::remove_file(&old).is_ok() {
+            step(&trf!("{}: the skill's old name, taken away (now {SKILL})", "{}: el nombre antiguo de la skill, quitado (ahora {SKILL})", short(&old)), State::Ok);
+        }
+    }
     for (at, shown) in skill_places() {
         if at.exists() && !at.is_symlink() {
             step(&trf!("left your {} alone; Corral's skill is in {}", "dejé tu {}; la skill de Corral está en {}", short(&at), short(&source)), State::Warn);
@@ -1383,8 +1406,8 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
         }
     }
     let _ = std::fs::remove_file(fresh_dir().join("themes/corral.json"));
-    for at in [bin().join("corral"), fresh_dir().join("plugins/corral.ts"), claude_dir().join("skills/corral-r"),
-               env::home().join(".agents/skills/corral-r"), gemini_dir().join("skills/corral-r")] {
+    for at in [bin().join("corral"), fresh_dir().join("plugins/corral.ts"), claude_dir().join("skills").join(SKILL),
+               env::home().join(".agents/skills").join(SKILL), gemini_dir().join("skills").join(SKILL)].into_iter().chain(old_skill_links()) {
         if points_into(&at, &dest) && std::fs::remove_file(&at).is_ok() {
             step(&short(&at), State::Ok);
         }
@@ -1514,6 +1537,21 @@ mod tests {
         let odd = ping_body(Some(r#"0.1"}x"#), true, false);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
         assert!(!ping_body(Some(""), true, false).contains("from"));
+    }
+
+    #[test]
+    fn only_corral_s_own_links_under_the_old_skill_name_go() {
+        let base = std::env::temp_dir().join(format!("corral-skill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (a, b, c) = (base.join("agents"), base.join("claude"), base.join("gemini"));
+        for d in [&a, &b, &c] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        symlink("/somewhere/corral-term/skills/corral-r", a.join(OLD_SKILL)).unwrap(); // Corral's: goes
+        std::fs::create_dir_all(b.join(OLD_SKILL)).unwrap(); // a folder of yours: stays
+        symlink("/elsewhere/my-skill", c.join(OLD_SKILL)).unwrap(); // a link of yours: stays
+        assert_eq!(old_skill_links_in(&[a.clone(), b, c]), vec![a.join(OLD_SKILL)]);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
