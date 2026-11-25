@@ -237,6 +237,9 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     let label = a.value("--label").unwrap_or("corral");
 
     theme::apply(); // herdr's theme rules every Corral window
+    // The tab you were in: closing Corral (ctrl+b shift+q) takes you back to it.
+    let from_tab = herdr::tabs(&ws).ok()
+        .and_then(|tabs| tabs.iter().find(|t| t.get("focused") == &Value::Bool(true)).and_then(|t| t.get("tab_id").str().map(String::from)));
     let tab = herdr::cli(&["tab", "create", "--workspace", &ws, "--label", label, "--cwd", &cwd, "--focus"])?;
     let left = tab.get("root_pane").get("pane_id").str().ok_or(tr("herdr did not create the tab", "herdr no creó la pestaña"))?.to_string();
     let right = herdr::split(&left, "right", Some(ratio.unwrap_or(width)), Some(&cwd))?;
@@ -273,6 +276,9 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         state.set("agent", agent_pane.as_str().into());
     }
     state.set("active", lang.into());
+    if let Some(t) = &from_tab {
+        state.set("from_tab", t.as_str().into());
+    }
     saved.set(&key, state);
     env::write_json(&env::layout_file(), &saved);
     herdr::rename(&console_pane, &console::label(lang))?;
@@ -646,6 +652,7 @@ pub fn close(args: &[String]) -> Result<(), String> {
     layout::remember_open(ws.as_deref()); // the sizes you left, for the next layout
     let (mut saved, key) = layout_state();
     let had_state = !saved.get(&key).is_null();
+    let from_tab = saved.get(&key).get("from_tab").str().map(String::from);
     if targets.is_empty() {
         env::notify("Corral", tr("no Corral panes in this tab", "no hay paneles de Corral en esta pestaña"));
         return Ok(());
@@ -662,6 +669,14 @@ pub fn close(args: &[String]) -> Result<(), String> {
     if had_state {
         saved.remove(&key);
         env::write_json(&env::layout_file(), &saved);
+    }
+    // Back to the tab Corral was opened from, if it is still there; the agent keeps
+    // running in its own tab.
+    if let (Some(ws), Some(from)) = (&ws, &from_tab) {
+        let open = herdr::tabs(ws).map(|t| t.iter().any(|t| t.get("tab_id").str() == Some(from.as_str()))).unwrap_or(false);
+        if open && tab.as_deref() != Some(from.as_str()) {
+            let _ = herdr::cli(&["tab", "focus", from]);
+        }
     }
     let n = targets.len();
     let note = trf!("{n} panes closed; the unsaved draft was discarded", "{n} paneles cerrados; el borrador sin guardar se descartó");
