@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- `corral` opens herdr too. Typed in any terminal outside herdr, it opens herdr on the folder's workspace, with the layout, and starts herdr's server first when none is running. Typing it again in the same folder goes back to that workspace.
+- A new layout opens a tab named `terminal` next to it, with a shell in the project folder, since the layout has none of its own. There is one per workspace, and when `corral` creates the workspace, its own shell tab becomes the terminal tab. `corral config terminal_tab off`, or the palette, leaves it out.
+- Corral tells you when there is a new version. Opening the workspace asks GitHub which version is the latest, at most once a day and in the background, and herdr shows a notice once per new version. `corral config update_check off`, or the palette, stops it. Besides the install count, this is the only request Corral makes, and it carries nothing about you.
+- The install count turns off in the config: `corral config telemetry off`, or the palette, holds in every shell, where `CORRAL_NO_TELEMETRY=1` in `.bashrc` doesn't reach an agent's shell.
+- When the installation stops because something required is missing, the ping says so, with the requirements by name (herdr, R, R packages…), so the project learns what keeps people out. install.sh does the same when it stops before Corral is on the machine (macOS, another processor). `--check` still sends nothing.
+
 ## 0.1.17
 
 Corral opens with one word: type `corral` in herdr.
