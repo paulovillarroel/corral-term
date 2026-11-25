@@ -4,6 +4,8 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- Tables open about twice as fast. The table viewer and Mirador keep one DuckDB open while you use a table, instead of starting one for every query. With 10 million rows, the first screen takes 14 ms instead of 30, a page from the middle 8 ms instead of 16, and sorting every row 25 ms instead of 35. DuckDB closes 30 seconds after the last query, and with the viewer, so nothing stays open at rest.
+- DuckDB 1.5.6, the latest 1.x. DuckDB 2.0.1 starts three times slower (22 ms against 8 ms), so Corral stays on 1.x for now. Corral also runs DuckDB without `AI_AGENT`, since DuckDB 2 changes how it answers when that is set.
 - Closing Corral (ctrl+b shift+q) takes you back to the tab you opened it from, instead of leaving you on the agent. The agent keeps running in its tab.
 - `corral` opens herdr too. Typed in any terminal outside herdr, it opens herdr on the folder's workspace, with the layout, and starts herdr's server first when none is running. Typing it again in the same folder goes back to that workspace.
 - A new layout opens a tab named `terminal` next to it, with a shell in the project folder, since the layout has none of its own. There is one per workspace, and when `corral` creates the workspace, its own shell tab becomes the terminal tab. `corral config terminal_tab off`, or the palette, leaves it out.
