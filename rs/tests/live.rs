@@ -417,6 +417,10 @@ fn python_keeps_its_objects_and_takes_turns() {
 #[ignore]
 fn sql_runs_in_the_session_in_r_and_python() {
     let live = Live::start("sql");
+    // A home without ~/.duckdb, as on a new machine: R's duckdb 2 would ask there
+    // whether to create it, and the console would wait for an answer.
+    let (code, text) = live.eval(&["--lang", "r", "Sys.setenv(HOME = file.path(tempdir(), 'home')); dir.create(Sys.getenv('HOME'))"]);
+    assert_eq!(code, 0, "{text}");
     let (code, text) = live.eval(&["--lang", "r", "sales <- data.frame(region = c('North', 'South', 'North'), amount = c(10, 20, 5))"]);
     assert_eq!(code, 0, "{text}");
     let (code, text) = live.eval(&["--lang", "sql", "SELECT region, sum(amount) AS total FROM sales GROUP BY region ORDER BY region"]);
