@@ -96,7 +96,7 @@
     <tr><td><a href="https://posit-dev.github.io/air/">Air</a></td><td>Formats R code.</td></tr>
     <tr><td><a href="https://github.com/posit-dev/ark">Ark</a></td><td>The R console, Positron's R kernel. The installer brings version 0.1.252, the one Corral was tested with.</td></tr>
     <tr><td>The R package <a href="https://nanoparquet.r-lib.org">nanoparquet</a></td><td>Saves the tables <code>View()</code> opens: big tables open faster, and R's memory stays steady in a long session. It goes in your own R library, without <code>sudo</code>, already compiled on the Ubuntu and Debian releases Posit's package manager builds for, from CRAN otherwise.</td></tr>
-    <tr><td>The R packages duckdb and DBI</td><td>SQL in R runs on them (<a href="data.html#sql">SQL</a>). They go in your own R library, without <code>sudo</code>, already compiled on Ubuntu and Debian; elsewhere duckdb has to compile, which takes a while, so the checklist shows it as optional.</td></tr>
+    <tr><td>The R packages duckdb and DBI</td><td>SQL in R runs on them (<a href="sql.html">SQL</a>). They go in your own R library, without <code>sudo</code>, already compiled on Ubuntu and Debian; elsewhere duckdb has to compile, which takes a while, so the checklist shows it as optional.</td></tr>
     <tr><td>The Python console's packages</td><td>With uv, it puts IPython, cloudpickle, pyarrow and duckdb in uv's cache, so the first Python console starts at once. duckdb runs SQL, imported only with the first query. pyarrow lets <code>View()</code> save pandas tables as parquet, about six times faster than CSV and with their types.</td></tr>
     </tbody>
     </table>
@@ -236,7 +236,7 @@ Optional
 </div>
 
 <footer class="foot">
-  <span>Corral · R and Python, R first</span>
+  <span>Corral · R, Python and SQL, R first</span>
   <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
 </footer>
 

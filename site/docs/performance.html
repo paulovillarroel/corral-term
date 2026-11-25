@@ -169,7 +169,7 @@
     <p>Without either package, <code>View()</code> falls back to CSV, which is more than ten times slower to save, and then every page and sort reads the whole file again. nanoparquet has no dependencies, so it is the one to install.</p>
 
     <h2 id="sql">SQL in the session</h2>
-    <p>SQL runs on DuckDB inside the R or Python session (<a href="data.html#sql">SQL</a>), so the console starts as before: R ready in 365–392 ms with or without it. DuckDB loads with the first query.</p>
+    <p>SQL runs on DuckDB inside the R or Python session (<a href="sql.html">SQL</a>), so the console starts as before: R ready in 365–392 ms with or without it. DuckDB loads with the first query.</p>
     <ul>
     <li>November 25, 2026, the same machine, R 4.6.1 with the duckdb package 2.0.0, Python with duckdb 2.0.1, a data frame of a million rows.</li>
     <li>The first query of a session in R takes about 220 ms: loading duckdb (156 ms), connecting (20 ms) and compiling Corral's SQL functions, once. In Python, importing duckdb takes about 90 ms.</li>
@@ -273,7 +273,7 @@
 </div>
 
 <footer class="foot">
-  <span>Corral · R and Python, R first</span>
+  <span>Corral · R, Python and SQL, R first</span>
   <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
 </footer>
 

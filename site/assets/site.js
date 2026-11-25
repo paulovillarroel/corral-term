@@ -16,6 +16,7 @@ const NAV = [
     ["editor.html", "The script editor"],
     ["consoles.html", "Consoles: R and Python"],
     ["data.html", "Variables and tables"],
+    ["sql.html", "SQL"],
     ["plots.html", "Plots and Mirador"],
     ["agents.html", "Working with agents"],
     ["security.html", "Security model"],

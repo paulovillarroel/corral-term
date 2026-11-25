@@ -51,6 +51,7 @@
       <li><strong>A script editor</strong> (<a href="https://getfresh.dev">Fresh</a>) where <kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line or the selection and <kbd>F5</kbd> runs the file, with completion from your live R session and formatting with <a href="https://posit-dev.github.io/air/">Air</a>.</li>
       <li><strong>A console</strong> for R, running on <a href="https://github.com/posit-dev/ark">Ark</a>, Positron's R kernel, or plain R if you prefer. Python runs in IPython inside your project's uv environment, in the same spot, one key away.</li>
       <li><strong>A variables pane</strong> that updates after every command, and a <strong>table viewer</strong> for <code>View()</code> that pages through millions of rows with DuckDB.</li>
+      <li><strong>SQL in your session.</strong> In a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query on DuckDB in the console: your data frames are its tables, and the result is a data frame (<a href="sql.html">SQL</a>).</li>
       <li><strong>Plots</strong> in Mirador, a light page in your browser that shows each new plot about 80 ms after it is drawn.</li>
       <li><strong>Agents in the same session.</strong> Claude Code runs code in your console with <code>corral eval</code>, so its objects land where you can see them.</li>
     </ul>
@@ -59,7 +60,7 @@
     <p>Both languages get the whole workbench: the editor with completion and formatting (Air for R, Ruff for Python), the console, the variables pane, <code>View()</code>, plots in Mirador and agents running code in your session. R comes first: it is the default console, and its language server is Ark's, which knows your live objects.</p>
     <p>Projects often mix the two, so there is no language to choose up front. Running a <code>.py</code> file (or <kbd>ctrl+b</kbd> <kbd>y</kbd>) brings the Python console into the console spot; the one you are not using waits in a hidden tab and keeps its state.</p>
 
-    <p>SQL runs in either one, on DuckDB: in a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query in the console in view, your data frames are its tables, and the result is a data frame in the session (<a href="data.html#sql">SQL</a>).</p>
+    <p>SQL runs in either one, on DuckDB: in a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query in the console in view, your data frames are its tables, and the result is a data frame in the session (<a href="sql.html">SQL</a>).</p>
 
     <h2>How it is built</h2>
     <p>Corral is one small program, <code>corral</code>, written in Rust with no dependencies. It talks to the pieces that do the heavy lifting, most of them written in Rust as well:</p>
@@ -119,7 +120,7 @@
 </div>
 
 <footer class="foot">
-  <span>Corral · R and Python, R first</span>
+  <span>Corral · R, Python and SQL, R first</span>
   <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
 </footer>
 

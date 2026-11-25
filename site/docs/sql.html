@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- Paint the page's own background from the first frame (no white flash between pages);
+     the saved theme applies before the stylesheets load. -->
+<style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<title>SQL · Corral docs</title>
+<meta name="description" content="SQL in your live R or Python session, on DuckDB: run queries from .sql files, the palette or agents, query your data frames and files by name, and get every result back as a data frame.">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- Vercel Web Analytics: page views, no cookies. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Speed Insights: real visitors' load times. -->
+<script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>SQL</h1>
+    <p class="intro">SQL runs in your live session, on <a href="https://duckdb.org">DuckDB</a>, in the R or Python console you already have open. There is no database to set up and no second console: your data frames are tables under their own names, and every result comes back as a data frame you keep working with, in R or Python.</p>
+
+    <h2 id="run">Run it</h2>
+    <pre><code>-- name: by_region
+SELECT region, count(*) AS orders, sum(amount) AS total
+FROM sales
+GROUP BY region
+ORDER BY total DESC;</code></pre>
+    <ul>
+    <li>In a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs the statement under the cursor, up to its <code>;</code> and with the comments above it, and moves to the next one. <kbd>F5</kbd> runs the whole file.</li>
+    <li>Anywhere else, in an R script, a Markdown file or the terminal, select the SQL and choose <strong>Console: run the selection as SQL</strong> in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>).</li>
+    <li>In the console it is a function, the same in R and Python: <code>corral_sql("SELECT …")</code>, with <code>name =</code> to name the result.</li>
+    <li>From a terminal or a script: <code>corral send --lang sql 'SELECT …'</code>.</li>
+    </ul>
+    <p>It runs in the console in view: R by default, Python after <kbd>ctrl+b</kbd> <kbd>y</kbd>. The query and its result show in the console like any other command.</p>
+
+    <h2 id="tables">Your data frames are tables</h2>
+    <p>A name in the query that is a data frame of your session is a table: a data.frame or tibble in R, a pandas, polars or pyarrow table in Python. DuckDB reads it where it is, without a copy: a million rows take about 2 ms to make visible. A DuckDB table of the same name, one you made with <code>CREATE TABLE</code>, keeps the name.</p>
+    <pre><code>SELECT s.region, t.target, sum(s.amount) AS sold
+FROM sales s JOIN targets t USING (region)
+GROUP BY ALL;</code></pre>
+
+    <h2 id="files">Files and databases</h2>
+    <ul>
+    <li>Files are tables too: <code>FROM 'data/sales.parquet'</code>, <code>FROM 'data/*.parquet'</code>, <code>FROM read_csv('sales.csv')</code>, <code>FROM 'events.json'</code>.</li>
+    <li>Tables and views you make with <code>CREATE TABLE</code> or <code>CREATE VIEW</code> last as long as the session.</li>
+    <li><code>ATTACH 'project.duckdb' AS project</code> works on a DuckDB database file. DuckDB's extensions attach PostgreSQL, MySQL and SQLite databases the same way; DuckDB downloads an extension the first time it is used.</li>
+    </ul>
+
+    <h2 id="results">The result</h2>
+    <ul>
+    <li>The last query's result goes into <code>sql_result</code>, or into the name a <code>-- name: x</code> line gives it, so it shows in the variables pane and opens with <code>View()</code>.</li>
+    <li>Several statements run in order, and each <code>-- name:</code> keeps its own result.</li>
+    <li>The console shows the first 10 rows and a line with the row count, the time and the name: <code># 3 rows · 21 ms → by_region</code>.</li>
+    <li>In Python the result is a pandas DataFrame, or polars when that is what the session uses, or else a pyarrow Table.</li>
+    <li>A mistake shows DuckDB's own message, with the line and the place it points to.</li>
+    </ul>
+
+    <h2 id="agents">Agents</h2>
+    <p>Agents run SQL with <code>corral eval --lang sql</code>, through the same <a href="agents.html#the-agent-harness">harness</a> as R and Python: it asks before running when you set it to, the audit log records it, and the limits you set on what agents see apply. Corral's skill tells them to prefer it for joins and aggregations over big tables.</p>
+    <pre><code><span class="p">$ </span>corral eval --lang sql 'SELECT region, count(*) FROM sales GROUP BY 1'</code></pre>
+
+    <h2 id="speed">Speed</h2>
+    <p>DuckDB loads with the first query of a session, about 0.2 seconds in R and 0.1 in Python, so a session that never runs SQL doesn't pay for it and the console starts as fast as ever. After that the time is the query's own: a <code>GROUP BY</code> over a million rows takes about 20 ms, the same as DuckDB on its own. <a href="performance.html#sql">Performance</a> has the measurements.</p>
+
+    <h2 id="needs">What it needs</h2>
+    <p>In R, the duckdb and DBI packages: the installer puts them in your R library, already compiled, on Ubuntu and Debian; elsewhere duckdb has to compile for a while, so the installer shows the command instead. The Python console brings duckdb with it. R's duckdb keeps its extensions in <code>~/.duckdb</code> when that folder exists, shared with the DuckDB command line, and in a temporary folder for the session otherwise.</p>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R, Python and SQL, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>
