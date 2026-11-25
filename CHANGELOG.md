@@ -2,6 +2,10 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- SQL from an agent is recorded as SQL. The audit log keeps `lang: "sql"` and the console it ran in (`console`), and the approval and review popups say SQL; `code` is still exactly what ran in the console. Before, such a request showed as R or Python.
+
 ## 0.1.18
 
 SQL in your R or Python session, tables twice as fast, and `corral` opening herdr from any terminal.
