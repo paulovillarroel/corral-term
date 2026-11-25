@@ -410,6 +410,36 @@ fn python_keeps_its_objects_and_takes_turns() {
     assert!(started.elapsed() >= Duration::from_millis(2900), "they ran at once: {:?}", started.elapsed());
 }
 
+/// SQL runs in the console in view, R or Python, on DuckDB: the session's data
+/// frames are tables by name, the result stays as a data frame (sql_result, or the
+/// name a `-- name:` line gives it), and a mistake comes back as DuckDB's error.
+#[test]
+#[ignore]
+fn sql_runs_in_the_session_in_r_and_python() {
+    let live = Live::start("sql");
+    let (code, text) = live.eval(&["--lang", "r", "sales <- data.frame(region = c('North', 'South', 'North'), amount = c(10, 20, 5))"]);
+    assert_eq!(code, 0, "{text}");
+    let (code, text) = live.eval(&["--lang", "sql", "SELECT region, sum(amount) AS total FROM sales GROUP BY region ORDER BY region"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("North") && text.contains("15") && text.contains("sql_result"), "{text}");
+    // A comment before the query: `-- name:` names the result, and sales is still found.
+    let (code, text) = live.eval(&["--lang", "sql", "-- name: big\n-- the larger sales, and a longer comment to shift things\nSELECT * FROM sales WHERE amount > 8;\nCREATE TABLE kept AS SELECT 1 AS a"]);
+    assert_eq!(code, 0, "{text}");
+    let (_, text) = live.eval(&["--lang", "r", "cat(class(big), nrow(big), class(sql_result))"]);
+    assert!(text.contains("data.frame 2 data.frame"), "{text}");
+    let (_, text) = live.eval(&["--lang", "sql", "SELECT nope FROM nowhere"]);
+    assert!(text.contains("nowhere"), "{text}");
+
+    // Python, once its console is the one in view.
+    let (code, text) = live.eval(&["--lang", "python", "import pyarrow as pa; trips = pa.table({'city': ['Lima', 'Quito', 'Lima'], 'km': [3, 4, 5]})"]);
+    assert_eq!(code, 0, "{text}");
+    let (code, text) = live.eval(&["--lang", "sql", "-- name: by_city\nSELECT city, sum(km) AS km FROM trips GROUP BY city ORDER BY city"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("Lima") && text.contains("8") && text.contains("by_city"), "{text}");
+    let (_, text) = live.eval(&["--lang", "python", "print(by_city.num_rows if hasattr(by_city, 'num_rows') else len(by_city))"]);
+    assert!(text.contains('2'), "{text}");
+}
+
 /// Python: past the timeout the code keeps running; Ctrl+C stops it and the
 /// objects stay.
 #[test]

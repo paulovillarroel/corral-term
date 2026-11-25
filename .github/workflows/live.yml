@@ -36,7 +36,7 @@ jobs:
           use-public-rspm: true
 
       - name: R packages
-        run: Rscript -e 'install.packages(c("jsonlite", "rlang"))'
+        run: Rscript -e 'install.packages(c("jsonlite", "rlang", "duckdb", "DBI"))'
 
       - uses: astral-sh/setup-uv@v10.4.0
 
