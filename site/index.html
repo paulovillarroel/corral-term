@@ -110,11 +110,11 @@
       <div class="meta"><a href="docs/install.html#before-you-install">What you need</a><a href="docs/quickstart.html">Quick start</a><a href="docs/">Read the docs</a><a class="gh" href="https://github.com/paulovillarroel/corral-term"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>Star on GitHub</a></div>
     </div>
     <div class="hero-shot">
-      <figure class="browser hero-real">
-        <div class="browser-bar"><i></i><i></i><i></i><span>herdr · ~/projects/sales</span></div>
-        <img src="assets/shots/hero.webp" width="2200" height="1287" fetchpriority="high" alt="Corral in herdr: Claude Code on the left, after loading sales.csv and fitting a model in the R console with corral eval; on the right, sales.R in the editor, the R console with those requests, and the variables">
+      <figure class="hero-video">
+        <video src="assets/demo.mp4" poster="assets/demo-poster.webp" width="1600" height="900" autoplay muted loop playsinline preload="auto"
+               aria-label="A real Corral session: you type corral and the layout opens; Claude Code is asked to plot monthly revenue by region; Corral shows each request's exact code in an approval popup; it runs in the live R console and the variables pane fills; the plot opens in Mirador; Claude sums up what it found"></video>
       </figure>
-  <p class="shot-caption">Your agent on the left; the script, a live R console and your objects on the right, all in one session.</p>
+  <p class="shot-caption">A real session, with the waits sped up: you ask, Corral shows you the code, it runs in your live R console and the plot opens in Mirador. <a href="assets/demo.mp4">Full size</a></p>
     </div>
   </div>
 </section>
@@ -471,6 +471,15 @@
   <span><a href="docs/">Docs</a><a href="docs/install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a><a href="https://herdr.dev/tui/">herdr</a></span>
 </footer>
 
+<script>
+  // With reduced motion, the demo waits to be played.
+  try {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const v = document.querySelector(".hero-video video");
+      if (v) { v.removeAttribute("autoplay"); v.pause(); v.controls = true; }
+    }
+  } catch (e) {}
+</script>
 <script src="assets/site.js"></script>
 </body>
 </html>

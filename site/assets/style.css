@@ -369,6 +369,10 @@ kbd {
 .harness-shot { margin: 0; }
 /* The hero: a screenshot of a real session. */
 .hero-real { margin: 0; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
+/* The demo video brings its own window, so it needs no frame around it. */
+.hero-video { margin: 0; border-radius: 12px; overflow: hidden; background: #17191d; box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0, 0, 0, 0.35); }
+.hero-video video { display: block; width: 100%; height: auto; }
+.shot-caption a { color: var(--text); }
 .points { list-style: none; margin: 28px 0 0; padding: 0; }
 .points li { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .points li:first-child { border-top: 1px solid var(--line); }
