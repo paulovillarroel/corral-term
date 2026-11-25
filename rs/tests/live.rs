@@ -410,6 +410,32 @@ fn python_keeps_its_objects_and_takes_turns() {
     assert!(started.elapsed() >= Duration::from_millis(2900), "they ran at once: {:?}", started.elapsed());
 }
 
+/// Without --lang, `corral vars --json` lists the console in view, like the variables
+/// pane: Python's objects while Python shows, R's again once R does.
+#[test]
+#[ignore]
+fn vars_follow_the_console_in_view() {
+    let live = Live::start("varsview");
+    let (code, text) = live.eval(&["--lang", "r", "r_only <- 1"]);
+    assert_eq!(code, 0, "{text}");
+    let (code, text) = live.eval(&["--lang", "python", "py_only = 2"]);
+    assert_eq!(code, 0, "{text}");
+    let vars = || String::from_utf8_lossy(&live.corral(&["vars", "--json"]).stdout).to_string();
+    wait_for(Duration::from_secs(10), "Python's objects, without --lang", || {
+        let text = vars();
+        text.contains("py_only") && !text.contains("r_only")
+    });
+    let (code, text) = live.eval(&["--lang", "r", "r_again <- 3"]);
+    assert_eq!(code, 0, "{text}");
+    wait_for(Duration::from_secs(10), "R's objects again, without --lang", || {
+        let text = vars();
+        text.contains("r_again") && !text.contains("py_only")
+    });
+    // --lang still picks a console, whichever is in view.
+    let text = String::from_utf8_lossy(&live.corral(&["vars", "--json", "--lang", "python"]).stdout).to_string();
+    assert!(text.contains("py_only") && !text.contains("r_only"), "{text}");
+}
+
 /// SQL runs in the console in view, R or Python, on DuckDB: the session's data
 /// frames are tables by name, the result stays as a data frame (sql_result, or the
 /// name a `-- name:` line gives it), and a mistake comes back as DuckDB's error.
