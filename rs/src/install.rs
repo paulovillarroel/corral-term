@@ -311,7 +311,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                                     "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")]).id("r")),
         Some(r) => {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
-            let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang"];
+            let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI"];
             let has = setup::r_packages(&r, &pkgs);
             let missing: Vec<&str> = ["httpgd", "jsonlite"].into_iter().filter(|p| !has[pkgs.iter().position(|x| x == p).unwrap_or(0)]).collect();
             if missing.is_empty() {
@@ -332,6 +332,21 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                 out.push(check("installer", State::Download, "nanoparquet",
                                tr("will install it in your R library (big tables open faster in View(), R's memory stays steady)",
                                   "lo instalo en tu biblioteca de R (las tablas grandes abren más rápido en View() y la memoria de R se mantiene estable)"), &[]));
+            }
+            // SQL in R (corral_sql) runs on duckdb. Posit's package manager has it
+            // compiled for the systems it builds for (seconds); compiling it takes a
+            // long while, so elsewhere it is optional.
+            if has[5] && has[6] {
+                out.push(check("installer", State::Ok, "duckdb", tr("you already have it (SQL in R)", "ya lo tienes (SQL en R)"), &[]));
+            } else if p3m_codename().is_some() {
+                out.push(check("installer", State::Download, "duckdb",
+                               tr("will install it in your R library, already compiled (SQL in R)",
+                                  "lo instalo en tu biblioteca de R, ya compilado (SQL en R)"), &[]));
+            } else {
+                let cmd = format!("  {}", install_r(&["duckdb", "DBI"]));
+                out.push(check("optional", State::Warn, "duckdb", tr("not installed (SQL in R)", "no está instalado (SQL en R)"),
+                               &[tr("SQL in R runs on duckdb; here it has to compile, which takes a while:",
+                                    "SQL en R corre sobre duckdb; aquí hay que compilarlo, y tarda un rato:"), &cmd]));
             }
             if !has[4] {
                 let cmd = format!("  {}", install_r(&["rlang"]));
@@ -865,17 +880,17 @@ fn ask_agent(before: &Value, done: &mut Value) {
 /// the first Python console starts at once instead of downloading them then.
 fn python_ready() {
     let Some(uv) = which("uv") else { return };
-    println!("  {}", tr("… preparing the Python console (uv downloads IPython and pyarrow once)",
-                        "… preparo la consola de Python (uv descarga IPython y pyarrow una vez)"));
+    println!("  {}", tr("… preparing the Python console (uv downloads IPython, pyarrow and duckdb once)",
+                        "… preparo la consola de Python (uv descarga IPython, pyarrow y duckdb una vez)"));
     let mut c = Command::new(uv);
     c.args(["run", "--no-project"]);
     for p in crate::console::PYTHON_PACKAGES {
         c.args(["--with", p]);
     }
-    let ok = c.args(["python", "-c", "import IPython, cloudpickle, pyarrow"])
+    let ok = c.args(["python", "-c", "import IPython, cloudpickle, pyarrow, duckdb"])
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
     if ok {
-        step(tr("Python console ready: IPython, cloudpickle and pyarrow in uv's cache", "consola de Python lista: IPython, cloudpickle y pyarrow en la caché de uv"), State::Ok);
+        step(tr("Python console ready: IPython, cloudpickle, pyarrow and duckdb in uv's cache", "consola de Python lista: IPython, cloudpickle, pyarrow y duckdb en la caché de uv"), State::Ok);
     } else {
         step(tr("couldn't prepare the Python console; its first start downloads what it needs", "no pude preparar la consola de Python; su primer arranque descarga lo que necesita"), State::Warn);
     }
@@ -888,10 +903,31 @@ fn linux_codename() -> Option<String> {
     value("UBUNTU_CODENAME=").or_else(|| value("VERSION_CODENAME="))
 }
 
+/// The release Posit's package manager has R packages compiled for, if this is one.
+fn p3m_codename() -> Option<String> {
+    linux_codename().filter(|c| ["focal", "jammy", "noble", "bullseye", "bookworm"].contains(&c.as_str()))
+}
+
+/// R packages into your own R library: no sudo. On a system Posit's package manager
+/// builds for, they come already compiled; otherwise from CRAN, which needs a
+/// compiler. True when R can load them all afterwards.
+fn r_install(r: &Path, pkgs: &[&str]) -> bool {
+    let binaries = p3m_codename().map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", "));
+    let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+    let code = format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
+if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
+lib <- path.expand(lib)
+dir.create(lib, recursive = TRUE, showWarnings = FALSE)
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+pkgs <- c({list})
+install.packages(pkgs, lib = lib, repos = c({}CRAN = "{CRAN}"), quiet = TRUE)
+quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#, binaries.unwrap_or_default());
+    Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+        .status().is_ok_and(|s| s.success())
+}
+
 /// nanoparquet, which View() writes R's tables with (faster than arrow, and R's memory
-/// stays steady in a long session), into your own R library: no sudo. On a system
-/// Posit's package manager builds for, it comes already compiled; otherwise from
-/// CRAN, which needs a compiler. If it fails, View() keeps working with arrow or CSV.
+/// stays steady in a long session). If it fails, View() keeps working with arrow or CSV.
 fn r_nanoparquet() {
     let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
     if setup::r_packages(&r, &["nanoparquet"])[0] {
@@ -899,22 +935,29 @@ fn r_nanoparquet() {
     }
     println!("  {}", tr("… installing nanoparquet in your R library (seconds; a minute or two if it has to compile)",
                         "… instalo nanoparquet en tu biblioteca de R (segundos; uno o dos minutos si hay que compilarlo)"));
-    let binaries = linux_codename().filter(|c| ["focal", "jammy", "noble", "bullseye", "bookworm"].contains(&c.as_str()))
-        .map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", "));
-    let code = format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
-if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
-lib <- path.expand(lib)
-dir.create(lib, recursive = TRUE, showWarnings = FALSE)
-options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
-install.packages("nanoparquet", lib = lib, repos = c({}CRAN = "{CRAN}"), quiet = TRUE)
-quit(status = if (requireNamespace("nanoparquet", lib.loc = c(lib, .libPaths()), quietly = TRUE)) 0 else 1)"#, binaries.unwrap_or_default());
-    let ok = Command::new(&r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
-        .status().is_ok_and(|s| s.success());
+    let ok = r_install(&r, &["nanoparquet"]);
     if ok {
         step(tr("nanoparquet in your R library", "nanoparquet en tu biblioteca de R"), State::Ok);
     } else {
         step(&trf!("couldn't install nanoparquet; View() uses arrow or CSV meanwhile. To try again: {}",
                    "no pude instalar nanoparquet; mientras tanto View() usa arrow o CSV. Para reintentarlo: {}", install_r(&["nanoparquet"])), State::Warn);
+    }
+}
+
+/// duckdb and DBI, which SQL in R runs on (corral_sql), only where they come already
+/// compiled: elsewhere compiling duckdb takes a long while, and the checklist says how.
+fn r_duckdb() {
+    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+    if setup::r_packages(&r, &["duckdb", "DBI"]).iter().all(|h| *h) || p3m_codename().is_none() {
+        return;
+    }
+    println!("  {}", tr("… installing duckdb and DBI in your R library, already compiled (SQL in R)",
+                        "… instalo duckdb y DBI en tu biblioteca de R, ya compilados (SQL en R)"));
+    if r_install(&r, &["duckdb", "DBI"]) {
+        step(tr("duckdb in your R library (SQL in R)", "duckdb en tu biblioteca de R (SQL en R)"), State::Ok);
+    } else {
+        step(&trf!("couldn't install duckdb; SQL in R needs it. To try again: {}",
+                   "no pude instalar duckdb; SQL en R lo necesita. Para reintentarlo: {}", install_r(&["duckdb", "DBI"])), State::Warn);
     }
 }
 
@@ -964,6 +1007,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     }
     ark();
     r_nanoparquet();
+    r_duckdb();
     python_ready();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
