@@ -5,13 +5,14 @@
 
 use crate::env;
 use crate::i18n::{thousands, tr};
-use crate::json::Value;
+use crate::json::{obj, Value};
 use crate::mirador::{duck, sql_ident, sql_lit, table_source};
 use crate::term::{clip, out, width, Screen};
 use crate::vars::{message_screen, Colors};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
 
 const PAGE: usize = 200;
 const TOP: usize = 5; // first row of data on screen
@@ -492,7 +493,31 @@ pub(crate) fn count(sql: &str) -> Result<usize, String> {
     Ok(duck(sql)?.arr().first().and_then(|r| r.get("n").num()).unwrap_or(0.0) as usize)
 }
 
+/// `corral _table --bench FILE [COLUMN]`: times the viewer's own steps on FILE,
+/// without drawing, for bench/view.R: opening it (the first screen, DuckDB's start
+/// included), a page from the middle, and every row sorted by COLUMN, descending.
+/// Prints the seconds as JSON.
+fn bench(path: &str, column: Option<&str>) -> Result<(), String> {
+    let t = Instant::now();
+    let mut v = Viewer::open(path, "bench")?;
+    let first = t.elapsed().as_secs_f64();
+    let t = Instant::now();
+    v.fetch(v.total / 2)?;
+    let middle = t.elapsed().as_secs_f64();
+    let c = column.and_then(|n| v.cols.iter().position(|c| c.name == n)).unwrap_or(0);
+    v.sort = Some((c, true));
+    let t = Instant::now();
+    v.fetch(0)?;
+    let sort = t.elapsed().as_secs_f64();
+    println!("{}", obj(vec![("first", first.into()), ("middle", middle.into()), ("sort", sort.into())]).to_json());
+    Ok(())
+}
+
 pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
+    if args.first().map(String::as_str) == Some("--bench") {
+        let file = args.get(1).ok_or(tr("the file is missing", "falta el archivo"))?;
+        return bench(file, args.get(2).map(String::as_str));
+    }
     let file = args.first().cloned().or_else(|| std::env::var("CORRAL_FILE").ok()).ok_or(tr("the file is missing (an argument or CORRAL_FILE)", "falta el archivo (argumento o CORRAL_FILE)"))?;
     // Your own viewer, or VisiData if you prefer it (corral config table_viewer visidata).
     if let Ok(custom) = std::env::var("CORRAL_TABLE_VIEWER") {

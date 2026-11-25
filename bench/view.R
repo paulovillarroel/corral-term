@@ -5,10 +5,11 @@
 # View() does two things, and this measures both:
 #   1. R writes the table to a Parquet file: nanoparquet, else arrow, else CSV.
 #      These are the same calls as write_table() in r/corral.R.
-#   2. The viewer (corral _table, rs/src/table.rs) runs three DuckDB queries before
-#      it draws: the columns, the row count and the first page of 200 rows. Each is
-#      one `duckdb -json -c` call, as in the viewer. Then a page from the middle and
-#      a sort of every row, as you would scroll or sort.
+#   2. The viewer (corral _table, rs/src/table.rs) starts DuckDB and runs three
+#      queries before it draws: the columns, the row count and the first page of
+#      200 rows. Then a page from the middle and a sort of every row, as you would
+#      scroll or sort. `corral _table --bench` times these with the viewer's own
+#      code, one DuckDB per run, as each View() opens its own viewer.
 # Opening the herdr popup and drawing it aren't counted: a few milliseconds.
 # Times are the median of the runs, with the fastest and slowest in brackets.
 
@@ -16,6 +17,7 @@ args <- commandArgs(trailingOnly = TRUE)
 n <- if (length(args) >= 1) as.numeric(args[[1]]) else 1e7
 runs <- if (length(args) >= 2) as.integer(args[[2]]) else 10L
 if (!nzchar(Sys.which("duckdb"))) stop("duckdb isn't on the PATH")
+if (!nzchar(Sys.which("corral"))) stop("corral isn't on the PATH")
 
 # The table in the site's screenshots: sales, 7 columns.
 set.seed(1)
@@ -42,21 +44,10 @@ summary_of <- function(t, unit = secs) {
   if (length(t) == 1) return(unit(t))
   sprintf("%s [%s–%s]", unit(stats::median(t)), unit(min(t)), unit(max(t)))
 }
-duck <- function(sql) {
-  out <- system2("duckdb", c("-json", "-c", shQuote(sql)), stdout = TRUE)
-  if (!is.null(attr(out, "status"))) stop("DuckDB failed: ", sql)
-  invisible(out)
-}
-source_of <- function(f) {
-  if (grepl("\\.parquet$", f)) sprintf("read_parquet('%s')", f) else sprintf("read_csv_auto('%s')", f)
-}
-first_screen <- function(f) {
-  src <- source_of(f)
-  elapsed({
-    duck(sprintf("DESCRIBE SELECT * FROM %s", src))
-    duck(sprintf("SELECT count(*) AS n FROM %s", src))
-    duck(sprintf("SELECT * FROM %s LIMIT 200 OFFSET 0", src))
-  })
+viewer <- function(f) {
+  out <- system2("corral", c("_table", "--bench", shQuote(f), "revenue"), stdout = TRUE)
+  if (!is.null(attr(out, "status"))) stop("corral _table --bench failed on ", f)
+  jsonlite::fromJSON(paste(out, collapse = ""))
 }
 
 writers <- list(
@@ -81,9 +72,10 @@ for (w in names(writers)) {
   for (i in seq_len(k)) {
     unlink(f)
     write[i] <- elapsed(writers[[w]](f))
-    screen[i] <- first_screen(f)
-    middle[i] <- elapsed(duck(sprintf("SELECT * FROM %s LIMIT 200 OFFSET %d", source_of(f), n %/% 2)))
-    sort[i] <- elapsed(duck(sprintf("SELECT * FROM %s ORDER BY revenue DESC LIMIT 200", source_of(f))))
+    t <- viewer(f)
+    screen[i] <- t$first
+    middle[i] <- t$middle
+    sort[i] <- t$sort
   }
   version <- if (w == "csv") "utils::write.csv" else paste(w, packageVersion(w))
   cat(sprintf("%s · file %.0f MB\n", version, file.size(f) / 1e6))
