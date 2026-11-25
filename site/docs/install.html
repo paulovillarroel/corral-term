@@ -55,7 +55,7 @@
 
   <main class="content">
     <h1>Install</h1>
-    <p class="intro">Before you start you need a Linux system (or Windows with WSL), herdr, and R with two packages. The installer brings everything else, and it checks all of it before it changes anything: if something is missing, it tells you what to run and stops.</p>
+    <p class="intro">Before you start you need a Linux system (or Windows with WSL) and R. The installer brings everything else, and it checks all of it before it changes anything. If herdr or R's two packages are missing, it offers to install them; if something else is missing, it tells you what to run and stops.</p>
 
     <h2 id="windows">On Windows: set up WSL first</h2>
     <p>Corral runs on Linux. On Windows it runs inside WSL (Windows Subsystem for Linux), which gives you a real Ubuntu next to Windows, with no virtual machine to manage. You set it up once, in about ten minutes, and you don't need to know Linux for it: copy each command, paste it, and press <kbd>Enter</kbd>. On Linux, skip to <a href="#before-you-install">Before you install</a>.</p>
@@ -70,11 +70,8 @@
     <li><p><strong>Install R with <a href="https://github.com/r-lib/rig">rig</a>.</strong> rig installs R in your home folder and sets up ready-built packages, so nothing has to be compiled:</p>
     <pre><code><span class="p">$ </span>curl -LsSf https://r-lib.github.io/rig/install.sh | sh
 <span class="p">$ </span>rig add release</code></pre>
-    <p>Close Ubuntu and open it again, so it finds R. Then add the two packages Corral needs:</p>
-    <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"))'</code></pre></li>
-    <li><p><strong>Install <a href="https://herdr.dev/tui/">herdr</a></strong>, the terminal workspace Corral lives in:</p>
-    <pre><code><span class="p">$ </span>curl -fsSL https://herdr.dev/install.sh | sh</code></pre></li>
-    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first and tells you if anything is still missing, with the command to fix it.</p></li>
+    <p>Close Ubuntu and open it again, so it finds R.</p></li>
+    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first. It offers to install <a href="https://herdr.dev/tui/">herdr</a>, the terminal workspace Corral lives in, and R's two packages: press <kbd>Enter</kbd> to say yes. If anything else is missing, it tells you, with the command to fix it.</p></li>
     </ol>
 
     <h3>Working in WSL</h3>
@@ -85,14 +82,14 @@
     </ul>
 
     <h2 id="before-you-install">Before you install</h2>
-    <p>Have these ready. You don't need to check them by hand: the installer does, and shows the command for anything missing.</p>
+    <p>You don't need to check these by hand: the installer does. It offers to install herdr and R's two packages when they are missing, and shows the command for anything else.</p>
     <table>
     <thead><tr><th>You need</th><th>How to get it</th></tr></thead>
     <tbody>
     <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it: <a href="#windows">step by step</a>. The macOS version is in development.</td></tr>
     <tr><td><code>curl</code> and <code>tar</code></td><td>Ubuntu has them. If not: <code>sudo apt install curl tar</code>.</td></tr>
-    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. Install it from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>; <code>herdr update</code> updates it.</td></tr>
-    <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). Then the packages: httpgd draws the plots and jsonlite carries the variables.</td></tr>
+    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer offers to install it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it.</td></tr>
+    <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). The installer offers to put the two packages in your R library, without <code>sudo</code>: httpgd draws the plots and jsonlite carries the variables. To install them yourself:</td></tr>
     </tbody>
     </table>
     <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"), repos = "https://cloud.r-project.org")'</code></pre>
@@ -163,7 +160,7 @@ Optional
       <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ. That catches a download that arrived broken or changed on the way. Both files come from the same release, though, so someone able to publish there could replace both.</li>
       <li>The attestation covers that case. Each package carries a build provenance attestation, signed by GitHub when the project's workflow builds it, which proves the package came from that workflow and that version's code. If you have the <a href="https://cli.github.com">GitHub CLI</a> (<code>gh</code> 2.49 or later, logged in), the installer checks it and stops if it doesn't hold; without it, it says the attestation wasn't checked. You can also check it yourself:
 <pre><code><span class="p">$ </span>gh attestation verify corral-term-x86_64-linux.tar.gz --repo paulovillarroel/corral-term</code></pre></li>
-      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
+      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, and herdr, when you say yes to it, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
       <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
     </ul>
 
