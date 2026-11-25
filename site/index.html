@@ -8,8 +8,8 @@
      the saved theme applies before the stylesheets load. -->
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
-<title>Corral: the agentic Data Science IDE for R and Python</title>
-<meta name="description" content="Corral is a terminal-native data science workspace for R and Python, built for working alongside AI agents: you and your agent share one live session, the same objects, data, plots and results, under your control. Written in Rust, with DuckDB for your data, and ready in milliseconds.">
+<title>Corral: the agentic Data Science IDE for R, Python and SQL</title>
+<meta name="description" content="Corral is a terminal-native data science workspace for R, Python and SQL, built for working alongside AI agents: you and your agent share one live session, the same objects, data, plots and results, under your control. Written in Rust, with DuckDB for your data, and ready in milliseconds.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,9 +43,9 @@
 <section class="hero">
   <div class="wrap hero-grid">
     <div class="hero-text">
-      <div class="eyebrow">R and Python · in your terminal</div>
+      <div class="eyebrow">R, Python and SQL · in your terminal</div>
       <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
-      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R and Python, blazing fast with massive data, ready for professional work.</p>
+      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R, Python and SQL, blazing fast with massive data, ready for professional work.</p>
       <div class="install">
         <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
         <button class="copy" type="button">Copy</button>
@@ -175,7 +175,7 @@
   <article class="feature">
     <div class="n">02</div>
     <div><h3><a href="docs/editor.html">Write and run, like an IDE.</a></h3>
-      <p><kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line or the selection, <kbd>F5</kbd> the whole file. Completion knows the objects in your live session, Air formats R on save, and every draft is thrown away unless you save it.</p></div>
+      <p><kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line or the selection, <kbd>F5</kbd> the whole file, in R, Python and SQL files. Completion knows the objects in your live session, Air formats R on save, and every draft is thrown away unless you save it.</p></div>
     <div class="card">
       <div class="row"><span>Ctrl+R</span><span>run line or selection</span></div>
       <div class="row"><span>F5</span><span>run the file</span></div>
@@ -187,7 +187,7 @@
   <article class="feature">
     <div class="n">03</div>
     <div><h3><a href="docs/data.html">Big tables, instantly. DuckDB under the hood.</a></h3>
-      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. With ten million rows, saving the table takes about a second with nanoparquet; from then on each screen takes about 30 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
+      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. With ten million rows, saving the table takes about a second with nanoparquet; from then on each screen takes about 15 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
     <div class="card">
       <div class="row"><span>10,000,000 rows</span><span>on screen in ~1.1 s</span></div>
       <div class="row"><span>memory</span><span>~3 MB</span></div>
@@ -198,6 +198,18 @@
 
   <article class="feature">
     <div class="n">04</div>
+    <div><h3><a href="docs/sql.html">SQL, first-class. In your session.</a></h3>
+      <p>Write SQL in a <code>.sql</code> file and <kbd>Ctrl</kbd>+<kbd>R</kbd> runs it on DuckDB, in the R or Python console you already have open. Your data frames are its tables, read where they are, and the result comes back as a data frame you keep working with. No database to set up, no second console, and your agent runs SQL too, through the same harness.</p></div>
+    <div class="card">
+      <div class="row"><span>FROM sales</span><span>your data frame, no copy</span></div>
+      <div class="row"><span>-- name: monthly</span><span>the result's name</span></div>
+      <div class="row"><span>GROUP BY, 1M rows</span><span>~20 ms</span></div>
+      <div class="row"><span>corral eval --lang sql</span><span>for your agent</span></div>
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="n">05</div>
     <div><h3><a href="docs/plots.html">Plots that keep up.</a></h3>
       <p>Mirador shows each new plot about 80 ms after the command that drew it, sized to the window, with its history, SVG or PNG download and a copy button for emails and documents.</p></div>
     <div class="card">
@@ -209,9 +221,9 @@
   </article>
 
   <article class="feature">
-    <div class="n">05</div>
+    <div class="n">06</div>
     <div><h3><a href="docs/agents.html">Built for working with agents.</a></h3>
-      <p>Any agent (Claude Code, Codex, Gemini, opencode…) runs R and Python in your console with <code>corral eval</code> and gets back what it printed, plots included. Corral's skill follows the open Agent Skills standard, so agents know how to use it. Objects stay in your session, where you can see them, instead of in a throwaway script.</p></div>
+      <p>Any agent (Claude Code, Codex, Gemini, opencode…) runs R, Python and SQL in your console with <code>corral eval</code> and gets back what it printed, plots included. Corral's skill follows the open Agent Skills standard, so agents know how to use it. Objects stay in your session, where you can see them, instead of in a throwaway script.</p></div>
     <div class="card">
       <div class="row"><span>$ corral eval 'nrow(sales)'</span><span></span></div>
       <div class="row"><span>[1] 1204</span><span>20–40 ms</span></div>
@@ -220,7 +232,7 @@
   </article>
 
   <article class="feature">
-    <div class="n">06</div>
+    <div class="n">07</div>
     <div><h3><a href="docs/consoles.html#checkpoints">Close the terminal, lose nothing. Not even in a crash.</a></h3>
       <p>Corral lives in <a href="https://herdr.dev/tui/">herdr TUI</a>, herdr's terminal workspace: close the window and your consoles keep running, with the workspace exactly where you left it. If R or Python crashes, your objects come back by themselves about a second later: the tables, the models, the functions you wrote and the packages you loaded. Corral keeps them from the background, so the prompt doesn't feel it, <a href="docs/performance.html#checkpoints">measured</a> over a thousand commands.</p></div>
     <div class="card">
@@ -403,7 +415,7 @@
 </main>
 
 <footer class="foot">
-  <span>Corral · R and Python, in Rust, with DuckDB</span>
+  <span>Corral · R, Python and SQL, in Rust, with DuckDB</span>
   <span><a href="docs/">Docs</a><a href="docs/install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a><a href="https://herdr.dev/tui/">herdr</a></span>
 </footer>
 
