@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.20
+
+The anonymous install count says where Corral runs, counts uninstalls, and warns the project when a published package doesn't check out.
 
 - The anonymous install ping says a little more about where Corral runs, in coarse categories that name no person, machine or path: the agent the layout opens (`claude`, `codex`, `gemini`, `opencode`, another or none), the Ubuntu or Debian release (`noble`, `bookworm`…), herdr's version, R's major version (`4.6`) and whether uv is there. The site checks each field against a fixed list or pattern before it stores anything.
 - Uninstalling sends one ping too, with only the version, the system and whether Corral came from the package or a clone, so the project sees who leaves and after which version.
