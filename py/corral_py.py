@@ -848,6 +848,114 @@ def corral_sensitive(on: bool = True) -> None:
         print(tr("This session is no longer marked sensitive.", "Esta sesión ya no está marcada como sensible."))
 
 
+# --------------------------------------------------------------------------- SQL
+
+# SQL runs in this session, on DuckDB: your DataFrames are tables under their own
+# names, and each result is a DataFrame here (sql_result, or the name a
+# `-- name: x` line gives it). duckdb is imported with the first query, so a
+# session that never runs SQL doesn't pay for it.
+_sql = None
+_sql_ours: set[str] = set()
+_SQL_NAME = re.compile(r"^\s*--\s*name:\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
+_SQL_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_SQL_COMMENT = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+_SQL_ROWS = {"SELECT", "PRAGMA", "EXPLAIN", "CALL"}
+
+
+def _sql_connection():
+    global _sql
+    if _sql is None:
+        try:
+            import duckdb
+        except ImportError:
+            raise RuntimeError(tr("SQL needs duckdb in this Python: uv add duckdb (or pip install duckdb)",
+                                  "SQL necesita duckdb en este Python: uv add duckdb (o pip install duckdb)")) from None
+        _sql = duckdb.connect()
+    return _sql
+
+
+def _sql_register(con, ns: dict, text: str) -> None:
+    """The DataFrames a statement names become views of DuckDB's, without a copy.
+    A DuckDB table of the same name keeps its name."""
+    words = set(_SQL_WORD.findall(_SQL_COMMENT.sub(" ", text)))
+    names = [w for w in words if w in ns and (is_table(ns[w]) or type(ns[w]).__name__ == "LazyFrame")]
+    if not names:
+        return
+    own = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables()").fetchall()}
+    for w in names:
+        if w in own and w not in _sql_ours:
+            continue
+        con.register(w, ns[w])
+        _sql_ours.add(w)
+
+
+def _sql_frame(rel):
+    """A result as the DataFrames this session uses: pandas, else polars, else pyarrow."""
+    if "polars" in sys.modules and "pandas" not in sys.modules:
+        return rel.pl()
+    for kind in ("df", "pl"):
+        try:
+            return getattr(rel, kind)()
+        except (ImportError, ModuleNotFoundError):
+            continue
+    # A pyarrow Table (since duckdb 2, .arrow() is a stream of batches).
+    if hasattr(rel, "fetch_arrow_table"):
+        return rel.fetch_arrow_table()
+    t = rel.arrow()
+    return t.read_all() if hasattr(t, "read_all") else t
+
+
+def _arrow_text(t) -> str:
+    """The first rows of a pyarrow Table as an aligned table, as pandas would print them."""
+    cols = t.column_names
+    rows = [[("" if v is None else str(v)) for v in r.values()] for r in t.to_pylist()]
+    widths = [max([len(c)] + [len(r[i]) for r in rows]) for i, c in enumerate(cols)]
+    lines = ["  ".join(c.rjust(w) for c, w in zip(cols, widths))]
+    lines += ["  ".join(v.rjust(w) for v, w in zip(r, widths)) for r in rows]
+    return "\n".join(lines)
+
+
+def corral_sql(query: str, name: str | None = None):
+    """Run SQL in this session with DuckDB. Its DataFrames are tables by name; the
+    last result becomes a DataFrame (sql_result, or `name`, or `-- name: x`)."""
+    __tracebackhide__ = True
+    session = _require()
+    con = _sql_connection()
+    import duckdb
+    ns = session.shell.user_ns
+    start = time.perf_counter()
+    last = None
+    last_name = None
+    for st in duckdb.extract_statements(query):
+        text = st.query
+        if not _SQL_COMMENT.sub("", text).strip():
+            continue
+        _sql_register(con, ns, text)
+        if st.type.name in _SQL_ROWS:
+            rel = con.sql(text)
+            if rel is None:
+                continue
+            last = _sql_frame(rel)
+            m = _SQL_NAME.search(text)
+            last_name = m.group(1) if m else None
+            if last_name:
+                ns[last_name] = last
+        else:
+            con.execute(text)
+    secs = time.perf_counter() - start
+    took = f"{secs * 1000:.0f} ms" if secs < 1 else f"{secs:.1f} s"
+    if last is None:
+        print(f"# {tr('done', 'listo')} · {took}")
+        return None
+    target = name or last_name or "sql_result"
+    ns[target] = last
+    n = last.num_rows if hasattr(last, "num_rows") else len(last)
+    print(_arrow_text(last.slice(0, 10)) if hasattr(last, "num_rows") else last.head(10))
+    rows = tr("row", "fila") if n == 1 else tr("rows", "filas")
+    print(f"# {n:,} {rows} · {took} → {target}")
+    return None
+
+
 def View(x, title: str | None = None, mirador: bool = False) -> None:
     """Open a table (pandas, polars, pyarrow, a 2-D numpy array) in Corral's table viewer,
     or in Mirador, in the browser, with mirador=True."""
@@ -1060,7 +1168,8 @@ def activate(shell=None) -> None:
     except Exception:
         pass
 
-    helpers = {"View": View, "corral_sensitive": corral_sensitive, "_corral_eval": corral_eval, "_corral_show": show_plot}
+    helpers = {"View": View, "corral_sensitive": corral_sensitive, "corral_sql": corral_sql,
+               "_corral_eval": corral_eval, "_corral_show": show_plot}
     shell.user_ns.update(helpers)
     shell.user_ns_hidden.update(helpers)
     _session.snapshot()

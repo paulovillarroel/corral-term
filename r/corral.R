@@ -644,6 +644,124 @@ local({
     env$corral_view(x, title, mirador = mirador)
   }
 
+  # ---- SQL
+
+  # SQL runs in this session, on DuckDB: your data frames are tables under their
+  # own names, and each result is a data frame here (sql_result, or the name a
+  # `-- name: x` line gives it). DuckDB loads with the first query, so a session
+  # that never runs SQL doesn't pay for it.
+  sql_db <- NULL
+  sql_ours <- character()
+
+  sql_connection <- function() {
+    if (!is.null(sql_db) && DBI::dbIsValid(sql_db)) return(sql_db)
+    if (!requireNamespace("duckdb", quietly = TRUE) || !requireNamespace("DBI", quietly = TRUE)) {
+      stop(tr("SQL needs the duckdb package: install.packages(\"duckdb\")",
+              "SQL necesita el paquete duckdb: install.packages(\"duckdb\")"), call. = FALSE)
+    }
+    sql_db <<- suppressMessages(DBI::dbConnect(duckdb::duckdb()))
+    sql_ours <<- character()
+    sql_compile()
+    sql_db
+  }
+
+  # R compiles a function the second time it runs, and these take about 40 ms:
+  # compile them now, while DuckDB loads anyway, so the next query doesn't wait.
+  sql_compile <- function() {
+    home <- environment(sql_compile)
+    for (f in c("sql_register", "sql_statements", "sql_is_query", "sql_name", "sql_code")) {
+      assign(f, compiler::cmpfun(get(f, envir = home)), envir = home)
+    }
+    fast <- compiler::cmpfun(env$corral_sql)
+    env$corral_sql <- fast
+    if ("corral" %in% search()) assign("corral_sql", fast, envir = as.environment("corral"))
+  }
+
+  # The code of a statement, without its comments.
+  sql_code <- function(x) gsub("--[^\n]*", "", gsub("/\\*.*?\\*/", "", x, perl = TRUE))
+
+  # The statements in a piece of SQL: split at each ; outside strings, quoted
+  # names and comments, found with one regular expression (a loop over the
+  # characters would cost R's compiler far more than the SQL itself). Pieces with
+  # only comments are dropped.
+  sql_statements <- function(text) {
+    m <- gregexpr("'[^']*'|\"[^\"]*\"|--[^\n]*|/\\*[\\s\\S]*?\\*/|;", text, perl = TRUE)[[1]]
+    ends <- m[regmatches(text, list(m))[[1]] == ";"]
+    starts <- c(1L, ends + 1L)
+    stops <- c(ends, nchar(text))
+    out <- trimws(sub(";\\s*$", "", substring(text, starts, stops)))
+    out[nzchar(trimws(sql_code(out)))]
+  }
+
+  sql_is_query <- function(stmt) {
+    grepl("^[\\s(]*(select|with|from|values|table|describe|show|summarize|pivot|unpivot|explain|call|pragma)\\b",
+          tolower(sql_code(stmt)), perl = TRUE)
+  }
+
+  # `-- name: monthly` in a statement names its result.
+  sql_name <- function(stmt) {
+    m <- regmatches(stmt, regexec("(?m)^\\s*--\\s*name:\\s*([A-Za-z_][A-Za-z0-9_.]*)", stmt, perl = TRUE))[[1]]
+    if (length(m) == 2L) m[[2L]] else NULL
+  }
+
+  # The data frames a statement names become views of DuckDB's, without a copy.
+  # A DuckDB table of the same name keeps its name.
+  sql_register <- function(con, stmt) {
+    code <- sql_code(stmt)
+    words <- unique(regmatches(code, gregexpr("[A-Za-z_][A-Za-z0-9_]*", code))[[1]])
+    frames <- Filter(function(w) is.data.frame(get(w, envir = globalenv())), intersect(words, ls(globalenv())))
+    if (!length(frames)) return(invisible())
+    own <- DBI::dbGetQuery(con, "SELECT table_name FROM duckdb_tables()")$table_name
+    for (w in frames) {
+      if (!(w %in% sql_ours) && w %in% own) next
+      duckdb::duckdb_register(con, w, get(w, envir = globalenv()), overwrite = TRUE)
+      sql_ours <<- union(sql_ours, w)
+    }
+  }
+
+  # DuckDB's message, without the R binding's own lines.
+  sql_error <- function(e) {
+    msg <- strsplit(sub("^rapi_[a-z_]+: ", "", conditionMessage(e)), "\n")[[1]]
+    msg <- msg[!grepl("^ℹ (Context|Error type):", msg)]
+    paste(trimws(msg, "right"), collapse = "\n")
+  }
+
+  env$corral_sql <- function(query, name = NULL) {
+    con <- sql_connection()
+    statements <- sql_statements(paste(query, collapse = "\n"))
+    if (!length(statements)) return(invisible(NULL))
+    t0 <- proc.time()[["elapsed"]]
+    last <- NULL
+    last_name <- NULL
+    for (s in statements) {
+      sql_register(con, s)
+      # The error is raised out here, so the console's trace shows corral_sql() only.
+      failed <- tryCatch({
+        if (sql_is_query(s)) {
+          last <- suppressWarnings(DBI::dbGetQuery(con, s))
+          last_name <- sql_name(s)
+          if (!is.null(last_name)) assign(last_name, last, envir = globalenv())
+        } else {
+          DBI::dbExecute(con, s)
+        }
+        NULL
+      }, error = function(e) e)
+      if (!is.null(failed)) stop(sql_error(failed), call. = FALSE)
+    }
+    secs <- proc.time()[["elapsed"]] - t0
+    took <- if (secs < 1) sprintf("%.0f ms", secs * 1000) else sprintf("%.1f s", secs)
+    if (is.null(last)) {
+      cat(sprintf("# %s \u00b7 %s\n", tr("done", "listo"), took))
+      return(invisible(NULL))
+    }
+    target <- if (!is.null(name)) name else if (!is.null(last_name)) last_name else "sql_result"
+    assign(target, last, envir = globalenv())
+    print(utils::head(last, 10L))
+    rows <- if (nrow(last) == 1L) tr("row", "fila") else tr("rows", "filas")
+    cat(sprintf("# %s %s \u00b7 %s \u2192 %s\n", format(nrow(last), big.mark = ","), rows, took, target))
+    invisible(last)
+  }
+
   # ---- plots
 
   # corral.viewer: "herdr" (popup with ctrl+b f), "mirador" (browser) or "httpgd" (its own page).
