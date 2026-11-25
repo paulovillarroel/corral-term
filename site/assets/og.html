@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- The source of og.png, the image a link to corral-term.dev shows when it is pasted
+     (LinkedIn, Slack, X, WhatsApp…): 1200×630, the site's colors and fonts, the
+     landing's headline and its real screenshot. To make it again after a change:
+       chrome-headless-shell --headless --hide-scrollbars --window-size=1200,630 \
+         --virtual-time-budget=8000 --screenshot=og.png og.html
+     run in this folder, then check og.png before committing it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corral: link preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; }
+  body {
+    position: relative; width: 1200px; height: 630px; overflow: hidden;
+    background: #17191d; color: #eeeeef; font-family: "Geist", sans-serif;
+  }
+  /* A faint grid, like the site's mark, behind everything. */
+  .mark { position: absolute; left: 360px; top: -120px; width: 720px; color: #1b1d22; }
+  .text { position: absolute; left: 64px; top: 58px; width: 590px; }
+  .logo { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 31px; letter-spacing: -0.02em; }
+  .logo svg { width: 34px; height: 34px; color: #8fd3a7; flex: none; }
+  .logo .tag {
+    font: 500 14px/1 "JetBrains Mono", monospace; color: #98999b; letter-spacing: 0.12em; text-transform: uppercase;
+    border-left: 1px solid #3a3d44; padding-left: 14px;
+  }
+  h1 { margin: 58px 0 0; font-size: 68px; line-height: 0.97; font-weight: 800; letter-spacing: -0.05em; }
+  h1 em { font-style: normal; color: #8fd3a7; }
+  .langs {
+    display: flex; align-items: center; gap: 14px; margin-top: 30px;
+    font: 500 16px/1 "JetBrains Mono", monospace; letter-spacing: 0.22em; text-transform: uppercase; color: #8fd3a7;
+  }
+  .langs::before { content: ""; width: 36px; height: 1px; background: #98999b; }
+  .stats { position: absolute; left: 64px; bottom: 54px; display: flex; gap: 0; }
+  .stats div { padding: 0 34px; border-left: 1px solid #2a2c31; }
+  .stats div:first-child { padding-left: 0; border-left: 0; }
+  .stats b { display: block; font-size: 38px; font-weight: 800; letter-spacing: -0.03em; }
+  .stats span { display: block; margin-top: 8px; font: 500 14px/1.2 "JetBrains Mono", monospace; color: #98999b; }
+  .shot {
+    position: absolute; left: 690px; top: 82px; width: 840px;
+    border: 1px solid #3a3d44; background: #101010; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55);
+  }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; }
+  .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3a; }
+  .bar span { margin-left: 10px; font: 13px/1 "JetBrains Mono", monospace; color: #8c8c8c; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .url {
+    position: absolute; right: 0; bottom: 0; padding: 14px 22px 14px 24px; background: #8fd3a7; color: #0f1a13;
+    font: 700 19px/1 "JetBrains Mono", monospace; letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+  <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+  <div class="text">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+      corral <span class="tag">agentic Data Science IDE</span>
+    </div>
+    <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
+    <div class="langs">R, Python and SQL · in your terminal</div>
+  </div>
+  <div class="stats">
+    <div><b>0.45 s</b><span>launch to R ready</span></div>
+    <div><b>155 MB</b><span>memory in use</span></div>
+    <div><b>1 session</b><span>you and your agent</span></div>
+  </div>
+  <figure class="shot" style="margin: 0">
+    <div class="bar"><i></i><i></i><i></i><span>herdr · ~/projects/sales</span></div>
+    <img src="shots/hero.webp" alt="">
+  </figure>
+  <div class="url">corral-term.dev</div>
+</body>
+</html>
