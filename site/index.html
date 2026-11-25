@@ -187,10 +187,10 @@
   <article class="feature">
     <div class="n">03</div>
     <div><h3><a href="docs/data.html">Big tables, instantly. DuckDB under the hood.</a></h3>
-      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. With ten million rows, saving the table takes about a second with nanoparquet; from then on each screen takes about 15 ms, and the viewer uses about 3 MB. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
+      <p><code>View(df)</code> saves the table as Parquet, and Corral asks DuckDB only for what's on screen: a page of rows, the count, a sort, a search, a filter in R or SQL, a summary of every column. Each takes milliseconds. With ten million rows, saving the table takes about a second with nanoparquet; from then on each screen takes about 15 ms. The viewer uses about 3 MB, and DuckDB about 35 MB while the table is open; it closes when you stop. Press <kbd>m</kbd> to send the table to Mirador when you want the browser, and the variables pane keeps every object in view as you work.</p></div>
     <div class="card">
       <div class="row"><span>10,000,000 rows</span><span>on screen in ~1.1 s</span></div>
-      <div class="row"><span>memory</span><span>~3 MB</span></div>
+      <div class="row"><span>memory</span><span>viewer ~3 MB, DuckDB ~35 MB</span></div>
       <div class="row"><span>f</span><span>mpg &gt; 20 &amp; cyl == 6, or SQL</span></div>
       <div class="row"><span>i</span><span>SUMMARIZE every column</span></div>
     </div>
@@ -252,10 +252,10 @@
       <p>Want more room? Press <kbd>m</kbd> and the same table opens in Mirador, in your browser. Only when you ask: the terminal stays the default.</p>
       <div class="card">
         <div class="row"><span>10,000,000 rows, saved as Parquet</span><span>1.1 s</span></div>
-        <div class="row"><span>then the first screen</span><span>30 ms</span></div>
-        <div class="row"><span>a page from the middle</span><span>16 ms</span></div>
-        <div class="row"><span>sort every row by a column</span><span>35 ms</span></div>
-        <div class="row"><span>the viewer itself</span><span>~3 MB of memory</span></div>
+        <div class="row"><span>then the first screen</span><span>14 ms</span></div>
+        <div class="row"><span>a page from the middle</span><span>8 ms</span></div>
+        <div class="row"><span>sort every row by a column</span><span>25 ms</span></div>
+        <div class="row"><span>memory while it's open</span><span>viewer ~3 MB, DuckDB ~35 MB</span></div>
       </div>
     </div>
     <figure class="tui-shot" role="img" aria-label="Corral's table viewer showing a 10,000,000-row sales table with its column types and the keys at the bottom">
@@ -333,7 +333,7 @@
     </picture>
     <div class="section-label day-label"><span>Over a day's work</span><span>measured in long sessions</span></div>
     <div class="stats day-stats">
-      <div><b>1.1 s</b><span>10 million rows in View()</span><small>then about 15 ms each screen · viewer ~3 MB</small></div>
+      <div><b>1.1 s</b><span>10 million rows in View()</span><small>then about 15 ms each screen · DuckDB closes when idle</small></div>
       <div><b>~80 ms</b><span>From command to plot</span><small>in Mirador, sized to the window</small></div>
       <div><b>0.7 ms</b><span>Corral's work per command</span><small>keeping your objects safe · memory steady over 1,000 commands</small></div>
       <div><b>1.2 s</b><span>Back after R crashes</span><small>with your objects and packages</small></div>
