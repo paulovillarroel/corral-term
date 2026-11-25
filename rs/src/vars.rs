@@ -596,17 +596,26 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
     }
 }
 
-/// `corral vars --json`: the variables of the console's session (or the best match), for agents.
+/// `corral vars --json`: the variables of a console's session, for agents. With
+/// `--lang`, that console's; without it, the console in view, like the variables pane
+/// and `corral eval`, else the best match (pick_session).
 fn print_json(lang: Option<&str>) -> Result<(), String> {
     let ws = env::current_workspace();
-    let session = match console::session(lang.unwrap_or("r"), ws.as_deref()) {
-        Ok((_, s)) => Some(s),
-        Err(_) if lang.is_none() => console::pick_session(),
-        Err(_) => None,
+    let session = match lang {
+        Some(l) => console::session(l, ws.as_deref()).ok().map(|(_, s)| s),
+        None => {
+            let in_view = env::active_lang(ws.as_deref(), &herdr::panes(ws.as_deref()).unwrap_or_default());
+            console::session(&in_view, ws.as_deref()).ok().map(|(_, s)| s).or_else(console::pick_session)
+        }
     };
     let Some(session) = session else {
-        let name = console::lang_name(lang.unwrap_or("r"));
-        return Err(trf!("there is no {name} session with Corral", "no hay una sesión de {name} con Corral"));
+        return Err(match lang {
+            Some(l) => {
+                let name = console::lang_name(l);
+                trf!("there is no {name} session with Corral", "no hay una sesión de {name} con Corral")
+            }
+            None => tr("there is no R or Python session with Corral", "no hay una sesión de R ni de Python con Corral").to_string(),
+        });
     };
     let dir = PathBuf::from(session.get("dir").str().unwrap_or(""));
     let data = std::fs::read_to_string(dir.join("vars.json")).ok().and_then(|t| crate::json::parse(&t).ok())
