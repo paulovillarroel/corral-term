@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.18
+
+SQL in your R or Python session, tables twice as fast, and `corral` opening herdr from any terminal.
 
 - SQL, first-class. In a `.sql` file, Ctrl+R runs the statement under the cursor and F5 the whole file, on DuckDB in the console in view, R or Python. The session's data frames are tables under their own names, read without a copy, and the result is a data frame in the session: `sql_result`, or the name a `-- name: x` line gives it. Files work as tables too (`FROM 'data/*.parquet'`). Agents run SQL with `corral eval --lang sql`, through the same harness, and the palette runs any selection as SQL. DuckDB loads with the first query (about 0.2 s, once per session), so a session that never runs SQL doesn't pay for it; after that, a `GROUP BY` over a million rows takes about 20 ms. The installer puts duckdb in your R library, already compiled on Ubuntu and Debian, and in the Python console.
 - Tables open about twice as fast. The table viewer and Mirador keep one DuckDB open while you use a table, instead of starting one for every query. With 10 million rows (`bench/view.R`, median of 10 runs, before with DuckDB 1.4.4):

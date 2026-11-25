@@ -1,6 +1,6 @@
 [package]
 name = "corral"
-version = "0.1.17"
+version = "0.1.18"
 edition = "2021"
 description = "Corral: an agentic Data Science IDE in your terminal, for R and Python"
 license = "MIT"

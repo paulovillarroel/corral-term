@@ -118,10 +118,10 @@
     <p>The installer speaks English. To read it in Spanish, set <code>CORRAL_LANG=es</code>; an update already speaks the language you chose with <code>corral config language</code>.</p>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | CORRAL_LANG=es sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
-    <pre><code>Downloading Corral 0.1.17...
+    <pre><code>Downloading Corral 0.1.18...
 ✓ SHA-256 checked
 ✓ Attestation checked: built by paulovillarroel/corral-term's GitHub workflow
-Corral 0.1.17: what it needs, without changing anything.
+Corral 0.1.18: what it needs, without changing anything.
 
 Required
   ✓ System            Linux x86_64 (WSL)
@@ -130,7 +130,7 @@ Required
   ✓ R packages        httpgd and jsonlite
 
 Provided by the installer
-  ✓ corral            0.1.17, built
+  ✓ corral            0.1.18, built
   ↓ Fresh             will download 0.5.9 (script editor)
   ↓ DuckDB            will download 1.5.6 (View() tables)
   ✓ Air               0.13.0, you already have it
@@ -174,9 +174,9 @@ Optional
     <h2 id="install-count">Anonymous install count</h2>
     <p>When an installation finishes, or stops because something required is missing, the installer sends one anonymous ping to <code>corral-term.dev</code>, so the project knows how many people install Corral, from which countries, and what keeps people out. The ping says only:</p>
     <ul>
-      <li>the version of Corral (<code>0.1.17</code>);</li>
+      <li>the version of Corral (<code>0.1.18</code>);</li>
       <li>the system: Linux or WSL (macOS, or another system, when the installer stops because Corral doesn't run there yet);</li>
-      <li>whether it is a new install, an update or a stop; on an update, the version it replaced (<code>0.1.16</code>);</li>
+      <li>whether it is a new install, an update or a stop; on an update, the version it replaced (<code>0.1.17</code>);</li>
       <li>on a stop, which requirements were missing, by the names Corral gives them: <code>herdr</code>, <code>herdr_old</code>, <code>r</code>, <code>r_packages</code>, <code>folder</code>, or <code>system</code>, <code>arch</code> and <code>basics</code> when the installer stops before Corral is on the machine;</li>
       <li>whether it came from the published package or a clone.</li>
     </ul>
@@ -218,9 +218,9 @@ Optional
     <p>Your settings and sessions stay in <code>~/.config/corral</code> and <code>~/.local/state/corral</code>, in case you come back. Delete them if you won't.</p>
 
     <h2>Publish a version</h2>
-    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>, and publishes it with its SHA-256 and a build provenance attestation. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, and write its section in <code>CHANGELOG.md</code> (<code>## 0.1.18</code>): it becomes the release notes, and without it nothing is published. Run the live tests too, which check Corral with a real herdr, R and Python: in GitHub, Actions → Live tests → Run workflow, or on your machine <code>cargo test --release --test live -- --ignored --test-threads 1</code>. Then tag it with that number:</p>
-    <pre><code><span class="p">$ </span>git tag v0.1.18
-<span class="p">$ </span>git push origin v0.1.18</code></pre>
+    <p>The installer downloads the package of the latest version published on GitHub. That package includes <code>corral</code> already compiled, so nobody needs Rust. The action <code>.github/workflows/version.yml</code> builds it when you push a tag that starts with <code>v</code>, and publishes it with its SHA-256 and a build provenance attestation. First put the new number in <code>rs/Cargo.toml</code> and <code>herdr/herdr-plugin.toml</code>, so <code>corral --version</code>, the herdr plugin and Mirador say the same, and write its section in <code>CHANGELOG.md</code> (<code>## 0.1.19</code>): it becomes the release notes, and without it nothing is published. Run the live tests too, which check Corral with a real herdr, R and Python: in GitHub, Actions → Live tests → Run workflow, or on your machine <code>cargo test --release --test live -- --ignored --test-threads 1</code>. Then tag it with that number:</p>
+    <pre><code><span class="p">$ </span>git tag v0.1.19
+<span class="p">$ </span>git push origin v0.1.19</code></pre>
     <p>The binary is static (musl), so it runs on any x86_64 Linux, WSL included.</p>
     <p>The package appears on the release a few minutes after the tag, when the workflow finishes; until then the installer keeps installing the previous version. A version without its package or its SHA-256 doesn't install: the installer stops and says so, and never builds from <code>main</code> instead.</p>
     <p>When Fresh, DuckDB, Air or Ark move to a new version, its SHA-256 changes too: put it next to the version in <code>rs/src/install.rs</code> (<code>rs/src/setup.rs</code> for Ark). GitHub shows it on the release page, and this prints it:</p>
