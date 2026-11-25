@@ -93,6 +93,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         // Forget the sizes you left; the open layout goes back to Corral's.
         return layout::forget_sizes(env::current_workspace().as_deref());
     }
+    // Whether there is a newer Corral: in the background, once a day at most.
+    crate::install::check_for_update_later();
     let lang = match a.value("--lang") {
         Some(l @ ("r" | "python")) => l,
         Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),

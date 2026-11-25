@@ -282,6 +282,19 @@ title = "Corral: update to the latest version"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "update"]
 
+# Whether opening the workspace says when there is a newer version (corral config update_check).
+[[actions]]
+id = "update-check-on"
+title = "Corral: tell me when there is a new version"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "update_check", "on"]
+
+[[actions]]
+id = "update-check-off"
+title = "Corral: don't check for new versions"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "update_check", "off"]
+
 # The installer's anonymous install count (corral config telemetry).
 [[actions]]
 id = "telemetry-on"

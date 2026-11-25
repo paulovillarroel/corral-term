@@ -44,8 +44,9 @@ impl Live {
         let shell = dir.join("bin/shell");
         std::fs::write(&shell, "#!/bin/sh\nexec bash --norc --noprofile \"$@\"\n").unwrap();
         std::fs::set_permissions(&shell, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
-        // Agents run without asking: there is nobody to answer a popup here.
-        std::fs::write(dir.join("config/corral/config.json"), r#"{"agents":"on"}"#).unwrap();
+        // Agents run without asking: there is nobody to answer a popup here. No
+        // check for new versions either: tests don't ask GitHub.
+        std::fs::write(dir.join("config/corral/config.json"), r#"{"agents":"on","update_check":"off"}"#).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         std::fs::write(dir.join("Rprofile"), format!("if (interactive()) source(\"{}\")\n", repo.join("r/corral.R").display())).unwrap();
 

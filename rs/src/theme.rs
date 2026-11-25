@@ -698,7 +698,7 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("checkpoints", &["on", "off"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"]),
-                                         ("start", &["r", "python"]), ("telemetry", &["on", "off"])];
+                                         ("start", &["r", "python"]), ("telemetry", &["on", "off"]), ("update_check", &["on", "off"])];
     if let Some((_, values)) = allowed.iter().find(|(k, _)| k == key) {
         if !values.contains(&value.as_str()) {
             let mut v = values.to_vec();
@@ -717,6 +717,8 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python").to_string(), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python.").to_string())),
         ("telemetry", "on") => Some((tr("Install count: on", "Conteo de instalaciones: activado").to_string(), tr("The installer counts each install, update or stop with one anonymous ping (version, system and country).", "El instalador cuenta cada instalación, actualización o detención con un ping anónimo (versión, sistema y país).").to_string())),
         ("telemetry", "off") => Some((tr("Install count: off", "Conteo de instalaciones: desactivado").to_string(), tr("The installer sends nothing when it installs, updates or stops, in any shell.", "El instalador no envía nada al instalar, actualizar o detenerse, en ninguna shell.").to_string())),
+        ("update_check", "on") => Some((tr("New versions: Corral tells you", "Versiones nuevas: Corral te avisa").to_string(), tr("Once a day at most, opening the workspace asks GitHub for the latest version, and says so when there is a newer one.", "Como mucho una vez al día, al abrir el espacio de trabajo Corral le pregunta a GitHub cuál es la última versión, y avisa si hay una más nueva.").to_string())),
+        ("update_check", "off") => Some((tr("New versions: no check", "Versiones nuevas: sin revisar").to_string(), tr("Corral doesn't ask GitHub for new versions; corral update still checks when you run it.", "Corral no le pregunta a GitHub por versiones nuevas; corral update sigue revisando cuando lo corres.").to_string())),
         _ => None,
     });
     match meaning {

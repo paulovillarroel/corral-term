@@ -159,6 +159,7 @@ fn main() {
         Some("uninstall") => install::cmd_uninstall(rest),
         Some("update") => install::cmd_update(rest, false),
         Some("_update") => install::cmd_update(rest, true),
+        Some("_update-check") => install::cmd_update_check(),
         Some("config") => theme::cmd_config(rest),
         Some("--version" | "-V") => {
             println!("corral {} ({})", env!("CARGO_PKG_VERSION"), env::repo().display());

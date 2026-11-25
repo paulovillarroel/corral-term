@@ -15,6 +15,7 @@ use crate::toml;
 use crate::zip;
 use std::io::IsTerminal;
 use std::os::unix::fs::{symlink, PermissionsExt};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -1385,6 +1386,77 @@ pub fn cmd_uninstall(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+// ------------------------------------------------------------- new versions
+
+/// How often opening the workspace asks GitHub for the latest version.
+const CHECK_EVERY: u64 = 24 * 60 * 60;
+
+fn update_state() -> PathBuf {
+    env::state_dir().join("update-check.json")
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Whether a check is due: never asked, a day since, or a clock that went back.
+fn check_due(checked: Option<f64>, now: u64) -> bool {
+    match checked {
+        Some(c) if c >= 0.0 && (c as u64) <= now => now - c as u64 >= CHECK_EVERY,
+        _ => true,
+    }
+}
+
+/// Whether to tell about `latest`: newer than this corral, and not told yet.
+fn worth_telling(have: &str, latest: &str, told: Option<&str>) -> bool {
+    as_tuple(latest) > as_tuple(have) && told != Some(latest)
+}
+
+/// Opening the workspace calls this. At most once a day it starts `corral
+/// _update-check` on its own, which asks GitHub, so the layout never waits for the
+/// network. `corral config update_check off` stops it.
+pub fn check_for_update_later() {
+    if env::config().get("update_check").str() == Some("off") {
+        return;
+    }
+    if !check_due(env::read_json(&update_state()).get("checked").num(), now_secs()) {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+    let _ = Command::new(exe).arg("_update-check")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0)
+        .spawn();
+}
+
+/// `corral _update-check`: asks GitHub which version is the latest (the redirect
+/// install.sh follows, which sends nothing about you) and, when it is newer than
+/// this one and Corral hasn't said so yet, says so once in herdr.
+pub fn cmd_update_check() -> Result<(), String> {
+    let path = update_state();
+    let mut st = env::read_json(&path);
+    // First the time, so two layouts opened at once ask only once.
+    st.set("checked", (now_secs() as f64).into());
+    env::write_json(&path, &st);
+    let tag = latest_tag()?;
+    let latest = tag.trim_start_matches('v').to_string();
+    st.set("latest", latest.as_str().into());
+    if worth_telling(VERSION, &latest, st.get("told").str()) {
+        let shown = crate::herdr::call("notification.show", crate::json::obj(vec![
+            ("title", trf!("Corral {latest} is out", "Salió Corral {latest}").into()),
+            ("body", tr("corral update installs it, or Update in the palette (ctrl+b space).",
+                        "corral update la instala, o Actualizar en la paleta (ctrl+b space).").into()),
+        ]));
+        if shown.is_ok() {
+            st.set("told", latest.as_str().into());
+        }
+    }
+    env::write_json(&path, &st);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1399,6 +1471,20 @@ mod tests {
         let odd = ping_body(Some(r#"0.1"}x"#), true, false);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
         assert!(!ping_body(Some(""), true, false).contains("from"));
+    }
+
+    #[test]
+    fn new_versions_are_checked_once_a_day_and_told_once() {
+        assert!(check_due(None, 1_000_000));
+        assert!(!check_due(Some(1_000_000.0), 1_000_000 + 3600));
+        assert!(check_due(Some(1_000_000.0), 1_000_000 + CHECK_EVERY));
+        assert!(check_due(Some(2_000_000.0), 1_000_000)); // the clock went back
+        assert!(worth_telling("0.1.17", "0.1.18", None));
+        assert!(!worth_telling("0.1.17", "0.1.18", Some("0.1.18")));
+        assert!(worth_telling("0.1.17", "0.1.19", Some("0.1.18")));
+        assert!(!worth_telling("0.1.17", "0.1.17", None));
+        assert!(!worth_telling("0.1.18", "0.1.17", None)); // a build ahead of the latest
+        assert!(worth_telling("0.1.9", "0.1.10", None)); // not compared as text
     }
 
     #[test]
