@@ -148,6 +148,23 @@ region LIKE 'nor%'</code></pre>
     <p>Outside herdr, <code>View()</code> opens tables in Mirador when Mirador is running; <code>CORRAL_VIEW</code> changes that (see <a href="config.html#environment-variables">Configuration</a>).</p>
     <div class="note"><p>Tables from <code>View()</code> are saved in R's (or Python's) temporary folder, and they go away when you close the console.</p></div>
 
+    <h2 id="sql">SQL</h2>
+    <p>SQL runs in your session, on <a href="https://duckdb.org">DuckDB</a>, in the console in view: R or Python. There is no SQL console to open. The data frames in your session are tables under their own names, and each result comes back as a data frame you keep working with.</p>
+    <pre><code>-- name: by_region
+SELECT region, count(*) AS orders, sum(amount) AS total
+FROM sales
+GROUP BY region
+ORDER BY total DESC;</code></pre>
+    <ul>
+    <li>In a <code>.sql</code> file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs the statement under the cursor, up to its <code>;</code> and with the comments above it, and <kbd>F5</kbd> runs the whole file. Anywhere else, select the SQL and choose <strong>Console: run the selection as SQL</strong> in the palette.</li>
+    <li>The result is <code>sql_result</code>, or the name a <code>-- name: x</code> line gives it: it shows in the variables pane, opens with <code>View()</code>, and R or Python keeps working with it.</li>
+    <li><code>sales</code> is a data frame of your session: a data.frame or tibble in R, a pandas, polars or pyarrow table in Python. DuckDB reads it where it is, without a copy.</li>
+    <li>Files work as tables too: <code>FROM 'data/*.parquet'</code>, <code>FROM read_csv('sales.csv')</code>. Tables you make with <code>CREATE TABLE</code> last as long as the session, and <code>ATTACH 'project.duckdb'</code> works on a database file.</li>
+    <li>In R and Python it is a function: <code>corral_sql("SELECT …")</code>, with <code>name =</code> for the result. Agents run SQL the same way, with <code>corral eval --lang sql</code>.</li>
+    <li>In Python the result is a pandas DataFrame, or polars when that is what the session uses, or else a pyarrow Table.</li>
+    </ul>
+    <p>DuckDB loads with the first query of a session, about 0.2 seconds, so a session that never runs SQL doesn't pay for it. After that the time is the query's own: a <code>GROUP BY</code> over a million rows takes about 20 ms. SQL in R needs the duckdb package, which the installer puts in your R library already compiled on Ubuntu and Debian; the Python console brings it.</p>
+
     <h2>VisiData instead</h2>
     <p>If you prefer <a href="https://www.visidata.org">VisiData</a> and have it installed (<code>vd</code>), tables open there, with Corral's colors:</p>
     <pre><code><span class="p">$ </span>corral config table_viewer visidata</code></pre>

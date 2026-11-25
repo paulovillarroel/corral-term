@@ -107,6 +107,7 @@
     <pre><code><span class="p">$ </span>corral eval 'summary(mtcars)'
 <span class="p">$ </span>corral eval --file analysis.R
 <span class="p">$ </span>corral eval --lang python 'df.describe()'
+<span class="p">$ </span>corral eval --lang sql 'SELECT region, count(*) FROM sales GROUP BY 1'
 <span class="p">$ </span>corral vars --json</code></pre>
     <p>It also reads the code from stdin. If the console isn't there, isn't in view, or was quit, <code>corral eval</code> brings it into view or starts it first.</p>
 
@@ -139,7 +140,7 @@
     <table>
     <thead><tr><th>Option</th><th>What it does</th></tr></thead>
     <tbody>
-    <tr><td><code>--lang r|python</code></td><td>The console to use (<code>r</code> by default)</td></tr>
+    <tr><td><code>--lang r|python|sql</code></td><td>The console to use (<code>r</code> by default); <code>sql</code> runs SQL on DuckDB in the console in view, where the session's data frames are tables (<a href="data.html#sql">SQL</a>)</td></tr>
     <tr><td><code>--file FILE</code></td><td>Run a file</td></tr>
     <tr><td><code>--timeout S</code></td><td>Seconds to wait for the result (300)</td></tr>
     <tr><td><code>--wait-idle S</code></td><td>Seconds to wait for a busy console (20)</td></tr>

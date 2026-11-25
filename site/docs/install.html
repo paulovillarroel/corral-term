@@ -96,7 +96,8 @@
     <tr><td><a href="https://posit-dev.github.io/air/">Air</a></td><td>Formats R code.</td></tr>
     <tr><td><a href="https://github.com/posit-dev/ark">Ark</a></td><td>The R console, Positron's R kernel. The installer brings version 0.1.252, the one Corral was tested with.</td></tr>
     <tr><td>The R package <a href="https://nanoparquet.r-lib.org">nanoparquet</a></td><td>Saves the tables <code>View()</code> opens: big tables open faster, and R's memory stays steady in a long session. It goes in your own R library, without <code>sudo</code>, already compiled on the Ubuntu and Debian releases Posit's package manager builds for, from CRAN otherwise.</td></tr>
-    <tr><td>The Python console's packages</td><td>With uv, it puts IPython, cloudpickle and pyarrow in uv's cache, so the first Python console starts at once. pyarrow lets <code>View()</code> save pandas tables as parquet, about six times faster than CSV and with their types.</td></tr>
+    <tr><td>The R packages duckdb and DBI</td><td>SQL in R runs on them (<a href="data.html#sql">SQL</a>). They go in your own R library, without <code>sudo</code>, already compiled on Ubuntu and Debian; elsewhere duckdb has to compile, which takes a while, so the checklist shows it as optional.</td></tr>
+    <tr><td>The Python console's packages</td><td>With uv, it puts IPython, cloudpickle, pyarrow and duckdb in uv's cache, so the first Python console starts at once. duckdb runs SQL, imported only with the first query. pyarrow lets <code>View()</code> save pandas tables as parquet, about six times faster than CSV and with their types.</td></tr>
     </tbody>
     </table>
     <p>A program you already have on your <code>PATH</code> is left as it is, and Corral uses yours. When a download has a published checksum, the installer checks it. If Ark can't be downloaded, the R console is plain R until <code>corral ark --install</code> gets it.</p>
@@ -135,6 +136,7 @@ Provided by the installer
   ✓ Air               0.13.0, you already have it
   ✓ Ark               0.1.252, you already have it
   ↓ nanoparquet       will install it in your R library (big tables open faster in View(), R's memory stays steady)
+  ↓ duckdb            will install it in your R library, already compiled (SQL in R)
 
 Optional
   ✓ uv                0.10.4 (Python console)
