@@ -426,6 +426,9 @@ fn sql_runs_in_the_session_in_r_and_python() {
     let (code, text) = live.eval(&["--lang", "sql", "SELECT region, sum(amount) AS total FROM sales GROUP BY region ORDER BY region"]);
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("North") && text.contains("15") && text.contains("sql_result"), "{text}");
+    // The audit log says it was SQL, and which console it ran in.
+    let audit = String::from_utf8_lossy(&live.corral(&["audit", "--last", "1", "--json"]).stdout).to_string();
+    assert!(audit.contains(r#""lang":"sql""#) && audit.contains(r#""console":"r""#), "{audit}");
     // A comment before the query: `-- name:` names the result, and sales is still found.
     let (code, text) = live.eval(&["--lang", "sql", "-- name: big\n-- the larger sales, and a longer comment to shift things\nSELECT * FROM sales WHERE amount > 8;\nCREATE TABLE kept AS SELECT 1 AS a"]);
     assert_eq!(code, 0, "{text}");
