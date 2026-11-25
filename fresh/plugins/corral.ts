@@ -189,6 +189,7 @@ editor.on("after_insert", "corral_indent");
 // Which console a file's code goes to; null means the one showing.
 function langOf(path: string): string | null {
   if (/\.py$/i.test(path)) return "python";
+  if (/\.sql$/i.test(path)) return "sql";
   if (/\.(R|r|Rprofile)$/.test(path)) return "r";
   return null;
 }
@@ -196,6 +197,48 @@ function langOf(path: string): string | null {
 function langArgs(buf: number): string[] {
   const lang = langOf(editor.getBufferPath(buf) || "");
   return lang ? ["--lang", lang] : [];
+}
+
+// SQL: the lines where a statement ends, at a ; outside strings, quoted names and
+// comments (a string can span lines).
+function sqlEnds(lines: string[]): number[] {
+  const ends: number[] = [];
+  let quote: string | null = null;
+  let block = false;
+  for (let n = 0; n < lines.length; n++) {
+    const l = lines[n];
+    let ended = false;
+    for (let i = 0; i < l.length; i++) {
+      const c = l[i];
+      if (block) {
+        if (c === "*" && l[i + 1] === "/") { block = false; i++; }
+        continue;
+      }
+      if (quote) {
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === "'" || c === '"') { quote = c; continue; }
+      if (c === "-" && l[i + 1] === "-") break;
+      if (c === "/" && l[i + 1] === "*") { block = true; i++; continue; }
+      if (c === ";") ended = true;
+    }
+    if (ended) ends.push(n);
+  }
+  return ends;
+}
+
+// [first, last] lines of the SQL statement at `line`: from the line after the
+// previous ; to the line with its own, comments above it included (-- name: x).
+function sqlStatementAt(lines: string[], line: number): [number, number] {
+  const ends = sqlEnds(lines);
+  const before = ends.filter((e) => e < line);
+  let first = before.length ? before[before.length - 1] + 1 : 0;
+  const after = ends.find((e) => e >= line);
+  let last = after === undefined ? lines.length - 1 : after;
+  while (first < last && lines[first].trim() === "") first++;
+  while (last > first && lines[last].trim() === "") last--;
+  return [first, last];
 }
 
 // Python: brackets and triple-quoted strings carried from one line to the next.
@@ -282,6 +325,9 @@ registerHandler("corral_run_line", async function () {
 
     const lang = langArgs(buf);
     const python = lang[1] === "python";
+    const sql = lang[1] === "sql";
+    // In SQL a comment above a statement belongs to it (-- name: x): only empty lines are skipped.
+    const blank = sql ? (l: string) => l.trim() === "" : isBlank;
     if (cur.selection && cur.selection.end > cur.selection.start) {
       let text = await editor.getBufferText(buf, cur.selection.start, cur.selection.end);
       if (python) text = dedent(text);
@@ -294,15 +340,15 @@ registerHandler("corral_run_line", async function () {
     const lines = (await editor.getBufferText(buf)).split("\n");
     let line = cur.line;
     // On a blank or comment line, run the next statement (like Positron).
-    while (line < lines.length - 1 && isBlank(lines[line])) line++;
-    if (isBlank(lines[line])) return;
+    while (line < lines.length - 1 && blank(lines[line])) line++;
+    if (blank(lines[line])) return;
 
-    const [first, last] = python ? pyStatementAt(lines, line) : statementAt(lines, line);
+    const [first, last] = sql ? sqlStatementAt(lines, line) : python ? pyStatementAt(lines, line) : statementAt(lines, line);
     const text = lines.slice(first, last + 1).join("\n");
     const ok = await runCorral(["send", ...lang, "--", text]);
 
     let next = last + 1;
-    while (next < lines.length && isBlank(lines[next])) next++;
+    while (next < lines.length && blank(lines[next])) next++;
     if (next >= lines.length) next = Math.min(last + 1, lines.length - 1);
     const pos = await editor.getLineStartPosition(next);
     if (pos !== null) editor.setBufferCursor(buf, pos);
@@ -322,7 +368,10 @@ registerHandler("corral_run_file", async function () {
     const text = await editor.getBufferText(buf);
     if (!text.trim()) return;
     const path = editor.getBufferPath(buf) || "script";
-    if (await runCorral(["send", ...langArgs(buf), "--source", "--name", path, "--", text]))
+    const lang = langArgs(buf);
+    // A .sql file goes as one corral_sql() call; R and Python files are run as a copy.
+    const how = lang[1] === "sql" ? [] : ["--source", "--name", path];
+    if (await runCorral(["send", ...lang, ...how, "--", text]))
       editor.setStatus(tr("Corral: whole file sent to the console", "Corral: archivo completo enviado a la consola"));
   } catch (e) {
     editor.setStatus("Corral: " + String(e));
@@ -425,14 +474,14 @@ registerHandler("corral_save", async function () {
   }
 });
 
-// <- and |> are R's; in a Python file the keys do nothing.
+// <- and |> are R's; in a Python or SQL file the keys do nothing.
 registerHandler("corral_insert_assign", async function () {
-  if (langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") === "python") return;
+  if (["python", "sql"].includes(langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") || "")) return;
   editor.insertAtCursor(" <- ");
 });
 
 registerHandler("corral_insert_pipe", async function () {
-  if (langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") === "python") return;
+  if (["python", "sql"].includes(langOf(editor.getBufferPath(editor.getActiveBufferId()) || "") || "")) return;
   editor.insertAtCursor(" |> ");
 });
 
