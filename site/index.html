@@ -314,14 +314,14 @@
 
   <section class="compare">
     <h2>Measured, not promised.</h2>
-    <p>Same machine, same project, R in WSL, two runs each. Positron is a capable IDE; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. <a href="docs/performance.html">How it was measured →</a></p>
+    <p>Same machine, same project, R in WSL. Positron and Cursor are capable editors; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. <a href="docs/performance.html">How it was measured →</a></p>
     <picture data-themed>
-      <source srcset="assets/charts/vs-positron-dark.svg" media="all">
-      <img src="assets/charts/vs-positron-light.svg" width="760" alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB; 0.36 % idle CPU vs 13.9 %">
+      <source srcset="assets/charts/vs-editors-dark.svg" media="all">
+      <img src="assets/charts/vs-editors-light.svg" width="760" alt="Corral, Positron and Cursor: ready in 0.45 s, 13.3 s and 12.9 s; 155 MB, 3.2 GB and 2.5 GB of memory; 0.36 %, 13.9 % and 8.9 % of one core at rest">
     </picture>
     <div class="section-label day-label"><span>Over a day's work</span><span>measured in long sessions</span></div>
     <div class="stats day-stats">
-      <div><b>1.1 s</b><span>10 million rows in View()</span><small>then 30 ms each screen · viewer ~3 MB</small></div>
+      <div><b>1.1 s</b><span>10 million rows in View()</span><small>then about 15 ms each screen · viewer ~3 MB</small></div>
       <div><b>~80 ms</b><span>From command to plot</span><small>in Mirador, sized to the window</small></div>
       <div><b>0.7 ms</b><span>Corral's work per command</span><small>keeping your objects safe · memory steady over 1,000 commands</small></div>
       <div><b>1.2 s</b><span>Back after R crashes</span><small>with your objects and packages</small></div>

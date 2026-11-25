@@ -55,8 +55,8 @@ In a project folder, type `corral`: herdr opens with your agent, the script, the
 ## Performance
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/assets/charts/vs-positron-dark.svg">
-  <img alt="Corral vs Positron: R ready in 0.45 s vs 13.3 s; 155 MB vs 3.2 GB of memory; 0.36 % vs 13.9 % idle CPU" src="site/assets/charts/vs-positron-light.svg" width="760">
+  <source media="(prefers-color-scheme: dark)" srcset="site/assets/charts/vs-editors-dark.svg">
+  <img alt="Corral, Positron and Cursor: ready in 0.45 s, 13.3 s and 12.9 s; 155 MB, 3.2 GB and 2.5 GB of memory; 0.36 %, 13.9 % and 8.9 % of one core at rest" src="site/assets/charts/vs-editors-light.svg" width="760">
 </picture>
 
 Same machine and project, R in WSL, two runs each, against Positron as a full desktop IDE. <kbd>Ctrl</kbd>+<kbd>R</kbd> to the result in your console takes about 5 ms. Method and the numbers for each piece: [Performance](https://corral-term.dev/docs/performance.html).
