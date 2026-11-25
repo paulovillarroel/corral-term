@@ -56,25 +56,29 @@ stop() {
     for line in "$@"; do printf '  %s\n' "$line" >&2; done
     printf '\n%s\n' "$(t 'Nothing was changed.' 'No cambié nada.')" >&2
     if [ "$counted" = 1 ]; then
-        printf '\n%s\n' "$(t 'Counted this stop anonymously (the system and what was missing). CORRAL_NO_TELEMETRY=1 turns it off.' \
-                              'Conté esta detención de forma anónima (el sistema y qué faltó). CORRAL_NO_TELEMETRY=1 lo desactiva.')" >&2
+        printf '\n%s\n' "$(t 'Counted this stop anonymously (the system, the version and why it stopped). CORRAL_NO_TELEMETRY=1 turns it off.' \
+                              'Conté esta detención de forma anónima (el sistema, la versión y por qué se detuvo). CORRAL_NO_TELEMETRY=1 lo desactiva.')" >&2
     fi
     exit 1
 }
 
-# count_stop SYSTEM MISSING: one anonymous ping when the installer stops before
+# count_stop SYSTEM MISSING [VERSION]: one anonymous ping when the installer stops before
 # Corral is on this machine (a Mac, another system or processor, no tar), so the
 # project learns who it leaves out: the system and what was missing, nothing else
-# (api/installed.js). CORRAL_NO_TELEMETRY=1, DO_NOT_TRACK=1 or `corral config
-# telemetry off` turn it off, and --check never sends it. 5 seconds at most.
+# (api/installed.js). Also when a download doesn't check out (sha256, sha256_missing,
+# attestation), with VERSION: that one is an alarm about a published package.
+# CORRAL_NO_TELEMETRY=1, DO_NOT_TRACK=1 or `corral config telemetry off` turn it
+# off, and --check never sends it. 5 seconds at most.
 counted=0
 check_only=0
 count_stop() {
     case "${CORRAL_NO_TELEMETRY:-0}${DO_NOT_TRACK:-0}" in 00 | 0 | "") ;; *) return 0 ;; esac
     if [ "$check_only" = 1 ] || ! command -v curl >/dev/null 2>&1; then return 0; fi
     if [ -f "$config" ] && grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"' "$config" 2>/dev/null; then return 0; fi
+    v=${3:-unknown}
+    case "$v" in "" | *[!0-9.]*) v=unknown ;; esac
     if curl -fsS -m 5 -X POST -H 'Content-Type: application/json' \
-        --data "{\"version\":\"unknown\",\"system\":\"$1\",\"kind\":\"stopped\",\"source\":\"release\",\"missing\":[\"$2\"]}" \
+        --data "{\"version\":\"$v\",\"system\":\"$1\",\"kind\":\"stopped\",\"source\":\"release\",\"missing\":[\"$2\"]}" \
         "${CORRAL_TELEMETRY_URL:-https://corral-term.dev/api/installed}" >/dev/null 2>&1; then
         counted=1
     fi
@@ -149,6 +153,7 @@ attestation() {
         return 0
     fi
     printf '%s\n' "$why" | tail -n 5 >&2
+    count_stop "$(system_name)" attestation "${tag#v}"
     stop "$(t "The package's build provenance attestation didn't check out, so I didn't open it." \
               "La atestación de origen del paquete no se pudo comprobar, así que no lo abrí.")" \
          "$(t "Try again; if it keeps happening, tell the project: https://github.com/$REPO/issues" \
@@ -241,20 +246,24 @@ main() {
             stop "$(t "Couldn't download Corral $tag from GitHub." "No pude descargar Corral $tag de GitHub.")" \
                  "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")" \
                  "$(t "Published versions: https://github.com/$REPO/releases" "Versiones publicadas: https://github.com/$REPO/releases")"
-        curl -fsSL "$base/$PACKAGE.sha256" -o "$tmp/$PACKAGE.sha256" 2>/dev/null ||
+        curl -fsSL "$base/$PACKAGE.sha256" -o "$tmp/$PACKAGE.sha256" 2>/dev/null || {
+            count_stop "$(system_name)" sha256_missing "${tag#v}"
             stop "$(t "Corral $tag has no published SHA-256 to check the download against." "Corral $tag no tiene un SHA-256 publicado para comprobar la descarga.")" \
                  "$(t "Versions from 0.1.3 on have one: install the latest, or pick one with CORRAL_VERSION." \
                       "Las versiones desde la 0.1.3 lo tienen: instala la última, o elige una con CORRAL_VERSION.")"
+        }
         expected=$(cut -d' ' -f1 "$tmp/$PACKAGE.sha256")
     fi
 
     if [ -n "$expected" ]; then
         actual=$(sha256 "$tmp/$PACKAGE")
-        [ "$actual" = "$expected" ] ||
+        [ "$actual" = "$expected" ] || {
+            [ -z "$attest" ] || count_stop "$(system_name)" sha256 "${tag#v}"
             stop "$(t "The download doesn't match the SHA-256 it should have, so I didn't open it." "La descarga no coincide con el SHA-256 que debe tener, así que no la abrí.")" \
                  "$(t "expected" "esperado")  $expected" "$(t "got     " "obtenido")  $actual" \
                  "" "$(t "Try again; if it keeps happening, tell the project: https://github.com/$REPO/issues" \
                          "Vuelve a intentarlo; si se repite, avísale al proyecto: https://github.com/$REPO/issues")"
+        }
         printf '%s✓%s %s\n' "$green" "$off" "$(t "SHA-256 checked" "SHA-256 comprobado")"
     else
         printf '%s\n' "$(t "! Not checked (CORRAL_SHA256=skip)." "! Sin comprobar (CORRAL_SHA256=skip).")"
