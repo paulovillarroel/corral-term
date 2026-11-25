@@ -687,15 +687,17 @@ local({
     if ("corral" %in% search()) assign("corral_sql", fast, envir = as.environment("corral"))
   }
 
-  # The code of a statement, without its comments.
-  sql_code <- function(x) gsub("--[^\n]*", "", gsub("/\\*.*?\\*/", "", x, perl = TRUE))
+  # The code of a statement, without its comments (nested ones too, as in DuckDB).
+  sql_code <- function(x) gsub("(?<c>/\\*(?:[^/*]|/(?!\\*)|\\*(?!/)|(?&c))*\\*/)|--[^\n]*", "", x, perl = TRUE)
 
   # The statements in a piece of SQL: split at each ; outside strings, quoted
   # names and comments, found with one regular expression (a loop over the
-  # characters would cost R's compiler far more than the SQL itself). Pieces with
-  # only comments are dropped.
+  # characters would cost R's compiler far more than the SQL itself). It knows
+  # what DuckDB's own parser knows: '' inside strings, E'..' with backslashes,
+  # $$..$$ and $tag$..$tag$, and comments inside comments. Pieces with only
+  # comments are dropped.
   sql_statements <- function(text) {
-    m <- gregexpr("'[^']*'|\"[^\"]*\"|--[^\n]*|/\\*[\\s\\S]*?\\*/|;", text, perl = TRUE)[[1]]
+    m <- gregexpr("(?<c>/\\*(?:[^/*]|/(?!\\*)|\\*(?!/)|(?&c))*\\*/)|--[^\\n]*|\\$([A-Za-z_]\\w*|)\\$[\\s\\S]*?\\$\\2\\$|\\b[eE]'(?:[^'\\\\]|\\\\[\\s\\S])*'|'[^']*'|\"[^\"]*\"|;", text, perl = TRUE)[[1]]
     ends <- m[regmatches(text, list(m))[[1]] == ";"]
     starts <- c(1L, ends + 1L)
     stops <- c(ends, nchar(text))
