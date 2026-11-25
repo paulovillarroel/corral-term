@@ -1,8 +1,9 @@
 //! `corral install` and `corral uninstall`. install.sh downloads Corral (or
 //! uses a clone), makes sure this program is built, and runs `corral install`
 //! from there. First it checks everything Corral needs and says what to do
-//! about what is missing; only when nothing required is missing does it
-//! install. It never uses sudo and only writes inside HOME. Every file of the
+//! about what is missing, offering to bring herdr and R's two packages itself;
+//! only when nothing required is missing does it install. It never uses sudo
+//! and only writes inside HOME. Every file of the
 //! user's it edits (herdr's config, ~/.Rprofile, Fresh's config) is backed up
 //! first, and `corral uninstall` takes out what it added.
 
@@ -53,6 +54,17 @@ const DOWNLOADS: [Download; 3] = [
      "https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-unknown-linux-gnu.tar.gz",
      "3909b12870df0b6a44e3f40376cd59aca373791c0abedd02dcbda7b136e4573c"),
 ];
+
+/// herdr, when it is missing and you say yes: the version Corral was tested with, from
+/// herdr's own GitHub release, checked against the SHA-256 written here like the
+/// downloads above. It goes where herdr's own installer puts it (~/.local/bin/herdr),
+/// as your herdr: `herdr update` keeps it current, and `corral uninstall` leaves it.
+const HERDR: (&str, &str, &str) = ("0.9.5", "https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-linux-x86_64",
+                                   "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d");
+
+/// The R packages Corral can't work without: httpgd draws the plots, jsonlite carries
+/// the variables.
+const R_NEEDS: [&str; 2] = ["httpgd", "jsonlite"];
 
 // ----------------------------------------------------------------------- places
 
@@ -265,6 +277,14 @@ fn install_r(pkgs: &[&str]) -> String {
     format!("Rscript -e 'install.packages(c({list}), repos = \"{CRAN}\")'")
 }
 
+/// "a", "a and b", "a, b and c", in the user's language.
+fn and_list(items: &[&str]) -> String {
+    match items.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{}{}{last}", rest.join(", "), tr(" and ", " y ")),
+        _ => items.join(""),
+    }
+}
+
 fn on_path(dir: &Path) -> bool {
     std::env::var_os("PATH").map(|p| std::env::split_paths(&p).any(|d| d == dir)).unwrap_or(false)
 }
@@ -279,15 +299,23 @@ struct Check {
     name: String,
     detail: String,
     fix: Vec<String>, // what to do, line by line; a line starting with two spaces is a command
+    /// What is missing that the installer can bring itself, if you say yes (bring):
+    /// a short name, and what it would do.
+    brings: Option<(String, String)>,
 }
 
 fn check(group: &'static str, state: State, name: &str, detail: impl Into<String>, fix: &[&str]) -> Check {
-    Check { group, id: "", state, name: name.into(), detail: detail.into(), fix: fix.iter().map(|s| s.to_string()).collect() }
+    Check { group, id: "", state, name: name.into(), detail: detail.into(), fix: fix.iter().map(|s| s.to_string()).collect(), brings: None }
 }
 
 impl Check {
     fn id(mut self, id: &'static str) -> Check {
         self.id = id;
+        self
+    }
+
+    fn brings(mut self, short: impl Into<String>, what: impl Into<String>) -> Check {
+        self.brings = Some((short.into(), what.into()));
         self
     }
 }
@@ -301,7 +329,10 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     match which("herdr") {
         None => out.push(check("required", State::Missing, "herdr", tr("not installed", "no está instalado"),
                                &[tr("Install herdr, the terminal Corral lives in:", "Instala herdr, la terminal donde vive Corral:"),
-                                 "  curl -fsSL https://herdr.dev/install.sh | sh"]).id("herdr")),
+                                 "  curl -fsSL https://herdr.dev/install.sh | sh"]).id("herdr")
+                     .brings("herdr", trf!("herdr {}, the terminal Corral lives in: from herdr's GitHub release, SHA-256 checked, into {}",
+                                           "herdr {}, la terminal donde vive Corral: desde la versión publicada en GitHub, con su SHA-256 comprobado, en {}",
+                                           HERDR.0, short(&bin())))),
         Some(h) => {
             let v = version_of(&h, "--version");
             let ok = !v.is_empty() && as_tuple(&v) >= HERDR_MIN;
@@ -318,15 +349,17 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
             let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI"];
             let has = setup::r_packages(&r, &pkgs);
-            let missing: Vec<&str> = ["httpgd", "jsonlite"].into_iter().filter(|p| !has[pkgs.iter().position(|x| x == p).unwrap_or(0)]).collect();
+            let missing: Vec<&str> = R_NEEDS.into_iter().filter(|p| !has[pkgs.iter().position(|x| x == p).unwrap_or(0)]).collect();
             if missing.is_empty() {
                 out.push(check("required", State::Ok, tr("R packages", "Paquetes de R"), tr("httpgd and jsonlite", "httpgd y jsonlite"), &[]));
             } else {
                 let cmd = format!("  {}", install_r(&missing));
-                let list = missing.join(", ");
+                let (list, names) = (missing.join(", "), and_list(&missing));
                 out.push(check("required", State::Missing, tr("R packages", "Paquetes de R"), trf!("missing {list}", "faltan {list}"),
                                &[tr("Install the R packages (httpgd draws the plots, jsonlite carries the variables):",
-                                    "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]).id("r_packages"));
+                                    "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]).id("r_packages")
+                         .brings(names.clone(), trf!("{names}, R packages: into your R library, without sudo",
+                                                     "{names}, paquetes de R: en tu biblioteca de R, sin sudo")));
             }
             // nanoparquet even with arrow there: View() with arrow is slower, and in a
             // long session R's memory keeps growing with each table (bench/repeat.R).
@@ -398,11 +431,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                                &[tr("To use Python in Corral, install uv:", "Para usar Python en Corral instala uv:"),
                                  "  curl -LsSf https://astral.sh/uv/install.sh | sh"])),
     }
-    let places: Vec<&str> = skill_places().iter().map(|(_, shown)| *shown).collect();
-    let places = match places.split_last() {
-        Some((last, rest)) if !rest.is_empty() => format!("{}{}{last}", rest.join(", "), tr(" and ", " y ")),
-        _ => places.join(""),
-    };
+    let places = and_list(&skill_places().iter().map(|(_, shown)| *shown).collect::<Vec<_>>());
     // The agent the layout opens: the one chosen, else the first one installed.
     let agent = tr("Agent", "Agente");
     let found: Vec<&str> = env::AGENTS.iter().filter(|(cmd, _)| env::which(cmd).is_some()).map(|(_, name)| *name).collect();
@@ -453,8 +482,11 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     out
 }
 
-/// Print the check; true when nothing required is missing.
-fn report(rows: &[Check], again: &str) -> bool {
+/// Print the check; true when nothing required is missing. With `offer` (the
+/// installer can ask you), what it can bring itself stays out of the instructions:
+/// when that is all that's missing, the question comes next (bring); otherwise it
+/// says it will bring it when you run it again.
+fn report(rows: &[Check], again: &str, offer: bool) -> bool {
     let s = style();
     let width = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0);
     for (group, title) in [("required", tr("Required", "Necesario")), ("installer", tr("Provided by the installer", "Lo pone el instalador")),
@@ -464,28 +496,8 @@ fn report(rows: &[Check], again: &str) -> bool {
             println!("  {} {}{}  {}", mark(&s, r.state), r.name, " ".repeat(width - r.name.chars().count()), r.detail);
         }
     }
-    let blocking: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
+    let ok = missing_steps(rows, again, offer);
     let optional: Vec<&Check> = rows.iter().filter(|r| r.state == State::Warn && !r.fix.is_empty()).collect();
-    if !blocking.is_empty() {
-        let n = blocking.len();
-        let what = if n == 1 {
-            tr("1 thing is missing before installing.", "Falta 1 cosa antes de instalar.").to_string()
-        } else {
-            trf!("{n} things are missing before installing.", "Faltan {n} cosas antes de instalar.")
-        };
-        println!("\n{}{}{what}{} {}\n", s.red, s.bold, s.off, tr("Nothing was changed.", "No cambié nada."));
-        for (i, r) in blocking.iter().enumerate() {
-            println!("  {}. {}", i + 1, r.fix[0]);
-            for line in &r.fix[1..] {
-                if let Some(cmd) = line.strip_prefix("  ") {
-                    println!("     {}{cmd}{}", s.bold, s.off);
-                } else {
-                    println!("     {line}");
-                }
-            }
-        }
-        println!("\n  {}\n     {}{again}{}", tr("Then run the installation again:", "Después vuelve a correr la instalación:"), s.bold, s.off);
-    }
     if !optional.is_empty() {
         println!("\n{}{}{}", s.dim, tr("Optional, whenever you like:", "Opcional, cuando quieras:"), s.off);
         for r in optional {
@@ -495,7 +507,134 @@ fn report(rows: &[Check], again: &str) -> bool {
             }
         }
     }
+    ok
+}
+
+/// What to do about what is missing, step by step; true when nothing is. With `offer`,
+/// what the installer can bring itself is left out of the steps (see report).
+fn missing_steps(rows: &[Check], again: &str, offer: bool) -> bool {
+    let s = style();
+    let blocking: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
+    let (later, manual): (Vec<&Check>, Vec<&Check>) = blocking.iter().partition(|r| offer && r.brings.is_some());
+    if !manual.is_empty() {
+        let n = manual.len();
+        let what = if n == 1 {
+            tr("1 thing is missing before installing.", "Falta 1 cosa antes de instalar.").to_string()
+        } else {
+            trf!("{n} things are missing before installing.", "Faltan {n} cosas antes de instalar.")
+        };
+        println!("\n{}{}{what}{} {}\n", s.red, s.bold, s.off, tr("Nothing was changed.", "No cambié nada."));
+        for (i, r) in manual.iter().enumerate() {
+            println!("  {}. {}", i + 1, r.fix[0]);
+            for line in &r.fix[1..] {
+                if let Some(cmd) = line.strip_prefix("  ") {
+                    println!("     {}{cmd}{}", s.bold, s.off);
+                } else {
+                    println!("     {line}");
+                }
+            }
+        }
+        if !later.is_empty() {
+            let names: Vec<&str> = later.iter().filter_map(|r| r.brings.as_ref().map(|b| b.0.as_str())).collect();
+            println!("\n  {}", trf!("When you run it again, the installer can bring {} itself (it will ask you).",
+                                    "Cuando lo vuelvas a correr, el instalador puede poner {} por su cuenta (te lo va a preguntar).", and_list(&names)));
+        }
+        println!("\n  {}\n     {}{again}{}", tr("Then run the installation again:", "Después vuelve a correr la instalación:"), s.bold, s.off);
+    }
     blocking.is_empty()
+}
+
+/// Whether the installer can ask you something: a terminal, with /dev/tty to read the
+/// answer from (the install line reads its script from a pipe). Not in CI or a log.
+fn can_ask() -> bool {
+    std::io::stdout().is_terminal() && std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty").is_ok()
+}
+
+/// Enter, y, yes, s or sí: yes.
+fn said_yes(answer: &str) -> bool {
+    matches!(answer.trim().to_lowercase().as_str(), "" | "y" | "yes" | "s" | "si" | "sí")
+}
+
+/// When all that is missing is what the installer can bring (herdr, httpgd and
+/// jsonlite), it offers to, and Enter says yes. True when you said yes and, after
+/// bringing it, nothing required is missing.
+fn bring(rows: &[Check]) -> bool {
+    use std::io::{BufRead, Write};
+    let missing: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
+    if missing.is_empty() || missing.iter().any(|r| r.brings.is_none()) {
+        return false;
+    }
+    let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return false };
+    let s = style();
+    println!("\n{}{}{}", s.bold, tr("The installer can bring what is missing:", "El instalador puede poner lo que falta:"), s.off);
+    for r in &missing {
+        println!("  • {}", r.brings.as_ref().map(|b| b.1.as_str()).unwrap_or_default());
+    }
+    print!("{}", tr("Install it now? [Y/n] ", "¿Lo instalo ahora? [S/n] "));
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    if std::io::BufReader::new(tty).read_line(&mut answer).is_err() || !said_yes(&answer) {
+        return false;
+    }
+    println!();
+    let mut all = true;
+    for r in &missing {
+        all &= match r.id {
+            "herdr" => bring_herdr(),
+            "r_packages" => bring_r_packages(),
+            _ => false,
+        };
+    }
+    all
+}
+
+/// herdr into ~/.local/bin, from its GitHub release and checked against HERDR's
+/// SHA-256 before it is written.
+fn bring_herdr() -> bool {
+    let (v, url, sha) = HERDR;
+    println!("  {}", trf!("… downloading herdr {v}", "… descargando herdr {v}"));
+    let data = match setup::download(&url.replace("{v}", v)) {
+        Ok(d) => d,
+        Err(e) => {
+            step(&e, State::Missing);
+            return false;
+        }
+    };
+    if let Err(e) = setup::checked(&format!("herdr {v}"), &data, sha) {
+        step(&e, State::Missing);
+        return false;
+    }
+    let (exe, part) = (bin().join("herdr"), bin().join(".herdr.part"));
+    let written = std::fs::create_dir_all(bin()).and_then(|_| std::fs::write(&part, data))
+        .and_then(|_| std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o755)))
+        .and_then(|_| std::fs::rename(&part, &exe));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&part);
+        step(&format!("herdr: {e}"), State::Missing);
+        return false;
+    }
+    step(&trf!("herdr {v} in {}, SHA-256 checked", "herdr {v} en {}, SHA-256 comprobado", short(&exe)), State::Ok);
+    true
+}
+
+/// httpgd and jsonlite, whichever are missing, into your R library (r_install).
+fn bring_r_packages() -> bool {
+    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return false };
+    let has = setup::r_packages(&r, &R_NEEDS);
+    let missing: Vec<&str> = R_NEEDS.into_iter().zip(has).filter(|(_, h)| !h).map(|(p, _)| p).collect();
+    if missing.is_empty() {
+        return true;
+    }
+    let names = and_list(&missing);
+    println!("  {}", trf!("… installing {names} in your R library (seconds; a few minutes if they have to compile)",
+                          "… instalo {names} en tu biblioteca de R (segundos; unos minutos si hay que compilarlos)"));
+    if r_install(&r, &missing) {
+        step(&trf!("{names} in your R library", "{names} en tu biblioteca de R"), State::Ok);
+        true
+    } else {
+        step(&trf!("couldn't install {names}", "no pude instalar {names}"), State::Missing);
+        false
+    }
 }
 
 // ----------------------------------------------------------------------- install steps
@@ -988,12 +1127,28 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let s = style();
     println!("{}Corral {VERSION}{}: {}", s.bold, s.off,
              tr("checking what it needs, without changing anything yet.", "reviso lo que necesita, sin cambiar nada todavía."));
-    let rows = checks(in_place, src);
-    if !report(&rows, again) {
-        let missing: Vec<&str> = rows.iter().filter(|r| r.state == State::Missing)
-            .map(|r| if r.id.is_empty() { "other" } else { r.id }).collect();
-        count_stop(&missing, in_place);
-        std::process::exit(1);
+    let offer = can_ask();
+    let mut rows = checks(in_place, src);
+    if !report(&rows, again, offer) {
+        // When all that's missing is what the installer can bring, it asks, brings it
+        // with your yes and checks again; if you say no or something fails, the steps to
+        // do it yourself. Anything else missing, report already gave its steps.
+        let only_brought = offer && rows.iter().filter(|r| r.state == State::Missing).all(|r| r.brings.is_some());
+        let ok = only_brought && {
+            let brought = bring(&rows);
+            rows = checks(in_place, src);
+            brought && rows.iter().all(|r| r.state != State::Missing)
+        };
+        if !ok {
+            if only_brought {
+                missing_steps(&rows, again, false);
+            }
+            let missing: Vec<&str> = rows.iter().filter(|r| r.state == State::Missing)
+                .map(|r| if r.id.is_empty() { "other" } else { r.id }).collect();
+            count_stop(&missing, in_place);
+            std::process::exit(1);
+        }
+        step(tr("everything needed is here now", "ya está todo lo necesario"), State::Ok);
     }
     println!("\n{}{}{}", s.bold, tr("Installing", "Instalando"), s.off);
     migrate_old_install();
@@ -1250,7 +1405,7 @@ pub fn cmd_install(args: &[String]) -> Result<(), String> {
     if only_check {
         let s = style();
         println!("{}Corral {VERSION}{}: {}", s.bold, s.off, tr("what it needs, without changing anything.", "lo que necesita, sin cambiar nada."));
-        let ok = report(&checks(in_place, &src), &again);
+        let ok = report(&checks(in_place, &src), &again, false);
         if !ok {
             std::process::exit(1);
         }
@@ -1713,5 +1868,34 @@ mod tests {
     fn renamed_actions() {
         let text = "command = \"corral.atajos\"\ncommand = \"corral.layout-codigo\"\ncommand = \"corral.layout\"\n";
         assert_eq!(with_renamed_actions(text), "command = \"corral.keys\"\ncommand = \"corral.layout-code\"\ncommand = \"corral.layout\"\n");
+    }
+
+    #[test]
+    fn the_herdr_it_brings_is_one_corral_accepts() {
+        let (v, url, sha) = HERDR;
+        assert!(as_tuple(v) >= HERDR_MIN, "{v}");
+        assert!(url.starts_with("https://github.com/herdrdev/herdr/releases/download/") && url.contains("{v}"), "{url}");
+        assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
+    }
+
+    #[test]
+    fn enter_says_yes_to_bringing_what_is_missing() {
+        for answer in ["", "\n", "y", "Yes\n", "s", "sí\n", " SI "] {
+            assert!(said_yes(answer), "{answer:?}");
+        }
+        for answer in ["n", "no\n", "N", "q"] {
+            assert!(!said_yes(answer), "{answer:?}");
+        }
+    }
+
+    #[test]
+    fn what_it_can_bring_still_counts_as_missing() {
+        let herdr = || check("required", State::Missing, "herdr", "", &["Install herdr:", "  curl …"]).id("herdr").brings("herdr", "herdr 0.9.5");
+        let fine = || check("required", State::Ok, "System", "", &[]);
+        assert!(!missing_steps(&[herdr(), fine()], "again", true));
+        assert!(!missing_steps(&[herdr(), fine()], "again", false));
+        assert!(missing_steps(&[fine()], "again", true));
+        assert_eq!(and_list(&["herdr"]), "herdr");
+        assert!(and_list(&["a", "b", "c"]).starts_with("a, b"));
     }
 }
