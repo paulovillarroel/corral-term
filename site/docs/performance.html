@@ -43,7 +43,7 @@
 
   <main class="content">
     <h1>Performance</h1>
-    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB, or about 200 MB counting herdr. These are the measurements against Positron, how long <code>View()</code> takes with a big table, and the gains of each piece of Corral since it became one Rust binary.</p>
+    <p class="intro">A full Corral layout has R ready in about 400 milliseconds and uses about 155 MB, or about 200 MB counting herdr. These are the measurements against Positron and Cursor, how long <code>View()</code> takes with a big table and SQL runs in the session, and the gains of each piece of Corral since it became one Rust binary.</p>
 
     <h2>Corral and Positron</h2>
     <picture data-themed><source srcset="../assets/charts/vs-positron-dark.svg" media="all"><img src="../assets/charts/vs-positron-light.svg" width="760" alt="Corral and Positron: R ready in 0.45 s against 13.3 s; 155 MB of memory against 3.2 GB; 0.36 % of one core at rest against 13.9 %"></picture>
@@ -106,6 +106,27 @@
     </table>
     <p>With herdr, Corral uses about 200 MB and 0.76 % of one core at rest. herdr grows with what it holds: in a day-to-day session with 10 workspaces and 16 panes, its server used 47 MB and its client 17 MB.</p>
 
+    <h2 id="cursor">Corral and Cursor</h2>
+    <p>Cursor is the editor many developers already have open, so it was measured the same way as Positron. Here it has no R extension: its figures are Cursor alone, and R would add to them.</p>
+
+    <h3 id="cursor-measured">How it was measured</h3>
+    <ul>
+    <li>November 25, 2026, on the same machine and with the same project folder: Cursor 3.8.11 (VS Code 1.105) on Windows, connected to WSL, opened from the command line. Five starts for the time and the memory, two for the CPU at rest, closing Cursor and its server in WSL between them; a first start that installed the server isn't counted.</li>
+    <li>Cursor is ready when its processes in WSL go one second without CPU after its extension host starts. The memory is taken 15 seconds later, and the CPU at rest over the next 30 seconds, in Windows and in WSL.</li>
+    <li>Corral is a full layout, the same day, herdr included this time: Cursor's figures include its own window.</li>
+    </ul>
+
+    <h3 id="cursor-results">Results</h3>
+    <table>
+    <thead><tr><th>What</th><th>Cursor</th><th>Corral</th></tr></thead>
+    <tbody>
+    <tr><td>From opening it to ready</td><td>12.9–19.0 s, without R</td><td>379–398 ms, with R ready</td></tr>
+    <tr><td>Memory in use</td><td>2.5–2.9 GB (1.86–2.19 GB in Windows and 674–687 MB in WSL)</td><td>173 MB, herdr included</td></tr>
+    <tr><td>CPU at rest</td><td>8.9–10.4 % of one core (8.5–9.9 % in Windows and 0.4–0.5 % in WSL)</td><td>1.4–1.5 %, herdr included</td></tr>
+    </tbody>
+    </table>
+    <p>Most of Cursor's weight is its window in Windows. In WSL its server uses about 680 MB: one Node process of about 470 MB, the extension host, and two smaller ones.</p>
+
     <h2 id="view">A big table in View()</h2>
     <p><code>View(df)</code> does two things: R saves the table as a Parquet file, and the viewer asks DuckDB only for what is on screen. Saving is the wait you notice, it grows with the table and it happens on every <code>View()</code>. After that, each screen takes milliseconds at any size: the viewer starts DuckDB once and keeps it while the table is open, and closes it 30 seconds after the last query.</p>
 
@@ -146,6 +167,14 @@
     <p>With nanoparquet, R's memory settles at about 1.6 GB and stays there; 40 times gave the same. With arrow it grows by about 265 MB each time and isn't given back. That is why <code>corral doctor</code> and the installer suggest nanoparquet even when arrow is installed.</p>
     <p>nanoparquet's time varies more when the session holds a lot, because it works inside R and R's garbage collector can run during the write. Calling <code>gc()</code> before each write doesn't help: counting the collection, it took 0.1 to 0.45 s longer, so <code>View()</code> doesn't do it.</p>
     <p>Without either package, <code>View()</code> falls back to CSV, which is more than ten times slower to save, and then every page and sort reads the whole file again. nanoparquet has no dependencies, so it is the one to install.</p>
+
+    <h2 id="sql">SQL in the session</h2>
+    <p>SQL runs on DuckDB inside the R or Python session (<a href="data.html#sql">SQL</a>), so the console starts as before: R ready in 365–392 ms with or without it. DuckDB loads with the first query.</p>
+    <ul>
+    <li>November 25, 2026, the same machine, R 4.6.1 with the duckdb package 2.0.0, Python with duckdb 2.0.1, a data frame of a million rows.</li>
+    <li>The first query of a session in R takes about 220 ms: loading duckdb (156 ms), connecting (20 ms) and compiling Corral's SQL functions, once. In Python, importing duckdb takes about 90 ms.</li>
+    <li>After that, the time is the query's own: <code>SELECT 42</code> in 1–8 ms, and a <code>GROUP BY</code> over the million rows in 20–23 ms, the same as DuckDB alone in R (18–19 ms). DuckDB reads the data frame where it is: registering it takes 2 ms.</li>
+    </ul>
 
     <h2 id="checkpoints">Checkpoints</h2>
     <p>The consoles keep a checkpoint of their objects so they come back after a crash (<a href="consoles.html#checkpoints">Consoles</a>). It only counts as worth it if you don't feel it, so it was measured where you would: the time Corral's own work keeps the prompt waiting after each command, timed inside R and Python (<code>CORRAL_TIMING</code>).</p>
