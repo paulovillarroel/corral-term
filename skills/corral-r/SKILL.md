@@ -48,6 +48,15 @@ sales.describe()
 EOF
 ```
 
+SQL runs on DuckDB in the console that is showing, R or Python: the session's data frames are tables by name, and the result lands in the session as `sql_result` (or the name a `-- name: x` line gives it). Prefer it for joins and aggregations over big tables:
+
+```bash
+corral eval --lang sql <<'EOF'
+-- name: by_region
+SELECT region, count(*) AS orders, sum(amount) AS total FROM sales GROUP BY region
+EOF
+```
+
 You get the code echoed (`> ` in R, `>>> ` in Python) followed by what was printed. In R every top-level value prints, messages included, and warnings come after the output as `[corral] warning: ...`. In Python, as in IPython, only the last expression's value prints; use `print()` for the rest.
 
 Exit codes:
