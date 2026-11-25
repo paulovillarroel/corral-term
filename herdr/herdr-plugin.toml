@@ -29,6 +29,19 @@ title = "Corral: layout, notebook (script over the console)"
 contexts = ["global", "workspace"]
 command = ["../rs/target/release/corral", "layout", "--focus", "notebook"]
 
+# The shell tab a new layout opens next to it (corral config terminal_tab).
+[[actions]]
+id = "terminal-tab-on"
+title = "Corral: open a terminal tab with the layout"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "terminal_tab", "on"]
+
+[[actions]]
+id = "terminal-tab-off"
+title = "Corral: no terminal tab with the layout"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "config", "terminal_tab", "off"]
+
 # Each layout keeps the sizes you leave; this goes back to Corral's.
 [[actions]]
 id = "layout-sizes"

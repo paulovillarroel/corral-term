@@ -180,6 +180,8 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("layout", Group::Layout, "Layout: agent first", "Layout: foco en el agente"),
     ("layout-code", Group::Layout, "Layout: code first", "Layout: foco en el código"),
     ("layout-notebook", Group::Layout, "Layout: notebook (script over the console, agent and variables on the right)", "Layout: notebook (script sobre la consola, agente y variables a la derecha)"),
+    ("terminal-tab-on", Group::Layout, "Layout: open a terminal tab with it", "Layout: abrir una pestaña terminal junto a él"),
+    ("terminal-tab-off", Group::Layout, "Layout: no terminal tab", "Layout: sin pestaña terminal"),
     ("layout-sizes", Group::Layout, "Layout: back to Corral's sizes (forgets the ones you left)", "Layout: volver a los tamaños de Corral (olvida los que dejaste)"),
     ("start-r", Group::Layout, "Layout: start with R", "Layout: partir con R"),
     ("start-python", Group::Layout, "Layout: start with Python", "Layout: partir con Python"),

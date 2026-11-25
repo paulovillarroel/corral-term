@@ -87,6 +87,23 @@ fn layout_usage() -> &'static str {
 /// variables on the right. The script and the console share their area; ctrl+b t
 /// gives it to one or the other.
 /// It starts with R, or with Python: `--lang`, else `corral config start`.
+/// The label of the shell tab that opens next to the layout.
+const TERMINAL_TAB: &str = "terminal";
+
+/// A tab named terminal next to a new layout, with a shell in the project folder,
+/// since the layout has none of its own. It opens behind Corral's tab, once per
+/// workspace (an existing terminal tab is kept), and never fails the layout.
+/// `corral config terminal_tab off` leaves it out.
+fn terminal_tab(ws: &str, cwd: &str) {
+    if env::config().get("terminal_tab").str() == Some("off") {
+        return;
+    }
+    let has_one = herdr::tabs(ws).map(|t| t.iter().any(|t| t.get("label").str() == Some(TERMINAL_TAB))).unwrap_or(true);
+    if !has_one {
+        let _ = herdr::cli(&["tab", "create", "--workspace", ws, "--label", TERMINAL_TAB, "--cwd", cwd, "--no-focus"]);
+    }
+}
+
 pub fn layout(args: &[String]) -> Result<(), String> {
     let a = Args::parse(args, &["--cwd", "--label", "--agent", "--console", "--ratio", "--editor", "--focus", "--lang"], &["--shell", "--default-sizes"], layout_usage())?;
     if a.flag("--default-sizes") {
@@ -196,6 +213,7 @@ pub fn layout(args: &[String]) -> Result<(), String> {
     if !agent.is_empty() {
         herdr::start(&agent_pane, &agent)?;
     }
+    terminal_tab(&ws, &cwd);
     println!("{}", obj(vec![
         ("tab", tab.get("tab").get("tab_id").clone()), ("agent", agent_pane.as_str().into()),
         ("console", console_pane.as_str().into()),

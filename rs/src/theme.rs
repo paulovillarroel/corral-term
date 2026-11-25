@@ -698,7 +698,8 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     let allowed: &[(&str, &[&str])] = &[("agents", &["off", "ask", "on"]), ("checkpoints", &["on", "off"]), ("agent_output", &["full", "review", "structure"]),
                                          ("images", &["auto", "kitty", "symbols"]), ("mirador_window", &["right", "free"]),
                                          ("ark_frontend", &["corral", "jupyter"]), ("python_lsp", &["ty", "pylsp"]),
-                                         ("start", &["r", "python"]), ("telemetry", &["on", "off"]), ("update_check", &["on", "off"])];
+                                         ("start", &["r", "python"]), ("telemetry", &["on", "off"]), ("update_check", &["on", "off"]),
+                                         ("terminal_tab", &["on", "off"])];
     if let Some((_, values)) = allowed.iter().find(|(k, _)| k == key) {
         if !values.contains(&value.as_str()) {
             let mut v = values.to_vec();
@@ -715,6 +716,8 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
         ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados").to_string(), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola.").to_string())),
         ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R").to_string(), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R.").to_string())),
         ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python").to_string(), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python.").to_string())),
+        ("terminal_tab", "on") => Some((tr("Terminal tab: on", "Pestaña terminal: activada").to_string(), tr("A new layout opens a tab named terminal next to it, with a shell in the project folder.", "Un layout nuevo abre junto a él una pestaña llamada terminal, con una shell en la carpeta del proyecto.").to_string())),
+        ("terminal_tab", "off") => Some((tr("Terminal tab: off", "Pestaña terminal: desactivada").to_string(), tr("New layouts open without the terminal tab; corral layout --shell adds a shell next to the variables.", "Los layouts nuevos abren sin la pestaña terminal; corral layout --shell agrega una shell junto a las variables.").to_string())),
         ("telemetry", "on") => Some((tr("Install count: on", "Conteo de instalaciones: activado").to_string(), tr("The installer counts each install, update or stop with one anonymous ping (version, system and country).", "El instalador cuenta cada instalación, actualización o detención con un ping anónimo (versión, sistema y país).").to_string())),
         ("telemetry", "off") => Some((tr("Install count: off", "Conteo de instalaciones: desactivado").to_string(), tr("The installer sends nothing when it installs, updates or stops, in any shell.", "El instalador no envía nada al instalar, actualizar o detenerse, en ninguna shell.").to_string())),
         ("update_check", "on") => Some((tr("New versions: Corral tells you", "Versiones nuevas: Corral te avisa").to_string(), tr("Once a day at most, opening the workspace asks GitHub for the latest version, and says so when there is a newer one.", "Como mucho una vez al día, al abrir el espacio de trabajo Corral le pregunta a GitHub cuál es la última versión, y avisa si hay una más nueva.").to_string())),
