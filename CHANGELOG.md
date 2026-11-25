@@ -4,6 +4,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- Closing Corral (ctrl+b shift+q) takes you back to the tab you opened it from, instead of leaving you on the agent. The agent keeps running in its tab.
 - `corral` opens herdr too. Typed in any terminal outside herdr, it opens herdr on the folder's workspace, with the layout, and starts herdr's server first when none is running. Typing it again in the same folder goes back to that workspace.
 - A new layout opens a tab named `terminal` next to it, with a shell in the project folder, since the layout has none of its own. There is one per workspace, and when `corral` creates the workspace, its own shell tab becomes the terminal tab. `corral config terminal_tab off`, or the palette, leaves it out.
 - Corral tells you when there is a new version. Opening the workspace asks GitHub which version is the latest, at most once a day and in the background, and herdr shows a notice once per new version. `corral config update_check off`, or the palette, stops it. Besides the install count, this is the only request Corral makes, and it carries nothing about you.
