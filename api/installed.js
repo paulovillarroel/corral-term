@@ -27,11 +27,20 @@
 // is checked here against a list or a pattern, so nothing else can get in. An
 // uninstall says only what every ping says (kind "uninstall").
 //
+// A ping must have exactly that shape, or nothing is stored: a POST that isn't JSON,
+// is over 2 KB, lacks a field or carries a value outside its list or pattern gets a
+// 400 and never reaches the Blob store. Optional fields a real client may send
+// imperfectly (an update's `from`) are left out instead. Unknown fields are ignored,
+// so a newer client still counts. On top of this, a Vercel Firewall rule (in the
+// project's settings, not in this repository) limits how many POSTs one address can
+// send here in a few minutes; one install sends one.
+//
 // GET /api/installed?token=STATS_TOKEN returns the totals; `updates` counts each
 // "<from> -> <version>" ("unknown" when the ping didn't say), `missing` how many
 // stops each check caused, and agent, distro, herdr, r and python the pings that
 // said where Corral runs.
 import { put, list } from "@vercel/blob";
+import { timingSafeEqual } from "node:crypto";
 
 const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 // The checks a stop can name: corral install's required ones, then install.sh's.
@@ -39,39 +48,64 @@ const CHECKS = ["herdr", "herdr_old", "r", "r_packages", "folder", "other", "sys
   "sha256", "sha256_missing", "attestation"];
 const AGENTS = ["claude", "codex", "gemini", "opencode", "none", "other"];
 const ENV = ["agent", "distro", "herdr", "r", "python"];
-const shaped = (value, pattern, fallback) => (typeof value === "string" && pattern.test(value) ? value : fallback);
-const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+const MAX_BODY = 2048;
+const one = (value, allowed) => typeof value === "string" && allowed.includes(value);
+const like = (value, pattern) => typeof value === "string" && pattern.test(value);
+
+// The Blob name for a ping, or null when it isn't shaped like one a Corral client sends.
+export function pingName(body, country, day) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const { kind, system, source, version } = body;
+  if (!one(kind, ["new", "update", "stopped", "uninstall"])) return null;
+  if (!one(system, ["linux", "wsl", "macos", "other"])) return null;
+  if (!one(source, ["release", "clone"])) return null;
+  // install.sh doesn't know the version when it stops before downloading Corral.
+  if (!(like(version, VERSION) || (version === "unknown" && kind === "stopped"))) return null;
+  let extra = "";
+  if (kind === "update" && like(body.from, VERSION)) extra = `-${body.from}`;
+  if (kind === "stopped") {
+    const missing = Array.isArray(body.missing) ? [...new Set(body.missing)] : [];
+    if (missing.length === 0 || missing.length > CHECKS.length || !missing.every((m) => one(m, CHECKS))) return null;
+    extra = `-${missing.join("+")}`;
+  }
+  if (kind !== "uninstall" && ENV.some((k) => body[k] !== undefined)) {
+    const e = [body.agent, body.distro, body.herdr, body.r, body.python];
+    const fine = one(e[0], AGENTS)
+      && like(e[1], /^[a-z]{1,16}$/)
+      && (one(e[2], ["none", "unknown"]) || like(e[2], /^\d{1,4}(\.\d{1,4}){1,2}$/))
+      && (one(e[3], ["none", "unknown"]) || like(e[3], /^\d{1,2}\.\d{1,2}$/))
+      && one(e[4], ["uv", "none"]);
+    if (!fine) return null;
+    extra += `-e_${e.join("_")}`;
+  }
+  return `installs/${day}/${country}-${system}-${kind}-${source}-${version}${extra}.json`;
+}
+
+const sameToken = (given, token) => {
+  const a = Buffer.from(String(given || "")), b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    let body = req.body;
-    if (typeof body === "string") {
-      try { body = JSON.parse(body); } catch (e) { body = {}; }
+    const type = String(req.headers["content-type"] || "");
+    if (!type.startsWith("application/json") || Number(req.headers["content-length"] || 0) > MAX_BODY) {
+      res.status(400).end();
+      return;
     }
-    body = body || {};
-    const version = VERSION.test(body.version || "") ? body.version : "unknown";
-    const system = pick(body.system, ["linux", "wsl", "macos"], "other");
-    const kind = pick(body.kind, ["new", "update", "stopped", "uninstall"], "new");
-    const source = pick(body.source, ["release", "clone"], "release");
-    let extra = "";
-    if (kind === "update" && VERSION.test(body.from || "")) extra = `-${body.from}`;
-    if (kind === "stopped") {
-      const missing = [...new Set((Array.isArray(body.missing) ? body.missing : []).filter((m) => CHECKS.includes(m)))];
-      extra = `-${missing.length ? missing.join("+") : "other"}`;
-    }
-    if (kind !== "uninstall" && body.agent !== undefined) {
-      const e = [
-        pick(body.agent, AGENTS, "other"),
-        shaped(body.distro, /^[a-z]{1,16}$/, "other"),
-        body.herdr === "none" ? "none" : shaped(body.herdr, /^\d{1,4}(\.\d{1,4}){1,2}$/, "unknown"),
-        body.r === "none" ? "none" : shaped(body.r, /^\d{1,2}\.\d{1,2}$/, "unknown"),
-        pick(body.python, ["uv", "none"], "none"),
-      ];
-      extra += `-e_${e.join("_")}`;
+    let body;
+    try {
+      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    } catch (e) {
+      body = null;
     }
     const country = String(req.headers["x-vercel-ip-country"] || "XX").slice(0, 2).toUpperCase().replace(/[^A-Z]/g, "X");
-    const day = new Date().toISOString().slice(0, 10);
-    await put(`installs/${day}/${country}-${system}-${kind}-${source}-${version}${extra}.json`, "{}", {
+    const name = pingName(body, country, new Date().toISOString().slice(0, 10));
+    if (!name) {
+      res.status(400).end();
+      return;
+    }
+    await put(name, "{}", {
       access: "private",
       addRandomSuffix: true,
       contentType: "application/json",
@@ -82,7 +116,7 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const token = process.env.STATS_TOKEN;
-    if (!token || req.query.token !== token) {
+    if (!token || !sameToken(req.query.token, token)) {
       res.status(404).end();
       return;
     }
