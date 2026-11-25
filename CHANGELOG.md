@@ -2,6 +2,13 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- The anonymous install ping says a little more about where Corral runs, in coarse categories that name no person, machine or path: the agent the layout opens (`claude`, `codex`, `gemini`, `opencode`, another or none), the Ubuntu or Debian release (`noble`, `bookworm`…), herdr's version, R's major version (`4.6`) and whether uv is there. The site checks each field against a fixed list or pattern before it stores anything.
+- Uninstalling sends one ping too, with only the version, the system and whether Corral came from the package or a clone, so the project sees who leaves and after which version.
+- When a download doesn't check out (its SHA-256 doesn't match, the version has none published, or the build provenance attestation doesn't verify), install.sh sends a ping naming the check and the version: an alarm that a published package may be broken or replaced. A package from `CORRAL_URL` sends nothing.
+- The same switches turn all of it off: `corral config telemetry off`, `CORRAL_NO_TELEMETRY=1` or `DO_NOT_TRACK=1`. `--check` still sends nothing.
+
 ## 0.1.19
 
 Closing Corral leaves no tabs behind, SQL in R splits like DuckDB, the audit log names SQL, and the skill is called `corral`.
