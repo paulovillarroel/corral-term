@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.19
+
+Closing Corral leaves no tabs behind, SQL in R splits like DuckDB, the audit log names SQL, and the skill is called `corral`.
 
 - Corral's skill is called `corral` now, not `corral-r`: it covers R, Python and SQL. The installer takes away the links an older Corral made under the old name, so agents don't see the skill twice; a folder of yours with that name stays.
 - Closing Corral (ctrl+b shift+q) closes what the layout opened, so no tabs are left behind: the agent when herdr says it is idle (`claude --continue` picks the conversation up again), and the terminal tab when nothing runs there. An agent at work or waiting for you, or a command running, stays, and the message says so; a tab you opened Corral from is never closed.
