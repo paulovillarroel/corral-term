@@ -1288,57 +1288,66 @@ fn system_libs_step(r: &Path, pkgs: &[&str]) {
 /// httpgd, which draws R's plots for Mirador and the agent. If it can't be installed
 /// (it needs cairo and libpng from the system), Corral works without plots there, and
 /// the step says how to add it later, with pak's list of what the system lacks.
-fn r_httpgd() {
-    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+/// Some("httpgd") when it tried and couldn't, for the install's ping.
+fn r_httpgd() -> Option<&'static str> {
+    let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
     if setup::r_packages(&r, &["httpgd"])[0] {
-        return;
+        return None;
     }
     println!("  {}", tr("… installing httpgd in your R library, for R's plots (seconds; a few minutes if it has to compile)",
                         "… instalo httpgd en tu biblioteca de R, para los gráficos de R (segundos; unos minutos si hay que compilarlo)"));
     if r_install(&r, &["httpgd"]) {
         step(tr("httpgd in your R library (R's plots in Mirador)", "httpgd en tu biblioteca de R (los gráficos de R en Mirador)"), State::Ok);
+        None
     } else {
         step(&trf!("couldn't install httpgd: Corral works, but R's plots won't reach Mirador or the agent until you install it: {}",
                    "no pude instalar httpgd: Corral funciona, pero los gráficos de R no llegan a Mirador ni al agente hasta que lo instales: {}",
                    install_r(&["httpgd"])), State::Warn);
         system_libs_step(&r, &["httpgd"]);
+        Some("httpgd")
     }
 }
 
 /// nanoparquet, which View() writes R's tables with (faster than arrow, and R's memory
 /// stays steady in a long session). If it fails, View() keeps working with arrow or CSV.
-fn r_nanoparquet() {
-    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+/// Some("nanoparquet") when it tried and couldn't, for the install's ping.
+fn r_nanoparquet() -> Option<&'static str> {
+    let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
     if setup::r_packages(&r, &["nanoparquet"])[0] {
-        return;
+        return None;
     }
     println!("  {}", tr("… installing nanoparquet in your R library (seconds; a minute or two if it has to compile)",
                         "… instalo nanoparquet en tu biblioteca de R (segundos; uno o dos minutos si hay que compilarlo)"));
     let ok = r_install(&r, &["nanoparquet"]);
     if ok {
         step(tr("nanoparquet in your R library", "nanoparquet en tu biblioteca de R"), State::Ok);
+        None
     } else {
         step(&trf!("couldn't install nanoparquet; View() uses arrow or CSV meanwhile. To try again: {}",
                    "no pude instalar nanoparquet; mientras tanto View() usa arrow o CSV. Para reintentarlo: {}", install_r(&["nanoparquet"])), State::Warn);
         system_libs_step(&r, &["nanoparquet"]);
+        Some("nanoparquet")
     }
 }
 
 /// duckdb and DBI, which SQL in R runs on (corral_sql), only where they come already
 /// compiled: elsewhere compiling duckdb takes a long while, and the checklist says how.
-fn r_duckdb() {
-    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+/// Some("duckdb") when it tried and couldn't, for the install's ping.
+fn r_duckdb() -> Option<&'static str> {
+    let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
     if setup::r_packages(&r, &["duckdb", "DBI"]).iter().all(|h| *h) || p3m_codename().is_none() {
-        return;
+        return None;
     }
     println!("  {}", tr("… installing duckdb and DBI in your R library, already compiled (SQL in R)",
                         "… instalo duckdb y DBI en tu biblioteca de R, ya compilados (SQL en R)"));
     if r_install(&r, &["duckdb", "DBI"]) {
         step(tr("duckdb in your R library (SQL in R)", "duckdb en tu biblioteca de R (SQL en R)"), State::Ok);
+        None
     } else {
         step(&trf!("couldn't install duckdb; SQL in R needs it. To try again: {}",
                    "no pude instalar duckdb; SQL en R lo necesita. Para reintentarlo: {}", install_r(&["duckdb", "DBI"])), State::Warn);
         system_libs_step(&r, &["duckdb", "DBI"]);
+        Some("duckdb")
     }
 }
 
@@ -1404,9 +1413,8 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         }
     }
     ark();
-    r_httpgd();
-    r_nanoparquet();
-    r_duckdb();
+    // The R packages it puts in by itself and couldn't, for the install's ping.
+    let r_failed: Vec<&str> = [r_httpgd(), r_nanoparquet(), r_duckdb()].into_iter().flatten().collect();
     python_ready();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
@@ -1444,7 +1452,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         println!("{}{}{}", s.dim, tr("Corral speaks English; corral config language es switches it to Spanish.",
                                      "Corral habla inglés por defecto; corral config language es lo deja en español."), s.off);
     }
-    count_install(before.get("version").str(), in_place);
+    count_install(before.get("version").str(), in_place, &r_failed);
     Ok(())
 }
 
@@ -1455,14 +1463,14 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
 /// country from Vercel's geolocation and stores no IP (api/installed.js).
 /// telemetry_off() says what turns it off; CORRAL_TELEMETRY_URL points it elsewhere
 /// (tests). It waits 5 seconds at most and never fails the install.
-fn count_install(previous: Option<&str>, in_place: bool) {
+fn count_install(previous: Option<&str>, in_place: bool, r_failed: &[&str]) {
     if telemetry_off() {
         return;
     }
-    if send_ping(&ping_body(previous, is_wsl(), in_place, &ping_env())) {
+    if send_ping(&ping_body(previous, is_wsl(), in_place, &ping_env(), r_failed)) {
         let s = style();
-        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system, country and the tools it found). corral config telemetry off turns it off.",
-                                     "Conté esta instalación de forma anónima (versión, sistema, país y las herramientas que encontré). corral config telemetry off lo desactiva."), s.off);
+        println!("{}{}{}", s.dim, tr("Counted this install anonymously (version, system, country, the tools it found and any R package that didn't go in). corral config telemetry off turns it off.",
+                                     "Conté esta instalación de forma anónima (versión, sistema, país, las herramientas que encontré y los paquetes de R que no se instalaron). corral config telemetry off lo desactiva."), s.off);
     }
 }
 
@@ -1588,10 +1596,15 @@ fn uninstall_body(wsl: bool, in_place: bool) -> String {
 /// The install ping's JSON. `previous` is the version install.json had, if any: then
 /// it is an update, and the ping says which version it replaced when that reads as
 /// one (digits and dots only).
-fn ping_body(previous: Option<&str>, wsl: bool, in_place: bool, envs: &[(&str, String)]) -> String {
+fn ping_body(previous: Option<&str>, wsl: bool, in_place: bool, envs: &[(&str, String)], r_failed: &[&str]) -> String {
     let mut v = ping_base(if previous.is_some() { "update" } else { "new" }, wsl, in_place);
     if let Some(from) = previous.filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.')) {
         v.set("from", from.into());
+    }
+    // Which of the R packages it installs by itself didn't go in (httpgd, nanoparquet,
+    // duckdb): where installs on Linux get stuck. Only those names.
+    if !r_failed.is_empty() {
+        v.set("r_failed", Value::Arr(r_failed.iter().map(|p| Value::from(*p)).collect()));
     }
     with_env(v, envs).to_json()
 }
@@ -1986,22 +1999,26 @@ mod tests {
     #[test]
     fn the_ping_says_which_version_an_update_replaced() {
         let none: [(&str, String); 0] = [];
-        assert_eq!(ping_body(None, true, false, &none),
+        assert_eq!(ping_body(None, true, false, &none, &[]),
                    format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release"}}"#));
-        assert_eq!(ping_body(Some("0.1.15"), false, true, &none),
+        assert_eq!(ping_body(Some("0.1.15"), false, true, &none, &[]),
                    format!(r#"{{"version":"{VERSION}","system":"linux","kind":"update","source":"clone","from":"0.1.15"}}"#));
         // A version that doesn't read as one is left out, and it is still an update.
-        let odd = ping_body(Some(r#"0.1"}x"#), true, false, &none);
+        let odd = ping_body(Some(r#"0.1"}x"#), true, false, &none, &[]);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
-        assert!(!ping_body(Some(""), true, false, &none).contains("from"));
+        assert!(!ping_body(Some(""), true, false, &none, &[]).contains("from"));
     }
 
     #[test]
     fn the_ping_carries_where_corral_runs_in_categories() {
         let envs = [("agent", "claude".to_string()), ("distro", "noble".to_string()), ("herdr", "0.9.5".to_string()),
                     ("r", "4.6".to_string()), ("python", "uv".to_string())];
-        assert_eq!(ping_body(None, true, false, &envs),
+        assert_eq!(ping_body(None, true, false, &envs, &[]),
                    format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release","agent":"claude","distro":"noble","herdr":"0.9.5","r":"4.6","python":"uv"}}"#));
+        // The R packages that didn't go in.
+        assert!(ping_body(None, true, false, &envs, &["httpgd", "duckdb"]).contains(r#""r_failed":["httpgd","duckdb"]"#),
+                "{}", ping_body(None, true, false, &envs, &["httpgd", "duckdb"]));
+        assert!(!ping_body(None, true, false, &envs, &[]).contains("r_failed"));
         assert_eq!(uninstall_body(false, false), format!(r#"{{"version":"{VERSION}","system":"linux","kind":"uninstall","source":"release"}}"#));
         let installed = |c: &str| c == "codex";
         assert_eq!(agent_kind(None, installed), "codex");
