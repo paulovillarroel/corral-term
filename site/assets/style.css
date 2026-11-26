@@ -98,6 +98,9 @@ code, kbd, pre, .mono, .card, .install, .stats, .meta { font-variant-ligatures: 
   color: var(--text); text-decoration: none; background: none; border: 0; cursor: pointer; padding: 0;
 }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); }
+/* The docs, in the accent color, so they stand out in the bar and in the hero's links. */
+.nav a.docs-link, .hero-grid .meta a.docs-link { color: var(--accent); }
+.nav a.docs-link:hover, .hero-grid .meta a.docs-link:hover { color: var(--fg); }
 .theme-switch { display: inline-flex; border: 1px solid var(--line-2); }
 .theme-switch button { padding: 8px 10px; font-size: 11px; color: var(--muted); }
 .theme-switch button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
