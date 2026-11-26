@@ -265,6 +265,16 @@ fn mirador_get(port: u16, path: &str) -> (String, Vec<u8>) {
     (head.lines().next().unwrap_or("").to_string(), all[split..].to_vec())
 }
 
+/// POST a JSON `body` to Mirador on 127.0.0.1:`port`: the status line.
+fn mirador_post(port: u16, path: &str, body: &str) -> String {
+    use std::io::{Read, Write};
+    let mut c = std::net::TcpStream::connect(("127.0.0.1", port)).expect("Mirador isn't listening");
+    write!(c, "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+    let mut all = String::new();
+    c.read_to_string(&mut all).unwrap();
+    all.lines().next().unwrap_or("").to_string()
+}
+
 /// How many files with this extension a folder holds.
 fn count(dir: &Path, ext: &str) -> usize {
     std::fs::read_dir(dir).map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == ext)).count()).unwrap_or(0)
@@ -789,6 +799,12 @@ fn r_plots_survive_a_crash() {
     let list = String::from_utf8_lossy(&mirador_get(port, &format!("/api/plots?session={sid}&token={token}")).1).to_string();
     let kept2 = list.find("kept-k0002").unwrap_or(usize::MAX);
     assert!(list.matches("\"id\"").count() == 3 && kept2 < list.rfind("\"id\"").unwrap(), "{list}");
+    // Removed in Mirador, a kept plot goes for good: both its files.
+    let status = mirador_post(port, &format!("/api/plots/remove?token={token}"), &format!(r#"{{"session":"{sid}","index":0}}"#));
+    assert!(status.contains("200"), "{status}");
+    let list = String::from_utf8_lossy(&mirador_get(port, &format!("/api/plots?session={sid}&token={token}")).1).to_string();
+    assert!(!list.contains("kept-k0001") && list.contains("kept-k0002"), "{list}");
+    assert!(!new_dir.join("kept/k0001.png").exists() && !new_dir.join("kept/k0001.svg").exists(), "k0001 left files behind");
     let _ = live.corral(&["mirador", "--stop"]);
 }
 
