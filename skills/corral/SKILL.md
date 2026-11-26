@@ -12,11 +12,12 @@ R is the default. Add `--lang python` to every command for Python. Running code 
 ## Check first
 
 ```bash
-test "${HERDR_ENV:-}" = 1 && corral eval --check
-test "${HERDR_ENV:-}" = 1 && corral eval --check --lang python
+test "${HERDR_ENV:-}" = 1 && corral context --json
 ```
 
-Exit 0 prints the console and session as JSON (`active` tells whether it is the one showing). For R, anything else means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` or by typing `corral` in a terminal (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activate()` in that R). For Python, no console yet is normal: `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
+One call, nothing started: for each console (`consoles.r`, `consoles.python`) whether it is `running`, its `session`, `version`, `cwd`, whether it is `showing`, and whether SQL works there (`sql`); and the rules the user set, as they apply to that session: `access` (`on` runs, `ask` waits for their approval in a popup, `off` runs nothing) and `output` (`full`, `review` or `structure`), stricter when it is `sensitive`. `agents` gives the rules for a console not started yet. Plan around them: with `ask`, put related code in one request; with `structure`, work from shapes; with `off`, ask the user to run it. (`corral eval --check [--lang python]` still answers for one console.)
+
+For R, `running: false` means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` or by typing `corral` in a terminal (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activate()` in that R). For Python, no console yet is normal (`starts_on_request`): `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
 
 If `corral` itself is not found, Corral is not installed: `corral install --check` (once installed) or `sh install.sh --check` from a clone lists what is missing and what to run; the install line is `curl -LsSf https://corral-term.dev/install.sh | sh`.
 
