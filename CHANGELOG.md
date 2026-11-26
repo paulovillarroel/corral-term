@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+Security profiles, for all your work or for one project.
+
+- `corral profile open|standard|sensitive` sets the harness in one step: open (agents run without asking, full results), standard (they ask; the default) or sensitive (they ask, results come back without values, every session is sensitive). With `--project`, the profile is for one project folder and every session that starts or runs in it, so a project with clinical data is always sensitive without anyone remembering `corral_sensitive()`; a session that started there stays sensitive if it moves. The stricter of the global and the project's profile wins, so a project can only tighten. Projects' profiles live in Corral's settings (`projects`), not in the repository. Tightening never asks; a looser profile, or removing a project's, from an agent's pane waits for the user's approval, as `corral config` does.
+- The profile in effect shows in the variables pane's header, in the accent colour when it is sensitive; `corral context` gives it to the agent; `corral profile` shows the global one, the project's and the rules that result. In the palette: "Agents: open profile", "standard profile", "sensitive profile", "this project is sensitive" and "this project follows the global profile".
+- `corral eval`, `corral vars --json` and `corral context` now take their rules from one place, so they can't disagree. Working them out takes about 2 µs per request. R and Python note in their session file the folder each session started in. A live test marks a project sensitive and checks that requests then wait for approval, that values' previews go, that the session is marked and the pane says so, and that an agent can't remove the profile.
+
 ## 0.1.26
 
 `corral context`: what your agent knows before it runs anything. After a crash, R says why and what came back.
