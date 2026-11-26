@@ -456,8 +456,10 @@ local({
     pid <- if (file.exists(pid_file)) suppressWarnings(as.integer(readLines(pid_file, n = 1L, warn = FALSE))) else NA_integer_
     cmdline <- sprintf("/proc/%d/cmdline", if (length(pid) == 1L && !is.na(pid)) pid else 0L)
     if (file.exists(cmdline)) {
+      # Its own watcher: another session's could have the pid now.
       cmd <- tryCatch(readBin(cmdline, "raw", 512L), error = function(e) raw())
-      if (grepl("_keep-plots", rawToChar(cmd[cmd != as.raw(0L)]), fixed = TRUE)) return(invisible())
+      cmd[cmd == as.raw(0L)] <- as.raw(32L) # the arguments, separated by spaces
+      if (grepl(paste0(" _keep-plots ", session_id, " "), rawToChar(cmd), fixed = TRUE)) return(invisible())
     }
     if (is.null(keep_bin)) keep_bin <<- tryCatch(env$corral_bin(), error = function(e) "")
     if (nzchar(keep_bin)) {
