@@ -63,6 +63,13 @@ const DOWNLOADS: [Download; 3] = [
 const HERDR: (&str, &str, &str) = ("0.9.5", "https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-linux-x86_64",
                                    "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d");
 
+/// uv, for the Python console, when it's missing and you say yes (uv_step): a release
+/// at least three days old, from uv's GitHub release (the static musl build, which runs
+/// on any Linux), checked against the SHA-256 written here. uv and uvx go where uv's
+/// own installer puts them (~/.local/bin), as your uv; uninstalling Corral leaves them.
+const UV: (&str, &str, &str) = ("0.13.9", "https://github.com/astral-sh/uv/releases/download/{v}/uv-x86_64-unknown-linux-musl.tar.gz",
+                                "58ccf5f1792b8a5a88d01bc910ea131a8b3db4a319a17ad5fad75e0845a3e271");
+
 /// The R package Corral can't work without: jsonlite carries the variables (the
 /// variables pane, `corral vars`, the plot index). httpgd, for plots, goes in too, but
 /// Corral works without it, so it doesn't stop the install (r_httpgd).
@@ -469,7 +476,8 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     match which("uv") {
         Some(uv) => out.push(check("optional", State::Ok, "uv", trf!("{} (Python console)", "{} (consola de Python)", version_of(&uv, "--version")), &[])),
         None => out.push(check("optional", State::Warn, "uv", tr("without uv there is no Python console", "sin uv no hay consola de Python"),
-                               &[tr("To use Python in Corral, install uv:", "Para usar Python en Corral instala uv:"),
+                               &[tr("For Python in Corral, the installer offers uv while it installs, in a terminal; or install it yourself:",
+                                    "Para Python en Corral, el instalador ofrece uv mientras instala, en una terminal; o instálalo tú:"),
                                  "  curl -LsSf https://astral.sh/uv/install.sh | sh"])),
     }
     let places = and_list(&skill_places().iter().map(|(_, shown)| *shown).collect::<Vec<_>>());
@@ -722,16 +730,76 @@ fn bring_herdr() -> bool {
         step(&e, State::Missing);
         return false;
     }
-    let (exe, part) = (bin().join("herdr"), bin().join(".herdr.part"));
+    let exe = match place_in_bin("herdr", &data) {
+        Ok(exe) => exe,
+        Err(e) => {
+            step(&format!("herdr: {e}"), State::Missing);
+            return false;
+        }
+    };
+    step(&trf!("herdr {v} in {}, SHA-256 checked", "herdr {v} en {}, SHA-256 comprobado", short(&exe)), State::Ok);
+    true
+}
+
+/// A program into ~/.local/bin, whole or not at all: written next to it as
+/// `.<name>.part`, made executable, then renamed into place.
+fn place_in_bin(name: &str, data: &[u8]) -> std::io::Result<PathBuf> {
+    let (exe, part) = (bin().join(name), bin().join(format!(".{name}.part")));
     let written = std::fs::create_dir_all(bin()).and_then(|_| std::fs::write(&part, data))
         .and_then(|_| std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o755)))
         .and_then(|_| std::fs::rename(&part, &exe));
-    if let Err(e) = written {
+    if written.is_err() {
         let _ = std::fs::remove_file(&part);
-        step(&format!("herdr: {e}"), State::Missing);
+    }
+    written.map(|_| exe)
+}
+
+/// uv for the Python console, when it's missing: the installer offers it, in a
+/// terminal, and Enter says yes. Without uv there is no Python console, and with it
+/// python_ready, right after, gets Python and the console's packages once. No
+/// terminal to ask in, or a no: the checklist's hint says how to add it later.
+fn uv_step() {
+    if which("uv").is_some() || !can_ask() {
+        return;
+    }
+    println!("\n  {}", tr("uv isn't installed, so there's no Python console. With uv, it also gets Python and the console's packages, once (about 400 MB on disk).",
+                          "uv no está instalado, así que no hay consola de Python. Con uv también trae Python y los paquetes de la consola, una vez (unos 400 MB en disco)."));
+    if ask(&format!("  {}", trf!("Install uv {}?", "¿Instalo uv {}?", UV.0))) == Some(true) {
+        bring_uv();
+    }
+}
+
+/// uv and uvx into ~/.local/bin, from uv's GitHub release and checked against UV's
+/// SHA-256 before anything is written.
+fn bring_uv() -> bool {
+    let (v, url, sha) = UV;
+    println!("  {}", trf!("… downloading uv {v}", "… descargando uv {v}"));
+    let data = match setup::download(&url.replace("{v}", v)) {
+        Ok(d) => d,
+        Err(e) => {
+            step(&e, State::Warn);
+            return false;
+        }
+    };
+    if let Err(e) = setup::checked(&format!("uv {v}"), &data, sha) {
+        step(&e, State::Warn);
         return false;
     }
-    step(&trf!("herdr {v} in {}, SHA-256 checked", "herdr {v} en {}, SHA-256 comprobado", short(&exe)), State::Ok);
+    let Ok(tar) = zip::gunzip(&data) else {
+        step(&trf!("uv {v}: the download isn't a .tar.gz", "uv {v}: lo descargado no es un .tar.gz"), State::Warn);
+        return false;
+    };
+    for name in ["uv", "uvx"] {
+        let Some(program) = zip::tar_member(&tar, name) else {
+            step(&trf!("uv {v}: the download doesn't contain {name}", "uv {v}: lo descargado no trae {name}"), State::Warn);
+            return false;
+        };
+        if let Err(e) = place_in_bin(name, &program) {
+            step(&format!("{name}: {e}"), State::Warn);
+            return false;
+        }
+    }
+    step(&trf!("uv {v} in {}, SHA-256 checked", "uv {v} en {}, SHA-256 comprobado", short(&bin().join("uv"))), State::Ok);
     true
 }
 
@@ -1164,7 +1232,9 @@ fn python_ready() {
     println!("  {}", tr("… preparing the Python console (uv downloads IPython, pyarrow and duckdb once)",
                         "… preparo la consola de Python (uv descarga IPython, pyarrow y duckdb una vez)"));
     let mut c = Command::new(uv);
-    c.args(["run", "--no-project"]);
+    // As a console outside a project starts: in your home folder, with the same choice
+    // of Python (a uv-managed one when uv would otherwise take the system's).
+    c.current_dir(env::home()).args(["run", "--no-project"]).args(crate::versions::uv_python_args(&env::home()));
     for p in crate::console::PYTHON_PACKAGES {
         c.args(["--with", p]);
     }
@@ -1415,6 +1485,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     ark();
     // The R packages it puts in by itself and couldn't, for the install's ping.
     let r_failed: Vec<&str> = [r_httpgd(), r_nanoparquet(), r_duckdb()].into_iter().flatten().collect();
+    uv_step();
     python_ready();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
@@ -2148,6 +2219,14 @@ mod tests {
         assert_eq!(with_sudo(text).as_deref(), Some("sudo apt-get -y update && sudo apt-get -y install libcairo2-dev libpng-dev"));
         assert_eq!(with_sudo("sudo dnf install -y cairo-devel\n").as_deref(), Some("sudo dnf install -y cairo-devel"));
         assert_eq!(with_sudo("ℹ nothing to install\n"), None);
+    }
+
+    #[test]
+    fn the_uv_it_offers_is_pinned_and_checked() {
+        let (v, url, sha) = UV;
+        assert!(plain_version(v), "{v}");
+        assert!(url.starts_with("https://github.com/astral-sh/uv/releases/download/{v}/") && url.ends_with("-unknown-linux-musl.tar.gz"), "{url}");
+        assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
     }
 
     #[test]
