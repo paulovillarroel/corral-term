@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod common;
 use common::field;
@@ -20,6 +20,8 @@ struct Live {
     dir: PathBuf,
     server: Child,
     console: String,
+    /// The variables pane.
+    vars: String,
     workspace: String,
     /// More environment for herdr, and so for the consoles it starts.
     extra: Vec<(String, String)>,
@@ -57,7 +59,7 @@ impl Live {
         std::fs::write(dir.join("Rprofile"), format!("if (interactive()) source(\"{}\")\n", repo.join("r/corral.R").display())).unwrap();
 
         let extra = extra.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), workspace: String::new(), extra };
+        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), vars: String::new(), workspace: String::new(), extra };
         live.server = live.command("herdr").arg("server")
             .stdout(Stdio::null()).stderr(Stdio::null()).spawn()
             .expect("herdr is not on the PATH");
@@ -68,6 +70,7 @@ impl Live {
         live.workspace = field(&created, "workspace_id").expect("no workspace");
         let layout = live.run("corral", &["layout", "--editor", ""]);
         live.console = field(&layout, "console").unwrap_or_else(|| panic!("no console in {layout}"));
+        live.vars = field(&layout, "vars").unwrap_or_default();
         wait_for(Duration::from_secs(60), "the R console", || live.corral(&["eval", "--check"]).status.success());
         // The console in the pane must be the corral under test, not one installed elsewhere.
         let stat = std::fs::read_to_string(format!("/proc/{}/stat", live.kernel_pid())).unwrap();
@@ -459,6 +462,27 @@ fn an_eval_that_starts_the_watcher_again_doesnt_wait() {
     let r = sockets(live.kernel_pid());
     let shared: Vec<String> = sockets(read_pid().unwrap()).into_iter().filter(|s| r.contains(s)).collect();
     assert!(shared.is_empty(), "the watcher holds R's sockets: {shared:?}");
+}
+
+/// A newer Corral, once the daily check has found one, shows at the foot of the
+/// variables pane and names itself in the palette, and goes once it is installed:
+/// herdr's toast, the other way Corral tells, is off by default.
+#[test]
+#[ignore]
+fn a_newer_version_shows_in_the_variables_pane() {
+    let live = Live::start("newer");
+    // As the daily check leaves it; checks on (the harness turns them off), but the layout
+    // is already open, so nothing asks GitHub.
+    live.config(r#"{"agents":"on","update_check":"on"}"#);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    std::fs::write(live.dir.join("state/corral/update-check.json"), format!(r#"{{"checked":{now},"latest":"9.9.9"}}"#)).unwrap();
+    live.wait_screen(&live.vars, &["Corral 9.9.9 is out: ctrl+b space → Update"]);
+    let palette = live.run("corral", &["keys", "--json"]);
+    assert!(palette.contains("Update: Corral 9.9.9 is out, install it"), "{palette}");
+    // Installed (the install record says 9.9.9): the pane, still the old binary, drops it.
+    std::fs::write(live.dir.join("state/corral/install.json"), r#"{"version":"9.9.9"}"#).unwrap();
+    wait_for(Duration::from_secs(20), "the notice to go", || !live.screen(&live.vars).contains("9.9.9"));
+    assert!(!live.run("corral", &["keys", "--json"]).contains("9.9.9"));
 }
 
 /// Python: the first request starts the console; objects stay between
