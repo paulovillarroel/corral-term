@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.22
+
+The installer brings herdr and R's two packages when they are missing.
 
 - The installer offers to install herdr and the R packages httpgd and jsonlite when they are missing, instead of stopping. One question, Enter says yes. herdr 0.9.5 comes from herdr's GitHub release, checked against a SHA-256 written into Corral's code, and goes in `~/.local/bin` as your herdr: `herdr update` keeps it current and `corral uninstall` leaves it. The packages go in your R library, without sudo. Say no, or run it without a terminal, and it stops with the commands as before. When something else is missing too, such as R, it gives the steps for that and says it will offer the rest next time.
 
