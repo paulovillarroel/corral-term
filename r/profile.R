@@ -11,7 +11,7 @@
 #      (CORRAL_R_PROFILE_USER keeps it), else the project's .Rprofile (where renv
 #      activates its library), else ~/.Rprofile.
 #   3. Loads corral.R (CORRAL_R_FILE), unless that profile already did, as the line
-#      the installer puts in ~/.Rprofile does.
+#      the installer puts in ~/.Rprofile does, even when it points at another copy.
 #
 # A few file checks: it adds nothing you could time to R's start.
 local({
@@ -23,7 +23,10 @@ local({
   # doesn't stop R from starting.
   if (file.exists(profile)) try(source(profile, local = globalenv()))
   corral <- Sys.getenv("CORRAL_R_FILE")
-  if (!isTRUE(getOption("corral.loaded")) && interactive() && nzchar(corral) && file.exists(corral)) {
+  # Already loaded by that profile: the flag (this version on), or Corral's task callback,
+  # which every version registers as "corral" (a ~/.Rprofile pointing at an older copy).
+  loaded <- isTRUE(getOption("corral.loaded")) || "corral" %in% getTaskCallbackNames()
+  if (!loaded && interactive() && nzchar(corral) && file.exists(corral)) {
     try(source(corral, local = globalenv()))
   }
 })
