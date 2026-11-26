@@ -253,8 +253,8 @@ fn remove_shown(sid: &str, index: Option<i64>) -> bool {
 /// httpgd for them over HTTP, as Mirador does. Not in R's forked copy, where drawing can
 /// hang it for good (httpgd's server thread may hold a lock at the fork), nor started
 /// from R for each plot: R's system2() forks R, 8 ms with 400-650 MB in use.
-/// The newest 30 are kept. A plot whose SVG takes over 200 ms to draw is skipped from
-/// then on (a million points takes 0.4 s and 90 MB); otherwise its SVG is kept up to
+/// The newest 30 are kept. A plot whose SVG is over 20 MB is skipped from then on
+/// (too_heavy); otherwise its SVG is kept up to
 /// 2 MB, and a 720x576 PNG always, for the terminal's viewer. The newest is written
 /// again each time, since lines() can draw over it; the others once.
 pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
@@ -284,6 +284,15 @@ pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(250));
     }
     Ok(())
+}
+
+/// A plot too heavy to keep: its SVG is over 20 MB, about 200,000 points. Measured
+/// through httpgd at 720x576: that SVG takes 61 ms and its PNG 214 ms; a million points,
+/// 93 MB, takes 0.33 s and 0.95 s. Its size, not the time it took: that time grows up to
+/// five times when Mirador and the terminal's viewer ask httpgd for the same plot at the
+/// same moment, which they do, as all three follow plots-rev.
+fn too_heavy(svg_bytes: usize) -> bool {
+    svg_bytes > 20 * 1024 * 1024
 }
 
 /// One pass of `_keep-plots`: the files in `dir` follow the session's newest 30 plots.
@@ -323,9 +332,8 @@ fn write_plots(sid: &str, dir: &Path) {
         if skipped.contains(id) || (png.exists() && i + 1 < ids.len()) {
             continue;
         }
-        let start = Instant::now();
         let Some((svg, _)) = plots_raw(sid, "plot", &size("svg", id)) else { continue };
-        if start.elapsed() > Duration::from_millis(200) {
+        if too_heavy(svg.len()) {
             skipped.push(id.clone());
             let _ = std::fs::remove_file(&png);
             let _ = std::fs::remove_file(dir.join(format!("{id}.svg")));
@@ -970,6 +978,14 @@ pub fn serve() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn heavy_plots_by_size() {
+        assert!(!too_heavy(100 * 1024)); // 1,000 points
+        assert!(!too_heavy(19 * 1024 * 1024)); // about 200,000 points
+        assert!(too_heavy(21 * 1024 * 1024));
+        assert!(too_heavy(93 * 1024 * 1024)); // a million points
+    }
 
     #[test]
     fn plot_sizes() {
