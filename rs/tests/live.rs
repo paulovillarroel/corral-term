@@ -197,6 +197,20 @@ impl Live {
         found.unwrap()
     }
 
+    /// Mirador for this test (no browser): its port and token.
+    fn mirador(&self) -> (u16, String) {
+        self.run("corral", &["mirador", "--url"]);
+        let info = std::fs::read_to_string(self.dir.join("state/corral/mirador.json")).unwrap_or_default();
+        (field(&info, "port").and_then(|p| p.parse().ok()).expect("no Mirador port"), field(&info, "token").expect("no Mirador token"))
+    }
+
+    /// The id of the live session in `lang`, as Mirador and the checkpoints name it.
+    fn session_id(&self, lang: &str) -> String {
+        let (dir, _) = self.checkpoint(lang);
+        let name = dir.file_name().unwrap().to_string_lossy().to_string();
+        name.split_once('-').map(|(_, id)| id.to_string()).unwrap_or(name)
+    }
+
     fn kernel_pid(&self) -> i64 {
         self.session("r").expect("no live R session").0
     }
@@ -239,6 +253,23 @@ fn alive(pid: i64) -> bool {
 
 /// Kill a process as a crash would, and wait until it is gone: a request sent
 /// right after the signal could still reach it.
+/// GET `path` from Mirador on 127.0.0.1:`port`: the status line and the body.
+fn mirador_get(port: u16, path: &str) -> (String, Vec<u8>) {
+    use std::io::{Read, Write};
+    let mut c = std::net::TcpStream::connect(("127.0.0.1", port)).expect("Mirador isn't listening");
+    write!(c, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").unwrap();
+    let mut all = Vec::new();
+    c.read_to_end(&mut all).unwrap();
+    let split = all.windows(4).position(|w| w == b"\r\n\r\n").map(|i| i + 4).unwrap_or(all.len());
+    let head = String::from_utf8_lossy(&all[..split]).to_string();
+    (head.lines().next().unwrap_or("").to_string(), all[split..].to_vec())
+}
+
+/// How many files with this extension a folder holds.
+fn count(dir: &Path, ext: &str) -> usize {
+    std::fs::read_dir(dir).map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == ext)).count()).unwrap_or(0)
+}
+
 fn crash(pid: i64) {
     Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap();
     wait_for(Duration::from_secs(10), "the killed process to end", || !alive(pid));
@@ -720,6 +751,76 @@ fn r_objects_survive_a_crash() {
     live.wait_screen(&live.console, &["Restored", "con (a connection)"]);
 }
 
+#[test]
+#[ignore]
+fn r_plots_survive_a_crash() {
+    // A crash doesn't take R's plots: the checkpoint's copy keeps each one as a file,
+    // and the next R in the project shows them first, in Mirador, before its own.
+    let live = Live::start_with("rplots", &[("CORRAL_BROWSER", "print")]);
+    let (code, text) = live.eval(&["plot(1:10); hist(c(1, 2, 2, 3, 3, 3)); invisible(0)"]);
+    assert_eq!(code, 0, "{text}");
+    let (dir, _) = live.checkpoint("r");
+    wait_for(Duration::from_secs(30), "both plots in the checkpoint", || {
+        count(&dir.join("plots"), "png") == 2 && count(&dir.join("plots"), "svg") == 2
+    });
+    std::thread::sleep(Duration::from_secs(6)); // older than 5 s: the console starts R again by itself
+    let old = live.kernel_pid();
+    crash(old);
+    let end = Instant::now() + Duration::from_secs(60);
+    while !live.session("r").is_some_and(|(p, _)| p != old) {
+        assert!(Instant::now() < end, "no new R session after 60 s; the console shows:\n{}", live.screen(&live.console));
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    live.wait_screen(&live.console, &["Restored 2 plots", "first in Mirador"]);
+    let (new_dir, _) = live.checkpoint("r");
+    assert_eq!(count(&new_dir.join("kept"), "png"), 2, "{new_dir:?}");
+    // Mirador lists them and serves them before the new R draws anything.
+    let (port, token) = live.mirador();
+    let sid = live.session_id("r");
+    let (status, body) = mirador_get(port, &format!("/api/plots?session={sid}&token={token}"));
+    let list = String::from_utf8_lossy(&body).to_string();
+    assert!(status.contains("200") && list.contains("kept-k0001") && list.contains("kept-k0002"), "{status} {list}");
+    let (status, png) = mirador_get(port, &format!("/api/plot?session={sid}&id=kept-k0001&renderer=png&token={token}"));
+    assert!(status.contains("200") && png.starts_with(b"\x89PNG"), "{status}");
+    let (status, svg) = mirador_get(port, &format!("/api/plot?session={sid}&id=kept-k0002&token={token}"));
+    assert!(status.contains("200") && String::from_utf8_lossy(&svg).contains("<svg"), "{status}");
+    // A new plot comes after them.
+    assert_eq!(live.eval(&["plot(3:1)"]).0, 0);
+    let list = String::from_utf8_lossy(&mirador_get(port, &format!("/api/plots?session={sid}&token={token}")).1).to_string();
+    let kept2 = list.find("kept-k0002").unwrap_or(usize::MAX);
+    assert!(list.matches("\"id\"").count() == 3 && kept2 < list.rfind("\"id\"").unwrap(), "{list}");
+    let _ = live.corral(&["mirador", "--stop"]);
+}
+
+#[test]
+#[ignore]
+fn python_figures_survive_a_crash() {
+    // Python's figures too: they are already drawn when shown, so the copy only writes
+    // them, and the next Python in the project shows them first.
+    let live = Live::start_with("pyplots", &[("CORRAL_BROWSER", "print")]);
+    let startup = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("py/startup.py");
+    live.config(&format!(r#"{{"agents":"on","update_check":"off","python_console":"uv run --with ipython --with cloudpickle --with pyarrow --with duckdb --with matplotlib ipython --no-banner -i {}"}}"#,
+                         startup.display()));
+    let code = "import matplotlib.pyplot as plt\nkeep = 41\nplt.figure(); plt.plot([1, 2, 3]); plt.show()\nplt.figure(); plt.bar(['a', 'b'], [2, 3]); plt.show()\nprint('drawn')";
+    let (status, text) = live.eval(&["--lang", "python", "--timeout", "180", code]);
+    assert_eq!(status, 0, "{text}");
+    let (dir, _) = live.checkpoint("python");
+    wait_for(Duration::from_secs(30), "both figures in the checkpoint", || count(&dir.join("plots"), "png") == 2);
+    let (pid, _) = live.session("python").unwrap();
+    crash(pid);
+    let (status, text) = live.eval(&["--lang", "python", "--timeout", "180", "print('back', keep + 1)"]);
+    assert!(status == 0 && text.contains("back 42"), "{text}");
+    let (_, pane) = live.session("python").unwrap();
+    live.wait_screen(&pane, &["Restored 1 objects", "And its 2 figures"]);
+    let (port, token) = live.mirador();
+    let sid = live.session_id("python");
+    let list = String::from_utf8_lossy(&mirador_get(port, &format!("/api/plots?session={sid}&token={token}")).1).to_string();
+    assert!(list.contains("kept-k0001") && list.contains("kept-k0002"), "{list}");
+    let (status, png) = mirador_get(port, &format!("/api/plot?session={sid}&id=kept-k0002&renderer=png&token={token}"));
+    assert!(status.contains("200") && png.starts_with(b"\x89PNG"), "{status}");
+    let _ = live.corral(&["mirador", "--stop"]);
+}
+
 /// Python too, after a crash: values, a function defined in the session, an
 /// instance of a class defined there, and a module imported under another name.
 #[test]
@@ -935,6 +1036,94 @@ fn python_checkpoints_cost_report() {
     assert!(z <= 1, "{z} copies were never collected");
 }
 
+
+/// CPU time a process has used, in seconds.
+fn cpu_s(pid: i64) -> f64 {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+    let f: Vec<&str> = stat.rsplit_once(')').map(|(_, r)| r.split_whitespace().collect()).unwrap_or_default();
+    let tick = |k: usize| f.get(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+    (tick(11) + tick(12)) / 100.0
+}
+
+/// What keeping R's plots costs (docs/performance.html#checkpoints-plots): the wait
+/// after a command that draws, checkpoints off and on, the one watcher process
+/// (`corral _keep-plots`) at rest, the time from a plot to its file, and the disk.
+#[test]
+#[ignore]
+fn plots_checkpoint_cost_report() {
+    let file = PathBuf::from(format!("/tmp/corral-live-plotcost-{}/timing", std::process::id()));
+    let live = Live::start_with("plotcost", &[("CORRAL_TIMING", file.to_str().unwrap()), ("CORRAL_BROWSER", "print")]);
+    let timing = Timing(file);
+    let pid = live.kernel_pid();
+    let sid = live.session_id("r");
+    // As Ctrl+R sends it: `corral eval` would also ask httpgd for each new plot.
+    let sent = |code: &str| -> f64 {
+        let before = timing.lines().len();
+        let out = live.corral(&["send", "--lang", "r", code]);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        wait_for(Duration::from_secs(30), "the command's timing", || timing.lines().len() > before);
+        *timing.lines().last().unwrap()
+    };
+    sent("plot(1:3)"); // starts httpgd, and with it the watcher
+    std::thread::sleep(Duration::from_secs(2));
+    let mut phases = Vec::new();
+    for on in [false, true, false, true] {
+        live.config(if on { r#"{"agents":"on","update_check":"off"}"# } else { r#"{"agents":"on","update_check":"off","checkpoints":"off"}"# });
+        std::thread::sleep(Duration::from_secs(1));
+        let (rss0, cpu0) = (rss_mb(pid), cpu_s(pid));
+        let mut waits: Vec<f64> = (0..100).map(|i| sent(&format!("plot(rnorm(1000), main = '{i}')"))).collect();
+        std::thread::sleep(Duration::from_secs(1));
+        let (m, _, p90) = stats(&mut waits);
+        let (p99, max) = tail(&waits);
+        phases.push((on, rss0, rss_mb(pid), cpu_s(pid) - cpu0, m, p90, p99, max));
+    }
+    let (dir, _) = live.checkpoint("r");
+    let watcher: i64 = std::fs::read_to_string(live.dir.join(format!("state/corral/sessions/{sid}/keep-plots.pid"))).unwrap().trim().parse().unwrap();
+    let watchers = std::fs::read_dir("/proc").unwrap().flatten()
+        .filter_map(|e| std::fs::read(e.path().join("cmdline")).ok())
+        .filter(|c| String::from_utf8_lossy(c).contains("_keep-plots") && String::from_utf8_lossy(c).contains(&sid)).count();
+    let pss = std::fs::read_to_string(format!("/proc/{watcher}/smaps_rollup")).unwrap_or_default().lines()
+        .find(|l| l.starts_with("Pss:")).and_then(|l| l.split_whitespace().nth(1)?.parse::<f64>().ok()).unwrap_or(0.0) / 1024.0;
+    let cpu0 = cpu_s(watcher);
+    std::thread::sleep(Duration::from_secs(30));
+    let rest = cpu_s(watcher) - cpu0;
+    // From a command that draws to its PNG in the checkpoint.
+    let mut reach = Vec::new();
+    for i in 0..10 {
+        let pngs = || std::fs::read_dir(dir.join("plots")).unwrap().flatten().filter(|f| f.path().extension().is_some_and(|e| e == "png")).map(|f| f.file_name()).collect::<Vec<_>>();
+        let before = pngs();
+        let start = Instant::now();
+        let _ = live.corral(&["send", "--lang", "r", &format!("plot(rnorm(1000), main = 'reach {i}')")]);
+        wait_for(Duration::from_secs(10), "the new PNG", || pngs().iter().any(|f| !before.contains(f)));
+        reach.push(start.elapsed().as_secs_f64() * 1000.0);
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    let (reach_m, _, reach_p90) = stats(&mut reach);
+    // A plot too heavy to draw in 200 ms is left out, and remembered as such.
+    sent("plot(runif(1e6), runif(1e6), pch = 16)");
+    wait_for(Duration::from_secs(20), "the heavy plot left out", || {
+        std::fs::read_to_string(dir.join("plots/skipped")).is_ok_and(|s| !s.trim().is_empty())
+    });
+    let count = |ext: &str| std::fs::read_dir(dir.join("plots")).unwrap().flatten().filter(|f| f.path().extension().is_some_and(|e| e == ext)).count();
+    let (svg, png) = (count("svg"), count("png"));
+    let plots_mb = folder_mb(&dir.join("plots"));
+
+    println!("\nR plots, 100 commands that draw in each phase:");
+    for (on, rss0, rss1, cpu, m, p90, p99, max) in &phases {
+        println!("    checkpoints {:<3}  R {rss0:.0} -> {rss1:.0} MB, CPU {cpu:.2} s  wait median {m:.2} ms, p90 {p90:.2} ms, p99 {p99:.2} ms, max {max:.2} ms",
+                 if *on { "on" } else { "off" });
+    }
+    println!("    watchers for this session {watchers}; at rest {pss:.1} MB (PSS), CPU {rest:.3} s in 30 s");
+    println!("    from the command to its PNG in the checkpoint: median {reach_m:.0} ms, p90 {reach_p90:.0} ms");
+    println!("    in the checkpoint: {svg} SVG and {png} PNG, {plots_mb:.1} MB");
+
+    let (off, on) = (phases[2], phases[3]);
+    assert!(on.4 - off.4 < 1.0, "a command that draws waited {:.2} ms more", on.4 - off.4);
+    assert_eq!(watchers, 1, "one watcher per session");
+    assert!(rest < 0.1, "the watcher used {rest:.2} s of CPU at rest");
+    assert_eq!(png, 29, "the newest 30 plots but the heavy one, left out");
+    assert!((on.2 - on.1) <= (off.2 - off.1) + 50.0, "R's memory grew more with checkpoints on");
+}
 
 /// How long a crashed R takes to come back with its objects, for two sizes.
 #[test]
