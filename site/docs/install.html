@@ -118,7 +118,7 @@
     <thead><tr><th>Program</th><th>What it adds</th></tr></thead>
     <tbody>
     <tr><td>An agent: Claude Code, Codex, Gemini CLI, opencode…</td><td>Install it on its own. The layout opens the first one installed; with several, the installer asks which, and the palette or <code>corral config agent</code> picks another. The installer puts Corral's skill where agents look for it; if you install one later, run the install line again.</td></tr>
-    <tr><td><a href="https://docs.astral.sh/uv/">uv</a></td><td>The Python console. Without uv there is no Python in Corral.</td></tr>
+    <tr><td><a href="https://docs.astral.sh/uv/">uv</a></td><td>The Python console. Without uv there is no Python in Corral. If it's missing, the installer offers it, in a terminal: uv 0.13.9 from its GitHub release, checked against a SHA-256 in Corral's code, in <code>~/.local/bin</code> as uv's own installer puts it. Then it prepares the Python console, which gets Python and its packages once (about 400 MB on disk). Uninstalling Corral leaves uv.</td></tr>
     <tr><td>The R package <code>rlang</code></td><td>Saves redrawing a plot, and lets checkpoints see objects changed in place.</td></tr>
     <tr><td>A browser</td><td>For Mirador. On WSL, Corral uses your Windows browser; on Linux, <code>xdg-open</code>.</td></tr>
     </tbody>
@@ -163,7 +163,7 @@ Optional
       <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ. That catches a download that arrived broken or changed on the way. Both files come from the same release, though, so someone able to publish there could replace both.</li>
       <li>The attestation covers that case. Each package carries a build provenance attestation, signed by GitHub when the project's workflow builds it, which proves the package came from that workflow and that version's code. If you have the <a href="https://cli.github.com">GitHub CLI</a> (<code>gh</code> 2.49 or later, logged in), the installer checks it and stops if it doesn't hold; without it, it says the attestation wasn't checked. You can also check it yourself:
 <pre><code><span class="p">$ </span>gh attestation verify corral-term-x86_64-linux.tar.gz --repo paulovillarroel/corral-term</code></pre></li>
-      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, and herdr, when you say yes to it, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
+      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, and herdr and uv, when you say yes to them, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
       <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
     </ul>
 

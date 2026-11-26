@@ -32,7 +32,7 @@ Written in Rust. DuckDB for your data.</p>
 | [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. If it's missing, the installer offers to install it, and if it's older, to update it with `herdr update`. |
 | R, with the `jsonlite` package | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig). If jsonlite is missing, the installer offers to put it in your R library, with pak if you use it. httpgd, for the plots, it installs by itself. |
 
-Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console, and the R package `rlang`.
+Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console (the installer offers it when it's missing), and the R package `rlang`.
 
 ### One line
 
