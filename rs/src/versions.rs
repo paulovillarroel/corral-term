@@ -146,13 +146,39 @@ fn chosen_python() -> Option<String> {
     env::config().get("python_version").str().filter(|v| !v.is_empty()).map(String::from)
 }
 
-/// `--python VERSION` for `uv run` in `dir`: the chosen version outside a uv
-/// project; inside one, nothing, since its .python-version decides.
+/// `uv run`'s choice of Python in `dir`. Inside a uv project, nothing: its
+/// .python-version and environment decide. Outside one, the version chosen with
+/// `corral config python_version`, and, where uv would pick an interpreter itself
+/// (uv_picks_interpreter), a Python uv manages: a system Python brings the packages
+/// the distribution put there (Ubuntu's numpy 1, for one), which the console's
+/// pyarrow, built for numpy 2, can't import. The first time, uv downloads that
+/// Python (about 30 MB); later consoles start as before.
 pub fn uv_python_args(dir: &Path) -> Vec<String> {
-    match (uv_project(dir), chosen_python()) {
-        (None, Some(v)) => vec!["--python".into(), v],
-        _ => Vec::new(),
+    if uv_project(dir).is_some() {
+        return Vec::new();
     }
+    let mut args = Vec::new();
+    if let Some(v) = chosen_python() {
+        args.extend(["--python".to_string(), v]);
+    }
+    if uv_picks_interpreter(dir) {
+        args.extend(["--python-preference".to_string(), "only-managed".to_string()]);
+    }
+    args
+}
+
+/// Whether uv would choose the interpreter itself in `dir`: no virtual environment
+/// active (VIRTUAL_ENV) or in it or above it (a .venv), whose Python is yours to keep,
+/// and no UV_PYTHON_PREFERENCE of your own.
+fn uv_picks_interpreter(dir: &Path) -> bool {
+    std::env::var_os("VIRTUAL_ENV").is_none_or(|v| v.is_empty())
+        && std::env::var_os("UV_PYTHON_PREFERENCE").is_none()
+        && !venv_around(dir)
+}
+
+/// A virtual environment in `dir` or a folder above it, as uv finds one.
+fn venv_around(dir: &Path) -> bool {
+    dir.ancestors().any(|d| d.join(".venv/pyvenv.cfg").is_file())
 }
 
 // ----------------------------------------------------------------------- choosing
@@ -615,6 +641,13 @@ mod tests {
         assert_eq!(uv_project(&sub), Some(root.join("proj")));
         assert_eq!(pinned(&sub).as_deref(), Some("3.13"));
         assert!(uv_python_args(&sub).is_empty(), "in a project, .python-version decides");
+        // A .venv in a folder or above it is the user's: uv uses it, so Corral doesn't choose.
+        let plain = root.join("plain/deep");
+        std::fs::create_dir_all(&plain).unwrap();
+        assert!(!venv_around(&plain));
+        std::fs::create_dir_all(root.join("plain/.venv")).unwrap();
+        std::fs::write(root.join("plain/.venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        assert!(venv_around(&plain));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
