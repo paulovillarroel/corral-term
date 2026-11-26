@@ -41,6 +41,23 @@ struct App {
 
 type Shared = Arc<Mutex<App>>;
 
+/// Close what this process got from its parent beyond stdin, stdout and stderr. R starts
+/// the plot watcher with system2(), which hands it every descriptor R has open, httpgd's
+/// listening socket among them; kept for the watcher's life, a `corral eval` running at
+/// that moment waited out its 10 s read timeout and lost its plots (measured: 10.3 s, then
+/// 0.1 s with them closed; closing only the sockets is enough, only the pipes isn't).
+fn close_inherited() {
+    extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    let fds: Vec<i32> = std::fs::read_dir("/proc/self/fd").map(|d| d.flatten()
+        .filter_map(|e| e.file_name().to_str()?.parse().ok()).filter(|&fd| fd > 2).collect()).unwrap_or_default();
+    for fd in fds {
+        // SAFETY: nothing here uses them yet; the one read_dir listed is already closed (EBADF).
+        unsafe { close(fd) };
+    }
+}
+
 fn now() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
 }
@@ -260,6 +277,7 @@ pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
     let (Some(sid), Some(pid)) = (rest.first(), rest.get(1).and_then(|p| p.parse::<i64>().ok())) else {
         return Err("usage: corral _keep-plots SESSION PID".into());
     };
+    close_inherited();
     let sdir = session_dir(sid)?;
     let lock = std::fs::File::create(sdir.join("keep-plots.lock")).map_err(|e| e.to_string())?;
     // SAFETY: flock on a file this function keeps open; released when the process ends.
