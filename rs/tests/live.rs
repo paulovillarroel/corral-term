@@ -1099,7 +1099,7 @@ fn plots_checkpoint_cost_report() {
         std::thread::sleep(Duration::from_millis(300));
     }
     let (reach_m, _, reach_p90) = stats(&mut reach);
-    // A plot too heavy to draw in 200 ms is left out, and remembered as such.
+    // A plot too heavy to keep (a 93 MB SVG) is left out, and remembered as such.
     sent("plot(runif(1e6), runif(1e6), pch = 16)");
     wait_for(Duration::from_secs(20), "the heavy plot left out", || {
         std::fs::read_to_string(dir.join("plots/skipped")).is_ok_and(|s| !s.trim().is_empty())
