@@ -55,7 +55,7 @@
 
   <main class="content">
     <h1>Install</h1>
-    <p class="intro">Before you start you need a Linux system (or Windows with WSL) and R. The installer brings everything else, and it checks all of it before it changes anything. If herdr or R's two packages are missing, it offers to install them; if something else is missing, it tells you what to run and stops.</p>
+    <p class="intro">Before you start you need a Linux system (or Windows with WSL) and R. The installer brings everything else, and it checks all of it before it changes anything. If herdr or the R package jsonlite is missing, or herdr is too old, it offers to install or update them; if something else is missing, it tells you what to run and stops.</p>
 
     <h2 id="windows">On Windows: set up WSL first</h2>
     <p>Corral runs on Linux. On Windows it runs inside WSL (Windows Subsystem for Linux), which gives you a real Ubuntu next to Windows, with no virtual machine to manage. You set it up once, in about ten minutes, and you don't need to know Linux for it: copy each command, paste it, and press <kbd>Enter</kbd>. On Linux, skip to <a href="#before-you-install">Before you install</a>.</p>
@@ -71,7 +71,7 @@
     <pre><code><span class="p">$ </span>curl -LsSf https://r-lib.github.io/rig/install.sh | sh
 <span class="p">$ </span>rig add release</code></pre>
     <p>Close Ubuntu and open it again, so it finds R.</p></li>
-    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first. It offers to install <a href="https://herdr.dev/tui/">herdr</a>, the terminal workspace Corral lives in, and R's two packages: press <kbd>Enter</kbd> to say yes. If anything else is missing, it tells you, with the command to fix it.</p></li>
+    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first. It offers to install <a href="https://herdr.dev/tui/">herdr</a>, the terminal workspace Corral lives in, and the R packages it needs: press <kbd>Enter</kbd> to say yes. If anything else is missing, it tells you, with the command to fix it.</p></li>
     </ol>
 
     <h3>Working in WSL</h3>
@@ -82,14 +82,14 @@
     </ul>
 
     <h2 id="before-you-install">Before you install</h2>
-    <p>You don't need to check these by hand: the installer does. It offers to install herdr and R's two packages when they are missing, and shows the command for anything else.</p>
+    <p>You don't need to check these by hand: the installer does. It offers to install herdr and the R package jsonlite when they are missing, or to update herdr when it is older than Corral needs, and shows the command for anything else.</p>
     <table>
     <thead><tr><th>You need</th><th>How to get it</th></tr></thead>
     <tbody>
     <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it: <a href="#windows">step by step</a>. The macOS version is in development.</td></tr>
     <tr><td><code>curl</code> and <code>tar</code></td><td>Ubuntu has them. If not: <code>sudo apt install curl tar</code>.</td></tr>
-    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer offers to install it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it.</td></tr>
-    <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). The installer offers to put the two packages in your R library, without <code>sudo</code>, and with pak if you use it: httpgd draws the plots and jsonlite carries the variables. To install them yourself (with pak, <code>pak::pak(c("httpgd", "jsonlite"))</code>):</td></tr>
+    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer offers to install it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it, and if yours is older than 0.9.5 the installer offers to run it. A herdr you already have is never replaced by another.</td></tr>
+    <tr><td><strong>R</strong>, with the <code>jsonlite</code> package</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). jsonlite carries the variables to Corral; the installer offers to put it in your R library, without <code>sudo</code>, and with pak if you use it. httpgd, for the plots, it installs by itself (next section). To install both yourself (with pak, <code>pak::pak(c("httpgd", "jsonlite"))</code>):</td></tr>
     </tbody>
     </table>
     <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"), repos = "https://cloud.r-project.org")'</code></pre>
@@ -104,6 +104,7 @@
     <tr><td><a href="https://duckdb.org">DuckDB</a></td><td>Queries the tables you open with <code>View()</code>.</td></tr>
     <tr><td><a href="https://posit-dev.github.io/air/">Air</a></td><td>Formats R code.</td></tr>
     <tr><td><a href="https://github.com/posit-dev/ark">Ark</a></td><td>The R console, Positron's R kernel. The installer brings version 0.1.252, the one Corral was tested with.</td></tr>
+    <tr><td>The R package <a href="https://github.com/nx10/httpgd">httpgd</a></td><td>Draws R's plots, for Mirador and for the agent. It goes in your own R library, without <code>sudo</code>. If it can't be installed (it needs cairo and libpng from the system), Corral installs and works anyway, without R's plots in Mirador, and the installer says how to add it.</td></tr>
     <tr><td>The R package <a href="https://nanoparquet.r-lib.org">nanoparquet</a></td><td>Saves the tables <code>View()</code> opens: big tables open faster, and R's memory stays steady in a long session. It goes in your own R library, without <code>sudo</code>, already compiled on the Ubuntu and Debian releases Posit's package manager builds for, from CRAN otherwise.</td></tr>
     <tr><td>The R packages duckdb and DBI</td><td>SQL in R runs on them (<a href="sql.html">SQL</a>). They go in your own R library, without <code>sudo</code>, already compiled on Ubuntu and Debian; elsewhere duckdb has to compile, which takes a while, so the checklist shows it as optional.</td></tr>
     <tr><td>The Python console's packages</td><td>With uv, it puts IPython, cloudpickle, pyarrow and duckdb in uv's cache, so the first Python console starts at once. duckdb runs SQL, imported only with the first query. pyarrow lets <code>View()</code> save pandas tables as parquet, about six times faster than CSV and with their types.</td></tr>
@@ -137,7 +138,7 @@ Required
   ✓ System            Linux x86_64 (WSL)
   ✓ herdr             0.9.5
   ✓ R                 4.6.1
-  ✓ R packages        httpgd and jsonlite
+  ✓ R packages        jsonlite
 
 Provided by the installer
   ✓ corral            0.1.22, built
@@ -145,6 +146,7 @@ Provided by the installer
   ↓ DuckDB            will download 1.5.6 (View() tables)
   ✓ Air               0.13.0, you already have it
   ✓ Ark               0.1.252, you already have it
+  ✓ httpgd            you already have it (R's plots)
   ↓ nanoparquet       will install it in your R library (big tables open faster in View(), R's memory stays steady)
   ↓ duckdb            will install it in your R library, already compiled (SQL in R)
 
@@ -165,7 +167,7 @@ Optional
       <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
     </ul>
 
-    <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there; if it isn't, add this line at the end of <code>~/.bashrc</code> (or <code>~/.zshrc</code>) and open a new terminal:</p>
+    <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there. If it isn't, it offers to add the line to <code>~/.bashrc</code> (or <code>~/.zshrc</code>), after saving a copy of the file; uninstalling leaves that line, since herdr and other tools live there too. Without a terminal to ask in, add this line at the end of <code>~/.bashrc</code> (or <code>~/.zshrc</code>) and open a new terminal:</p>
     <pre><code>export PATH="$HOME/.local/bin:$PATH"</code></pre>
     <p>When it finishes, go to a project folder and type <code>corral</code>: herdr opens with the workspace. The <a href="quickstart.html">quick start</a> takes it from there.</p>
 
