@@ -230,8 +230,10 @@ fn remove_shown(sid: &str, index: Option<i64>) -> bool {
         return false;
     }
     if (i as usize) < kept.len() {
-        let dir = checkpoint.map(|c| c.join("kept"));
-        return dir.is_some_and(|d| ["png", "svg"].iter().any(|e| std::fs::remove_file(d.join(format!("{}.{e}", kept[i as usize]))).is_ok()));
+        // Both files: the list counts a plot while either is there.
+        let Some(dir) = checkpoint.map(|c| c.join("kept")) else { return false };
+        let gone: Vec<bool> = ["png", "svg"].iter().map(|e| std::fs::remove_file(dir.join(format!("{}.{e}", kept[i as usize]))).is_ok()).collect();
+        return gone.contains(&true);
     }
     let live_index = i - kept.len() as i64;
     let live_id = shown_plot_ids(sid).get(i as usize).cloned().filter(|id| id.chars().all(|c| c.is_ascii_alphanumeric()));
