@@ -523,6 +523,13 @@ local({
     invisible()
   }
 
+  # The console reads the notice as soon as it exists: whole, or not at all.
+  write_notice <- function(lines, path) {
+    tmp <- paste0(path, ".tmp")
+    writeLines(lines, tmp)
+    file.rename(tmp, path)
+  }
+
   # At startup: the newest checkpoint of an R in this project that ended
   # without being closed comes back, packages first.
   restore_checkpoint <- function() {
@@ -557,8 +564,11 @@ local({
       dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
       writeLines("1", file.path(session_dir, "sensitive"))
     }
+    pkgs <- character()
     for (p in rev(unlist(idx$packages))) {
-      if (!p %in% .packages()) try(suppressPackageStartupMessages(library(p, character.only = TRUE)), silent = TRUE)
+      if (p %in% .packages()) next
+      ok <- !inherits(try(suppressPackageStartupMessages(library(p, character.only = TRUE)), silent = TRUE), "try-error")
+      if (ok) pkgs <- c(pkgs, p)
     }
     back <- character()
     for (n in names(idx$objects)) {
@@ -577,19 +587,26 @@ local({
       tr("couldn't be saved", "no se pudo guardar")), "")
     when <- format(as.POSIXct(as.numeric(idx$updated), origin = "1970-01-01"), "%Y-%m-%d %H:%M")
     shown <- function(x) if (length(x) > 8) paste(c(x[1:8], "\u2026"), collapse = ", ") else paste(x, collapse = ", ")
-    # Only plots came back (no objects): one line says so.
-    lines <- if (length(back) || !plots) {
-      trf("[corral] Restored %d objects from the R that ended without being closed (%s): %s.",
-          "[corral] Restaur\u00e9 %d objetos del R que termin\u00f3 sin que lo cerraran (%s): %s.",
-          length(back), when, shown(back))
-    }
-    if (plots > 0 && length(back)) {
-      lines <- c(lines, trf("[corral] And its %d plots, first in Mirador (ctrl+b f).",
-                            "[corral] Y sus %d gr\u00e1ficos, primero en Mirador (ctrl+b f).", plots))
-    } else if (plots > 0) {
-      lines <- trf("[corral] Restored %d plots from the R that ended without being closed (%s), first in Mirador (ctrl+b f).",
-                   "[corral] Restaur\u00e9 %d gr\u00e1ficos del R que termin\u00f3 sin que lo cerraran (%s), primero en Mirador (ctrl+b f).",
-                   plots, when)
+    # What came back, in one line: the objects and the packages by name, and the plots.
+    named <- function(n, one, many, x) paste0(n, " ", if (n == 1) one else many, if (length(x)) paste0(" (", shown(x), ")") else "")
+    parts <- c(
+      if (length(back)) named(length(back), tr("object", "objeto"), tr("objects", "objetos"), back),
+      if (length(pkgs)) named(length(pkgs), tr("package", "paquete"), tr("packages", "paquetes"), rev(pkgs)),
+      if (plots > 0) named(plots, tr("plot", "gr\u00e1fico"), tr("plots", "gr\u00e1ficos"), NULL))
+    what <- if (length(parts) > 1) paste(paste(parts[-length(parts)], collapse = ", "), tr("and", "y"), parts[length(parts)]) else parts
+    mirador <- if (plots > 0) tr(", first in Mirador (ctrl+b f)", ", primero en Mirador (ctrl+b f)") else ""
+    # Started again by Corral's console after a crash: it says when, and so how long it took.
+    crashed <- suppressWarnings(as.numeric(Sys.getenv("CORRAL_CRASHED_AT")))
+    lines <- if (!is.na(crashed)) {
+      secs <- format(round(as.numeric(Sys.time()) - crashed, 1), nsmall = 1, decimal.mark = tr(".", ","))
+      if (length(parts)) {
+        trf("[corral] Back in %s s with %s%s.", "[corral] Volvi\u00f3 en %s s con %s%s.", secs, what, mirador)
+      } else {
+        trf("[corral] Back in %s s, with nothing to bring back.", "[corral] Volvi\u00f3 en %s s, sin nada que recuperar.", secs)
+      }
+    } else if (length(parts)) {
+      trf("[corral] Restored %s from the R that ended without being closed (%s)%s.",
+          "[corral] Restaur\u00e9 %s del R que termin\u00f3 sin que lo cerraran (%s)%s.", what, when, mirador)
     }
     if (length(left)) {
       lines <- c(lines, trf("[corral] Not kept: %s.", "[corral] No se conservaron: %s.",
@@ -602,7 +619,7 @@ local({
     # Under Ark, what R prints while starting doesn't reach the console: Corral's
     # console shows this file instead.
     notice <- Sys.getenv("CORRAL_NOTICE")
-    if (nzchar(notice)) writeLines(lines, notice) else message(paste(lines, collapse = "\n"))
+    if (nzchar(notice)) write_notice(lines, notice) else message(paste(lines, collapse = "\n"))
     invisible()
   }
 
@@ -622,6 +639,12 @@ local({
     # R closed on purpose: the session and its checkpoint go (a crash skips this).
     reg.finalizer(env, function(e) unlink(c(session_dir, checkpoint_dir), recursive = TRUE), onexit = TRUE)
   }
+  # Started again after a crash: Corral's console waits for the notice before it runs
+  # anything typed meanwhile, so it is written even when there was nothing to bring back.
+  local({
+    notice <- Sys.getenv("CORRAL_NOTICE")
+    if (nzchar(Sys.getenv("CORRAL_CRASHED_AT")) && nzchar(notice) && !file.exists(notice)) write_notice(character(), notice)
+  })
 
   # ---- corral eval: an agent runs code in this session and reads the result
   #
