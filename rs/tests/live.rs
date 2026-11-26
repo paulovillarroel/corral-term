@@ -485,6 +485,51 @@ fn a_newer_version_shows_in_the_variables_pane() {
     assert!(!live.run("corral", &["keys", "--json"]).contains("9.9.9"));
 }
 
+/// `corral context` tells an agent, in one call and without starting anything, which
+/// consoles run, whether SQL works in each, and the rules as they apply to each session.
+#[test]
+#[ignore]
+fn context_tells_an_agent_where_it_is_and_its_rules() {
+    let live = Live::start("context");
+    let context = || {
+        let json = live.run("corral", &["context", "--json"]);
+        let at = json.find(r#""python":"#).expect("no python in the context");
+        let (r, python) = json.split_at(at);
+        (json.clone(), r.to_string(), python.to_string())
+    };
+    let (all, r, python) = context();
+    // R runs, in view, with its session; SQL as R itself sees it.
+    let (_, sql) = live.eval(&[r#"cat("sql:", all(nzchar(c(system.file(package = "duckdb"), system.file(package = "DBI")))), "\n")"#]);
+    let sql = if sql.contains("sql: TRUE") { "true" } else { "false" };
+    for part in [r#""r":{"running":true"#, r#""showing":true"#, &format!(r#""sql":{sql}"#), r#""sensitive":false,"access":"on","output":"full""#] {
+        assert!(r.contains(part), "{part} missing in {all}");
+    }
+    assert_eq!(field(&r, "session"), live.session_id("r").into(), "{all}");
+    // Python isn't running, says it starts on request, and asking didn't start it.
+    assert!(python.contains(r#""running":false,"starts_on_request":true"#), "{all}");
+    assert!(live.session("python").is_none(), "corral context started Python");
+    assert!(all.contains(r#""agents":{"access":"on","output":"full"}"#), "{all}");
+    // A session marked sensitive: that console asks and gives only structure; new ones don't.
+    assert_eq!(live.eval(&["corral_sensitive()"]).0, 0);
+    let (all, r, _) = context();
+    assert!(r.contains(r#""sensitive":true,"access":"ask","output":"structure""#), "{all}");
+    assert!(all.contains(r#""agents":{"access":"on","output":"full"}"#), "{all}");
+    // Agents off: it says so, the way eval would refuse.
+    live.config(r#"{"agents":"off","update_check":"off"}"#);
+    let (all, r, _) = context();
+    assert!(r.contains(r#""access":"off""#) && all.contains(r#""agents":{"access":"off""#), "{all}");
+    // In words, for the palette's popup.
+    let words = live.run("corral", &["context"]);
+    assert!(words.contains("R 4.") && words.contains("Python") && words.contains("can't run code"), "{words}");
+    // From the palette (Agents: what your agent sees): the action opens that popup.
+    live.link_plugin();
+    let running = || std::fs::read_dir("/proc").unwrap().flatten()
+        .filter_map(|p| std::fs::read(p.path().join("cmdline")).ok())
+        .any(|c| String::from_utf8_lossy(&c).replace('\0', " ").ends_with("corral _context "));
+    live.run("herdr", &["plugin", "action", "invoke", "context", "--plugin", "corral"]);
+    wait_for(Duration::from_secs(20), "the context popup", running);
+}
+
 /// Python: the first request starts the console; objects stay between
 /// requests, and two agents asking at once take turns.
 #[test]
