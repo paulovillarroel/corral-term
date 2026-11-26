@@ -233,6 +233,11 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
 /// action this list doesn't know yet goes under Layouts with its own title.
 fn action_label(id: &str, title: &str) -> (Group, String, usize) {
     match ACTIONS.iter().position(|a| a.0 == id) {
+        // With a newer Corral out, the entry names it.
+        Some(i) if id == "update" && crate::install::newer_version().is_some() => {
+            let v = crate::install::newer_version().unwrap_or_default();
+            (ACTIONS[i].1, trf!("Update: Corral {v} is out, install it", "Actualizar: salió Corral {v}, instalarla"), i)
+        }
         Some(i) => (ACTIONS[i].1, tr(ACTIONS[i].2, ACTIONS[i].3).to_string(), i),
         None => (Group::Layout, tidy(title), ACTIONS.len()),
     }
