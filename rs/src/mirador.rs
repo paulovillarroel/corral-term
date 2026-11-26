@@ -132,6 +132,215 @@ pub(crate) fn plots_json(sid: &str, path: &str) -> Value {
     plots_raw(sid, path, &[]).and_then(|(b, _)| json::parse(&String::from_utf8_lossy(&b)).ok()).unwrap_or(Value::Null)
 }
 
+// --------------------------------------------------------------------------- kept plots
+
+/// Where a session's checkpoint keeps the plots a crashed session left it: corral.R
+/// and corral_py.py move them there when they restore, as k0001.svg/.png and so on
+/// (keep_plots). They go with the checkpoint: when the console closes, or after a week.
+fn kept_dir(sid: &str) -> Option<PathBuf> {
+    let meta = env::read_json(&session_dir(sid).ok()?.join("meta.json"));
+    let prefix = if meta.get("lang").str() == Some("python") { "py" } else { "r" };
+    Some(env::state_dir().join("checkpoints").join(format!("{prefix}-{sid}")).join("kept"))
+}
+
+/// The plot server's state, counting the kept plots too: the page reloads its list when
+/// `upid` changes, and shows the kept ones even before the session draws its first plot.
+fn shown_state(sid: &str) -> Value {
+    let live = plots_json(sid, "state");
+    let kept = kept_stems(sid).len();
+    if kept == 0 {
+        return live;
+    }
+    let upid = match live.get("upid") {
+        Value::Num(n) => format!("{}k{kept}", *n as i64),
+        _ => format!("k{kept}"),
+    };
+    let hsize = live.get("hsize").num().unwrap_or(0.0) + kept as f64;
+    obj(vec![("upid", upid.into()), ("hsize", hsize.into()), ("active", true.into())])
+}
+
+/// The kept plots' names (k0001, k0002…), oldest first.
+fn kept_stems(sid: &str) -> Vec<String> {
+    let Some(dir) = kept_dir(sid) else { return Vec::new() };
+    let mut stems: Vec<String> = std::fs::read_dir(dir).map(|d| d.flatten()
+        .filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".png").or(n.strip_suffix(".svg"))).map(String::from))
+        .filter(|s| kept_name(s)).collect()).unwrap_or_default();
+    stems.sort();
+    stems.dedup();
+    stems
+}
+
+/// A kept plot's name: k and four digits, never a way out of its folder.
+fn kept_name(stem: &str) -> bool {
+    stem.len() == 5 && stem.starts_with('k') && stem[1..].chars().all(|c| c.is_ascii_digit())
+}
+
+/// The plots to show for a session, as the page and the terminal's viewer list them:
+/// the kept ones first ("kept-k0001"…), then the session's own. `corral eval` keeps
+/// using the live list alone, where positions match the plot server's.
+pub(crate) fn shown_plot_ids(sid: &str) -> Vec<String> {
+    let live = plots_json(sid, "plots").get("plots").arr().iter().filter_map(|p| match p.get("id") {
+        Value::Str(s) => Some(s.clone()),
+        Value::Num(n) => Some(format!("{}", *n as i64)),
+        _ => None,
+    }).collect::<Vec<_>>();
+    kept_stems(sid).into_iter().map(|s| format!("kept-{s}")).chain(live).collect()
+}
+
+/// A plot to show: a kept one from its file (the PNG when `renderer` asks for one or
+/// there is no SVG, else the SVG), any other from the session's plot server.
+pub(crate) fn shown_plot(sid: &str, id: &str, params: &[(&str, String)]) -> Option<(Vec<u8>, String)> {
+    let Some(stem) = id.strip_prefix("kept-") else {
+        let mut p = params.to_vec();
+        p.push(("id", id.to_string()));
+        return plots_raw(sid, "plot", &p);
+    };
+    if !kept_name(stem) {
+        return None;
+    }
+    let dir = kept_dir(sid)?;
+    let png = params.iter().any(|(k, v)| *k == "renderer" && v == "png");
+    let svg = dir.join(format!("{stem}.svg"));
+    if !png && svg.is_file() {
+        return std::fs::read(svg).ok().map(|b| (b, "image/svg+xml".to_string()));
+    }
+    std::fs::read(dir.join(format!("{stem}.png"))).ok().map(|b| (b, "image/png".to_string()))
+}
+
+/// Remove the plot at `index` in the shown list: a kept one's files, or the live one at
+/// that position among the session's own, with its copy in the checkpoint, so it doesn't
+/// come back after a crash. All of them for `clear`.
+fn remove_shown(sid: &str, index: Option<i64>) -> bool {
+    let kept = kept_stems(sid);
+    let checkpoint = kept_dir(sid).and_then(|k| k.parent().map(Path::to_path_buf));
+    let Some(i) = index else {
+        if let Some(c) = &checkpoint {
+            let _ = std::fs::remove_dir_all(c.join("kept"));
+            if let Ok(d) = std::fs::read_dir(c.join("plots")) {
+                for f in d.flatten().filter(|f| f.path().extension().is_some_and(|e| e == "png" || e == "svg")) {
+                    let _ = std::fs::remove_file(f.path());
+                }
+            }
+        }
+        return plots_raw(sid, "clear", &[]).is_some() || !kept.is_empty();
+    };
+    let total = shown_plot_ids(sid).len() as i64;
+    let i = if i < 0 { total + i } else { i };
+    if i < 0 || i >= total {
+        return false;
+    }
+    if (i as usize) < kept.len() {
+        let dir = checkpoint.map(|c| c.join("kept"));
+        return dir.is_some_and(|d| ["png", "svg"].iter().any(|e| std::fs::remove_file(d.join(format!("{}.{e}", kept[i as usize]))).is_ok()));
+    }
+    let live_index = i - kept.len() as i64;
+    let live_id = shown_plot_ids(sid).get(i as usize).cloned().filter(|id| id.chars().all(|c| c.is_ascii_alphanumeric()));
+    let ok = plots_raw(sid, "remove", &[("index", live_index.to_string())]).is_some();
+    if let (true, Some(c), Some(id)) = (ok, checkpoint, live_id) {
+        for e in ["png", "svg"] {
+            let _ = std::fs::remove_file(c.join("plots").join(format!("{id}.{e}")));
+        }
+    }
+    ok
+}
+
+/// `corral _keep-plots SESSION PID`: keeps an R session's plots in its checkpoint, so
+/// they outlive a crash. corral.R starts it with the first plot and it stays while that
+/// R (PID) lives, one per session (a second one finds the lock taken and leaves). Every
+/// 250 ms it reads `plots-rev`, which R rewrites when the plots change, and then asks
+/// httpgd for them over HTTP, as Mirador does. Not in R's forked copy, where drawing can
+/// hang it for good (httpgd's server thread may hold a lock at the fork), nor started
+/// from R for each plot: R's system2() forks R, 8 ms with 400-650 MB in use.
+/// The newest 30 are kept. A plot whose SVG takes over 200 ms to draw is skipped from
+/// then on (a million points takes 0.4 s and 90 MB); otherwise its SVG is kept up to
+/// 2 MB, and a 720x576 PNG always, for the terminal's viewer. The newest is written
+/// again each time, since lines() can draw over it; the others once.
+pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
+    use std::os::fd::AsRawFd;
+    let (Some(sid), Some(pid)) = (rest.first(), rest.get(1).and_then(|p| p.parse::<i64>().ok())) else {
+        return Err("usage: corral _keep-plots SESSION PID".into());
+    };
+    let sdir = session_dir(sid)?;
+    let lock = std::fs::File::create(sdir.join("keep-plots.lock")).map_err(|e| e.to_string())?;
+    // SAFETY: flock on a file this function keeps open; released when the process ends.
+    if unsafe { crate::eval::flock(lock.as_raw_fd(), crate::eval::LOCK_EX | crate::eval::LOCK_NB) } != 0 {
+        return Ok(());
+    }
+    let _ = std::fs::write(sdir.join("keep-plots.pid"), std::process::id().to_string());
+    let checkpoint = env::state_dir().join("checkpoints").join(format!("r-{sid}"));
+    let mut last = String::new();
+    while env::pid_alive(pid) {
+        let rev = std::fs::read_to_string(sdir.join("plots-rev")).unwrap_or_default();
+        // R writes the checkpoint folder soon after it starts; until then, look again.
+        if rev != last && checkpoint.is_dir() {
+            last = rev;
+            let dir = checkpoint.join("plots");
+            if env::config().get("checkpoints").str() != Some("off") && std::fs::create_dir_all(&dir).is_ok() {
+                write_plots(sid, &dir);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Ok(())
+}
+
+/// One pass of `_keep-plots`: the files in `dir` follow the session's newest 30 plots.
+fn write_plots(sid: &str, dir: &Path) {
+    let list = plots_json(sid, "plots");
+    // No answer: httpgd is gone or busy, and the files stay as they are.
+    let Value::Arr(plots) = list.get("plots") else { return };
+    let ids: Vec<String> = plots.iter().filter_map(|p| match p.get("id") {
+        Value::Str(s) => Some(s.clone()),
+        Value::Num(n) => Some(format!("{}", *n as i64)),
+        _ => None,
+    }).filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric())).collect();
+    let ids = &ids[ids.len().saturating_sub(30)..];
+    if let Ok(d) = std::fs::read_dir(dir) {
+        for f in d.flatten() {
+            let path = f.path();
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if path.extension().is_some_and(|e| e == "png" || e == "svg") && !ids.iter().any(|id| id == stem) {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+    let skipped_file = dir.join("skipped");
+    let mut skipped: Vec<String> = std::fs::read_to_string(&skipped_file).unwrap_or_default().lines()
+        .filter(|l| ids.iter().any(|id| id == l)).map(String::from).collect();
+    let put = |path: PathBuf, bytes: &[u8]| {
+        let tmp = PathBuf::from(format!("{}.tmp", path.display()));
+        if std::fs::write(&tmp, bytes).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    };
+    let size = |renderer: &str, id: &str| -> Vec<(&'static str, String)> {
+        vec![("id", id.to_string()), ("renderer", renderer.to_string()), ("width", "720".into()), ("height", "576".into())]
+    };
+    for (i, id) in ids.iter().enumerate() {
+        let png = dir.join(format!("{id}.png"));
+        if skipped.contains(id) || (png.exists() && i + 1 < ids.len()) {
+            continue;
+        }
+        let start = Instant::now();
+        let Some((svg, _)) = plots_raw(sid, "plot", &size("svg", id)) else { continue };
+        if start.elapsed() > Duration::from_millis(200) {
+            skipped.push(id.clone());
+            let _ = std::fs::remove_file(&png);
+            let _ = std::fs::remove_file(dir.join(format!("{id}.svg")));
+            continue;
+        }
+        if svg.len() <= HEAVY_SVG {
+            put(dir.join(format!("{id}.svg")), &svg);
+        } else {
+            let _ = std::fs::remove_file(dir.join(format!("{id}.svg")));
+        }
+        if let Some((bytes, _)) = plots_raw(sid, "plot", &size("png", id)) {
+            put(png, &bytes);
+        }
+    }
+    let _ = std::fs::write(&skipped_file, skipped.join("\n"));
+}
+
 // --------------------------------------------------------------------------- DuckDB
 
 pub(crate) fn sql_lit(s: &str) -> String {
@@ -337,7 +546,7 @@ fn sessions() -> Vec<Value> {
         }
         meta.set("vars_rev", mtime(&d.join("vars.json")).map(Value::Num).unwrap_or(Value::Null));
         let id = meta.get("id").str().unwrap_or("").to_string();
-        meta.set("plots", plots_json(&id, "state"));
+        meta.set("plots", shown_state(&id));
         out.push(meta);
     }
     out
@@ -581,9 +790,8 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
             json_reply(200, &v)
         }
         "/api/plots" => {
-            let p = plots_json(&arg("session", ""), "plots");
-            let p = if p.is_null() { obj(vec![("plots", Value::Arr(Vec::new()))]) } else { p };
-            json_reply(200, &p)
+            let ids = shown_plot_ids(&arg("session", ""));
+            json_reply(200, &obj(vec![("plots", Value::Arr(ids.into_iter().map(|id| obj(vec![("id", id.into())])).collect()))]))
         }
         "/api/plot" => {
             // renderer=auto (what the page shows): SVG, or PNG for a plot whose SVG is too heavy.
@@ -602,10 +810,9 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
                 let mut params = vec![("width", size("width", "720")), ("height", size("height", "576")),
                                       ("renderer", renderer.to_string()), ("zoom", format!("{z}"))];
                 if q.get("id").map(|s| !s.is_empty()).unwrap_or(false) {
-                    params.push(("id", arg("id", "")));
-                } else {
-                    params.push(("index", arg("index", "-1")));
+                    return shown_plot(&arg("session", ""), &arg("id", ""), &params);
                 }
+                params.push(("index", arg("index", "-1")));
                 plots_raw(&arg("session", ""), "plot", &params)
             };
             let Some((mut body, mut ctype)) = fetch(&renderer) else {
@@ -710,10 +917,10 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
         "/api/plots/remove" | "/api/plots/clear" => {
             let sid = field("session");
             let ok = if path.ends_with("clear") {
-                plots_raw(&sid, "clear", &[]).is_some()
+                remove_shown(&sid, None)
             } else {
-                let index = match body.get("index") { Value::Num(n) => format!("{}", *n as i64), _ => "-1".into() };
-                plots_raw(&sid, "remove", &[("index", index)]).is_some()
+                let index = match body.get("index") { Value::Num(n) => *n as i64, _ => -1 };
+                remove_shown(&sid, Some(index))
             };
             if ok {
                 // R isn't running a command, so mark the change here: open pages update at once.
