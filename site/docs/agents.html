@@ -93,7 +93,8 @@
     <thead><tr><th>Tool</th><th>What the agent gets</th><th>What happens in your session</th><th>Who decides</th></tr></thead>
     <tbody>
     <tr><td><code>corral eval</code></td><td>What the code printed, errors, warnings and new plots as PNG; with review, what you choose to share; with restricted output, only whether it worked and the shape of the objects</td><td>The code runs in your console, in view, and its objects stay</td><td>You: <code>agents</code>, <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
-    <tr><td><code>corral eval --check</code></td><td>Which console, R or Python, its version and whether it is in view</td><td>Nothing</td><td>—</td></tr>
+    <tr><td><code>corral context --json</code></td><td>Which consoles run, their version and folder, which one is in view, whether SQL works in each, and the rules you set as they apply to each session</td><td>Nothing: it reads files and starts no console</td><td>—</td></tr>
+    <tr><td><code>corral eval --check</code></td><td>The same for one console, R or Python, without the rules</td><td>Nothing</td><td>—</td></tr>
     <tr><td><code>corral vars --json</code></td><td>Names, classes, dimensions and short previews of your objects (no previews of values with review or restricted output)</td><td>Nothing: it reads, it doesn't run code</td><td>You: <code>agent_output</code>, <code>corral_sensitive()</code></td></tr>
     <tr><td><code>corral script --read</code>, <code>--write</code>, <code>--save</code></td><td>Your draft's text; a way to write into it or save it in the project</td><td>Changes to the draft show in your editor, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes them</td><td>The skill asks you first; the agent's own permissions</td></tr>
     <tr><td><code>View(df)</code>, through <code>corral eval</code></td><td>Nothing back: it shows you a table</td><td>The table viewer opens next to your console</td><td>Same as <code>corral eval</code></td></tr>
@@ -144,7 +145,16 @@
     <p>If the console is busy, <code>corral eval</code> waits up to 20 seconds (<code>--wait-idle</code>). If you have a half-typed line, it runs nothing and says so. Several agents can use the same console: their requests run one at a time.</p>
     <p><code>--timeout</code> (300 seconds by default) is how long it waits for the result. After that, it exits with code 2 and the code may still be running. A request the console only reaches after its agent gave up doesn't run at all.</p>
 
-    <h3>Check the console</h3>
+    <h3 id="context">What the agent knows before it runs anything</h3>
+    <pre><code><span class="p">$ </span>corral context --json</code></pre>
+    <p>One call tells the agent where it is and what it may do, so it doesn't learn it by being refused. For each console, R and Python: whether it runs, its session, version and folder, whether it is the one in view, and whether SQL works there (R needs the duckdb and DBI packages). Then the rules you set, as they apply to that session: <code>access</code> (<code>on</code>, <code>ask</code> or <code>off</code>) and <code>output</code> (<code>full</code>, <code>review</code> or <code>structure</code>); a session marked with <code>corral_sensitive()</code> always asks and never gives full output. <code>agents</code> holds the rules for a console that hasn't started. It reads files Corral already writes and herdr's list of panes: it starts no console, Python included, and takes about 2 ms.</p>
+    <pre><code>{"corral":"0.1.25","herdr":true,"workspace":"w1","showing":"r",
+ "consoles":{"r":{"running":true,"pane":"w1:p3","session":"w1-p3-162502","version":"4.6.1","cwd":"~/proj",
+                  "showing":true,"sql":true,"sensitive":false,"access":"ask","output":"full"},
+             "python":{"running":false,"starts_on_request":true}},
+ "agents":{"access":"ask","output":"full"}}</code></pre>
+    <p>The agent can read the rules, not change them. To see exactly what it sees, open the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>) and pick "Agents: what your agent sees": a window shows the same in words. <code>corral context</code> without <code>--json</code> prints it in a terminal.</p>
+    <h3>Check one console</h3>
     <pre><code><span class="p">$ </span>corral eval --check
 <span class="p">$ </span>corral eval --check --lang python</code></pre>
     <p>With a console, it prints the console and its session as JSON: the pane, the language, the session, the R or Python version, the folder, and <code>active</code>, which says whether that console is the one in view.</p>
@@ -168,7 +178,7 @@
 
     <h3>What it does</h3>
     <ul>
-    <li>It checks first, with <code>corral eval --check</code>. If there is no R console, or Corral isn't active in it, it tells you that <kbd>ctrl+b</kbd> <kbd>a</kbd> opens one and <kbd>ctrl+b</kbd> <kbd>m</kbd> switches Corral on in an R you already have. For Python, no console yet is normal: its first request starts one.</li>
+    <li>It checks first, with <code>corral context --json</code>: which consoles run, whether SQL works, and the rules you set, so with <code>ask</code> it puts related code in one request and with restricted output it works from shapes. If there is no R console, or Corral isn't active in it, it tells you that <kbd>ctrl+b</kbd> <kbd>a</kbd> opens one and <kbd>ctrl+b</kbd> <kbd>m</kbd> switches Corral on in an R you already have. For Python, no console yet is normal: its first request starts one.</li>
     <li>It looks before it runs, with <code>corral vars --json</code>, so it uses your object names and doesn't overwrite your objects.</li>
     <li>It runs code with <code>corral eval</code> and reads the PNG of each plot before it describes or adjusts the plot. It uses <code>--replace</code> only to fix a plot its own previous request drew.</li>
     <li>It keeps the output small (<code>head()</code>, <code>str()</code>, <code>summary()</code>, <code>df.head()</code>), and does scratch work in <code>local({ ... })</code> in R, or in a function in Python, so your environment stays clean.</li>

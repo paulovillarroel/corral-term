@@ -163,6 +163,11 @@
     </table>
     <p><a href="agents.html">Working with agents</a> explains the output and the exit codes.</p>
 
+    <h3 id="corral-context">corral context</h3>
+    <pre><code><span class="p">$ </span>corral context
+<span class="p">$ </span>corral context --json</code></pre>
+    <p>What your agent sees before it runs anything: the R and Python consoles (running, version, folder, in view, whether SQL works) and the rules for agents as they apply to each session. <code>--json</code> is for agents; without it, in words. It starts no console. In the palette: "Agents: what your agent sees" (<a href="agents.html#context">details</a>).</p>
+
     <h3>corral audit</h3>
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
