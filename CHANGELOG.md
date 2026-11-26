@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.23
+
+The installer asks less of you and brings more: herdr, jsonlite, uv and the PATH line, R packages from a 3-day-old snapshot or your institution's mirror, with pak if you use it. Corral now works in projects with renv.
 
 - When uv is missing, the installer offers it, in a terminal: uv 0.13.9 from its GitHub release, checked against a SHA-256 in Corral's code, into `~/.local/bin` as uv's own installer does, so the Python console works from the first install. It says what that costs once: Python and the console's packages, about 400 MB on disk. Say no, or run it without a terminal, and it goes on without Python, as before. Uninstalling Corral leaves uv.
 - The Python console, outside a uv project and without a `.venv`, now runs on a Python uv manages instead of the system's. With Ubuntu's Python, the packages apt put in it (numpy 1) came before the console's, and pyarrow, built for numpy 2, couldn't be imported, so `View()` of a pandas table failed. uv downloads that Python the first time. In a project, or with your own `.venv` or `UV_PYTHON_PREFERENCE`, nothing changes.
