@@ -501,19 +501,19 @@ fn context_tells_an_agent_where_it_is_and_its_rules() {
     // R runs, in view, with its session; SQL as R itself sees it.
     let (_, sql) = live.eval(&[r#"cat("sql:", all(nzchar(c(system.file(package = "duckdb"), system.file(package = "DBI")))), "\n")"#]);
     let sql = if sql.contains("sql: TRUE") { "true" } else { "false" };
-    for part in [r#""r":{"running":true"#, r#""showing":true"#, &format!(r#""sql":{sql}"#), r#""sensitive":false,"access":"on","output":"full""#] {
+    for part in [r#""r":{"running":true"#, r#""showing":true"#, &format!(r#""sql":{sql}"#), r#""sensitive":false,"access":"on","output":"full","profile":"open""#] {
         assert!(r.contains(part), "{part} missing in {all}");
     }
     assert_eq!(field(&r, "session"), live.session_id("r").into(), "{all}");
     // Python isn't running, says it starts on request, and asking didn't start it.
     assert!(python.contains(r#""running":false,"starts_on_request":true"#), "{all}");
     assert!(live.session("python").is_none(), "corral context started Python");
-    assert!(all.contains(r#""agents":{"access":"on","output":"full"}"#), "{all}");
+    assert!(all.contains(r#""agents":{"access":"on","output":"full","profile":"open"}"#), "{all}");
     // A session marked sensitive: that console asks and gives only structure; new ones don't.
     assert_eq!(live.eval(&["corral_sensitive()"]).0, 0);
     let (all, r, _) = context();
-    assert!(r.contains(r#""sensitive":true,"access":"ask","output":"structure""#), "{all}");
-    assert!(all.contains(r#""agents":{"access":"on","output":"full"}"#), "{all}");
+    assert!(r.contains(r#""sensitive":true,"access":"ask","output":"structure","profile":"sensitive""#), "{all}");
+    assert!(all.contains(r#""agents":{"access":"on","output":"full","profile":"open"}"#), "{all}");
     // Agents off: it says so, the way eval would refuse.
     live.config(r#"{"agents":"off","update_check":"off"}"#);
     let (all, r, _) = context();
@@ -546,6 +546,45 @@ fn a_crash_says_why_and_what_was_running() {
     live.wait_screen(&live.console, &["R ended unexpectedly: it was stopped from outside (signal 9), while running: Sys.sleep(60); cat('never\\n')",
                                       "Back in", "with 1 object (kept)"]);
     let _ = request.wait();
+}
+
+/// Security profiles: a project marked sensitive makes every session in it ask and give
+/// only structure, whatever the global profile; its sessions keep the mark; the pane
+/// shows it; and loosening it from a shell without a terminal (an agent) is refused.
+#[test]
+#[ignore]
+fn a_sensitive_project_applies_to_its_sessions() {
+    let live = Live::start("profiles");
+    let proj = live.dir.join("proj").canonicalize().unwrap();
+    let proj = proj.to_str().unwrap();
+    // The harness runs agents on: the global profile is open, and code runs at once.
+    assert!(live.run("corral", &["profile", "--json"]).contains(r#""global":"open""#));
+    assert_eq!(live.eval(&["v <- \"patient-4711\""]).0, 0);
+    let vars = || String::from_utf8_lossy(&live.corral(&["vars", "--json"]).stdout).to_string();
+    // Before: the value's preview reaches the agent.
+    wait_for(Duration::from_secs(10), "v's preview", || vars().contains("patient-4711"));
+    live.wait_screen(&live.vars, &["open"]);
+    // Tightening never asks.
+    live.run("corral", &["profile", "sensitive", "--project", proj]);
+    let shown = live.run("corral", &["profile", "--json", "--project", proj]);
+    assert!(shown.contains(r#""profile":"sensitive""#) && shown.contains(r#""global":"open""#), "{shown}");
+    // Now each request needs the user's approval: nobody is here to give it, so nothing runs.
+    let (code, text) = live.eval(&["cat(40 + 2, '\\n')"]);
+    assert_eq!(code, 3, "it ran without approval: {text}");
+    assert!(!text.contains("42"), "{text}");
+    let ctx = live.run("corral", &["context", "--json"]);
+    assert!(ctx.contains(r#""sensitive":true,"access":"ask","output":"structure","profile":"sensitive""#), "{ctx}");
+    let sid = live.session_id("r");
+    assert!(live.dir.join(format!("state/corral/sessions/{sid}/sensitive")).exists(), "the session wasn't marked");
+    // The values' previews go, as in any sensitive session.
+    let listed = vars();
+    assert!(listed.contains("\"v\"") && !listed.contains("patient-4711"), "{listed}");
+    // The variables pane says so, in its header.
+    live.wait_screen(&live.vars, &["sensitive"]);
+    // Loosening it from a shell without a terminal, as an agent's, needs the user: refused.
+    let out = live.corral(&["profile", "--project", "--clear", proj]);
+    assert!(!out.status.success(), "an agent removed the project's profile: {}", String::from_utf8_lossy(&out.stdout));
+    assert!(live.run("corral", &["profile", "--json", "--project", proj]).contains(r#""profile":"sensitive""#));
 }
 
 /// Python: the first request starts the console; objects stay between
