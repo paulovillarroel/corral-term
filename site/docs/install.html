@@ -89,7 +89,7 @@
     <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it: <a href="#windows">step by step</a>. The macOS version is in development.</td></tr>
     <tr><td><code>curl</code> and <code>tar</code></td><td>Ubuntu has them. If not: <code>sudo apt install curl tar</code>.</td></tr>
     <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer offers to install it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it.</td></tr>
-    <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). The installer offers to put the two packages in your R library, without <code>sudo</code>: httpgd draws the plots and jsonlite carries the variables. To install them yourself:</td></tr>
+    <tr><td><strong>R</strong>, with the <code>httpgd</code> and <code>jsonlite</code> packages</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). The installer offers to put the two packages in your R library, without <code>sudo</code>, and with pak if you use it: httpgd draws the plots and jsonlite carries the variables. To install them yourself (with pak, <code>pak::pak(c("httpgd", "jsonlite"))</code>):</td></tr>
     </tbody>
     </table>
     <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"), repos = "https://cloud.r-project.org")'</code></pre>
@@ -109,6 +109,7 @@
     <tr><td>The Python console's packages</td><td>With uv, it puts IPython, cloudpickle, pyarrow and duckdb in uv's cache, so the first Python console starts at once. duckdb runs SQL, imported only with the first query. pyarrow lets <code>View()</code> save pandas tables as parquet, about six times faster than CSV and with their types.</td></tr>
     </tbody>
     </table>
+    <p>If your R has <a href="https://pak.r-lib.org">pak</a>, the installer installs R packages with it, as you would; otherwise with <code>install.packages()</code>. Either way they come already compiled where Posit's package manager builds them. pak never installs system libraries here, since that takes <code>sudo</code>: if a package arrives but doesn't load, the installer shows the <code>apt-get</code> line pak gives for what it needs, for you to run.</p>
     <p>A program you already have on your <code>PATH</code> is left as it is, and Corral uses yours. When a download has a published checksum, the installer checks it. If Ark can't be downloaded, the R console is plain R until <code>corral ark --install</code> gets it.</p>
 
     <h3>Optional</h3>
