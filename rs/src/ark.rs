@@ -63,6 +63,9 @@ struct Kernel {
     child: Child,
     /// When it started: a kernel that crashes right after starting isn't started again.
     started: Instant,
+    /// The system's out-of-memory kills so far, when it started: read once, so a crash
+    /// can say whether memory ran out (see crash_cause).
+    oom_kills: Option<u64>,
     key: Vec<u8>,
     session: String,
     shell: Socket,
@@ -179,7 +182,45 @@ fn connect(child: &mut Child, addr: &str, kind: &str, identity: Option<&[u8]>, e
 }
 
 /// Start Ark on a new connection file and connect to its four channels.
-fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, String> {
+/// The system's out-of-memory kills so far (`oom_kill` in /proc/vmstat).
+fn oom_kills() -> Option<u64> {
+    std::fs::read_to_string("/proc/vmstat").ok()?.lines()
+        .find_map(|l| l.strip_prefix("oom_kill ")).and_then(|n| n.trim().parse().ok())
+}
+
+/// Why R ended, in words. Signal 9 is how the kernel ends a process when memory runs
+/// out, and how `kill -9` ends one: the out-of-memory count, read when R started and
+/// again now, tells them apart.
+fn crash_cause(signal: Option<i32>, code: Option<i32>, memory: bool) -> String {
+    match (signal, code) {
+        (Some(9), _) if memory => tr("the system ran out of memory (signal 9)", "el sistema se quedó sin memoria (señal 9)").into(),
+        (Some(9), _) => tr("it was stopped from outside (signal 9)", "lo detuvieron desde fuera (señal 9)").into(),
+        (Some(11), _) => tr("a crash in R or in a package (signal 11)", "un fallo de R o de un paquete (señal 11)").into(),
+        (Some(6), _) => tr("R aborted (signal 6)", "R abortó (señal 6)").into(),
+        (Some(sig), _) => trf!("signal {sig}", "señal {sig}"),
+        (None, c) => trf!("it exited with code {}", "salió con código {}", c.unwrap_or(-1)),
+    }
+}
+
+/// The code an agent's request ran (`.corral_eval("ID")` stands for eval/ID.R in its
+/// session); anything else as it was typed. Read only when R crashed.
+fn eval_code(sent: &str) -> String {
+    let id = sent.trim().strip_prefix(".corral_eval(\"").and_then(|r| r.strip_suffix("\")"));
+    let Some(id) = id.filter(|id| id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) else { return sent.to_string() };
+    std::fs::read_dir(env::state_dir().join("sessions")).ok().and_then(|d| d.flatten()
+        .find_map(|s| std::fs::read_to_string(s.path().join("eval").join(format!("{id}.R"))).ok()))
+        .unwrap_or_else(|| sent.to_string())
+}
+
+/// The first line that says something, cut to 80 characters, with … when there is more.
+fn first_line(code: &str) -> String {
+    let lines: Vec<&str> = code.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let Some(first) = lines.first() else { return String::new() };
+    let cut: String = first.chars().take(80).collect();
+    if cut.chars().count() < first.chars().count() || lines.len() > 1 { format!("{cut}…") } else { cut }
+}
+
+fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>, crashed_at: Option<f64>) -> Result<Kernel, String> {
     let ports = free_ports(5)?;
     let key = env::random_hex(16);
     let conn = obj(vec![
@@ -206,6 +247,8 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
         .env("CORRAL", "1")
         .env("CORRAL_ARK_CONNECTION", conn_path) // corral.R announces it, for the editor's language server
         .env("CORRAL_NOTICE", conn_path.with_extension("notice")) // what R says while starting
+        // After a crash: when, so R says how long it took to come back with its objects.
+        .envs(crashed_at.map(|t| ("CORRAL_CRASHED_AT", format!("{t:.3}"))))
         .stdin(Stdio::null())
         .spawn()
         .map_err(|e| trf!("could not start Ark: {e}", "no pude iniciar Ark: {e}"))?;
@@ -265,7 +308,7 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
             h.get("msg_type").str() != Some("input_request") || t.send(Event::Input(h, content)).is_ok()
         });
     });
-    Ok(Kernel { child, started: Instant::now(), key: key.into_bytes(), session, shell, stdin, control })
+    Ok(Kernel { child, started: Instant::now(), oom_kills: oom_kills(), key: key.into_bytes(), session, shell, stdin, control })
 }
 
 /// Open a channel again while the kernel runs: a few seconds of tries.
@@ -804,6 +847,9 @@ struct Console {
     mode: Mode,
     count: u64,
     at_line_start: bool,
+    /// The code sent last (the console's text, or `.corral_eval("…")`): if R dies while
+    /// it runs, the crash line names it.
+    last_code: String,
 }
 
 fn common_prefix(items: &[String]) -> String {
@@ -933,6 +979,7 @@ impl Console {
         let code = self.ed.text();
         self.ed.finish();
         self.hist.add(&code);
+        self.last_code.clone_from(&code);
         let content = obj(vec![
             ("code", code.as_str().into()),
             ("silent", false.into()),
@@ -1158,17 +1205,19 @@ impl Console {
     /// console. Keys typed meanwhile stay; what the old kernel left doesn't.
     fn restart(&mut self, status: &std::process::ExitStatus) -> Result<(), String> {
         use std::os::unix::process::ExitStatusExt;
-        let why = match status.signal() {
-            Some(sig) => trf!("signal {sig}", "señal {sig}"),
-            None => trf!("code {}", "código {}", status.code().unwrap_or(-1)),
-        };
+        let crashed_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).ok();
+        let memory = matches!((self.k.oom_kills, oom_kills()), (Some(a), Some(b)) if b > a);
+        let why = crash_cause(status.signal(), status.code(), memory);
+        // What it was running, when it was running something.
+        let running = if matches!(self.mode, Mode::Busy { .. }) { first_line(&eval_code(&self.last_code)) } else { String::new() };
+        let what = if running.is_empty() { String::new() } else { trf!(", while running: {running}", ", mientras ejecutaba: {running}") };
         let gone = if env::config().get("checkpoints").str() == Some("off") {
             tr(" Its objects are gone (checkpoints are off).", " Sus objetos se perdieron (los respaldos están desactivados).")
         } else {
             ""
         };
-        out(&format!("{}{gone}\n", trf!("[corral] R ended unexpectedly ({why}); starting a new session.",
-                                          "[corral] R terminó inesperadamente ({why}); inicio una sesión nueva.")));
+        out(&format!("{}{gone}\n", trf!("[corral] R ended unexpectedly: {why}{what}. Starting a new session.",
+                                          "[corral] R terminó inesperadamente: {why}{what}. Inicio una sesión nueva.")));
         let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(_))).collect();
         while let Ok(ev) = self.rx.try_recv() {
             if matches!(ev, Event::Bytes(_)) {
@@ -1177,7 +1226,7 @@ impl Console {
         }
         let _ = std::fs::remove_file(&self.conn_path);
         self.conn_path = self.conn_path.with_file_name(format!("kernel-{}.json", env::random_hex(4)));
-        self.k = start(&self.ark, &self.conn_path, &self.tx)?;
+        self.k = start(&self.ark, &self.conn_path, &self.tx, crashed_at)?;
         let id = self.k.request("kernel_info_request", Value::obj());
         if self.wait_reply(&id, Duration::from_secs(60)).is_none() {
             let log = log_file();
@@ -1188,8 +1237,16 @@ impl Console {
         self.backlog.extend(kept);
         self.mode = Mode::Edit;
         self.count = 1;
-        self.ed = Editor::new(Prompt::In(1));
         self.at_line_start = true;
+        // What R said while starting (what came back) before anything typed meanwhile runs:
+        // R writes it once it has restored, empty when there was nothing; up to 3 s.
+        let notice = self.conn_path.with_extension("notice");
+        let until = Instant::now() + Duration::from_secs(3);
+        while !notice.exists() && Instant::now() < until && self.k.alive() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        self.show_notice();
+        self.ed = Editor::new(Prompt::In(1));
         self.ed.render();
         Ok(())
     }
@@ -1199,7 +1256,9 @@ impl Console {
         let file = self.conn_path.with_extension("notice");
         if let Ok(text) = std::fs::read_to_string(&file) {
             let _ = std::fs::remove_file(&file);
-            self.print(&format!("{}\n", text.trim_end()));
+            if !text.trim().is_empty() {
+                self.print(&format!("{}\n", text.trim_end()));
+            }
         }
     }
 
@@ -1266,7 +1325,7 @@ pub fn run() -> Result<(), String> {
     env::remove_old(&folder, "json", 2 * 86400);
     let conn_path = folder.join(format!("kernel-{}.json", env::random_hex(4)));
     let (tx, rx) = mpsc::channel();
-    let kernel = start(&ark, &conn_path, &tx)?;
+    let kernel = start(&ark, &conn_path, &tx, None)?;
     read_terminal(tx.clone());
     let raw = Raw::enter();
     out("\x1b[?2004h"); // pasted text comes marked, so it is not run line by line
@@ -1284,6 +1343,7 @@ pub fn run() -> Result<(), String> {
         mode: Mode::Edit,
         count: 1,
         at_line_start: true,
+        last_code: String::new(),
     };
     let id = c.k.request("kernel_info_request", Value::obj());
     if c.wait_reply(&id, Duration::from_secs(60)).is_none() {
@@ -1305,6 +1365,19 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_crash_says_why_in_words() {
+        assert!(crash_cause(Some(9), None, true).contains("memory"));
+        assert!(crash_cause(Some(9), None, false).contains("from outside"));
+        assert!(crash_cause(Some(11), None, false).contains("package"));
+        assert!(crash_cause(None, Some(2), false).contains("code 2"));
+        assert_eq!(first_line("\n  x <- 1\ny <- 2"), "x <- 1…");
+        assert_eq!(first_line("summary(m)"), "summary(m)");
+        assert_eq!(first_line(&"a".repeat(100)).chars().count(), 81);
+        // Not an agent's request: as it was sent.
+        assert_eq!(eval_code("lm(y ~ x)"), "lm(y ~ x)");
+    }
 
     #[test]
     fn keys_and_paste() {
