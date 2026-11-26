@@ -272,9 +272,27 @@ fn points_into(p: &Path, folder: &Path) -> bool {
     }
 }
 
+/// Whether your R has pak: the installer then installs R packages with it, as you
+/// would. The checklist's probe sets it (checks); otherwise R is asked once.
+static HAS_PAK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+fn has_pak() -> bool {
+    *HAS_PAK.get_or_init(|| crate::versions::rscript().or_else(|| which("Rscript")).is_some_and(|r| setup::r_packages(&r, &["pak"])[0]))
+}
+
+/// The command to install these R packages yourself: pak's if your R has it, else
+/// install.packages from CRAN.
 fn install_r(pkgs: &[&str]) -> String {
+    install_r_with(pkgs, has_pak())
+}
+
+fn install_r_with(pkgs: &[&str], pak: bool) -> String {
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
-    format!("Rscript -e 'install.packages(c({list}), repos = \"{CRAN}\")'")
+    if pak {
+        format!("Rscript -e 'pak::pak(c({list}))'")
+    } else {
+        format!("Rscript -e 'install.packages(c({list}), repos = \"{CRAN}\")'")
+    }
 }
 
 /// "a", "a and b", "a, b and c", in the user's language.
@@ -347,8 +365,9 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                                     "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")]).id("r")),
         Some(r) => {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
-            let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI"];
+            let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI", "pak"];
             let has = setup::r_packages(&r, &pkgs);
+            let _ = HAS_PAK.set(has[7]);
             let missing: Vec<&str> = R_NEEDS.into_iter().filter(|p| !has[pkgs.iter().position(|x| x == p).unwrap_or(0)]).collect();
             if missing.is_empty() {
                 out.push(check("required", State::Ok, tr("R packages", "Paquetes de R"), tr("httpgd and jsonlite", "httpgd y jsonlite"), &[]));
@@ -358,8 +377,13 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
                 out.push(check("required", State::Missing, tr("R packages", "Paquetes de R"), trf!("missing {list}", "faltan {list}"),
                                &[tr("Install the R packages (httpgd draws the plots, jsonlite carries the variables):",
                                     "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]).id("r_packages")
-                         .brings(names.clone(), trf!("{names}, R packages: into your R library, without sudo",
-                                                     "{names}, paquetes de R: en tu biblioteca de R, sin sudo")));
+                         .brings(names.clone(), if has[7] {
+                             trf!("{names}, R packages: with pak, into your R library, without sudo",
+                                  "{names}, paquetes de R: con pak, en tu biblioteca de R, sin sudo")
+                         } else {
+                             trf!("{names}, R packages: into your R library, without sudo",
+                                  "{names}, paquetes de R: en tu biblioteca de R, sin sudo")
+                         }));
             }
             // nanoparquet even with arrow there: View() with arrow is slower, and in a
             // long session R's memory keeps growing with each table (bench/repeat.R).
@@ -496,7 +520,7 @@ fn report(rows: &[Check], again: &str, offer: bool) -> bool {
             println!("  {} {}{}  {}", mark(&s, r.state), r.name, " ".repeat(width - r.name.chars().count()), r.detail);
         }
     }
-    let ok = missing_steps(rows, again, offer);
+    let ok = missing_steps(rows, again, offer, true);
     let optional: Vec<&Check> = rows.iter().filter(|r| r.state == State::Warn && !r.fix.is_empty()).collect();
     if !optional.is_empty() {
         println!("\n{}{}{}", s.dim, tr("Optional, whenever you like:", "Opcional, cuando quieras:"), s.off);
@@ -512,7 +536,8 @@ fn report(rows: &[Check], again: &str, offer: bool) -> bool {
 
 /// What to do about what is missing, step by step; true when nothing is. With `offer`,
 /// what the installer can bring itself is left out of the steps (see report).
-fn missing_steps(rows: &[Check], again: &str, offer: bool) -> bool {
+/// `unchanged` says nothing was installed yet (false after bring installed part of it).
+fn missing_steps(rows: &[Check], again: &str, offer: bool, unchanged: bool) -> bool {
     let s = style();
     let blocking: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
     let (later, manual): (Vec<&Check>, Vec<&Check>) = blocking.iter().partition(|r| offer && r.brings.is_some());
@@ -523,7 +548,8 @@ fn missing_steps(rows: &[Check], again: &str, offer: bool) -> bool {
         } else {
             trf!("{n} things are missing before installing.", "Faltan {n} cosas antes de instalar.")
         };
-        println!("\n{}{}{what}{} {}\n", s.red, s.bold, s.off, tr("Nothing was changed.", "No cambié nada."));
+        let note = if unchanged { tr(" Nothing was changed.", " No cambié nada.") } else { "" };
+        println!("\n{}{}{what}{}{note}\n", s.red, s.bold, s.off);
         for (i, r) in manual.iter().enumerate() {
             println!("  {}. {}", i + 1, r.fix[0]);
             for line in &r.fix[1..] {
@@ -556,15 +582,15 @@ fn said_yes(answer: &str) -> bool {
 }
 
 /// When all that is missing is what the installer can bring (herdr, httpgd and
-/// jsonlite), it offers to, and Enter says yes. True when you said yes and, after
-/// bringing it, nothing required is missing.
-fn bring(rows: &[Check]) -> bool {
+/// jsonlite), it offers to, and Enter says yes. None when it didn't bring anything
+/// (it couldn't ask, or you said no); otherwise whether everything came.
+fn bring(rows: &[Check]) -> Option<bool> {
     use std::io::{BufRead, Write};
     let missing: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
     if missing.is_empty() || missing.iter().any(|r| r.brings.is_none()) {
-        return false;
+        return None;
     }
-    let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return false };
+    let tty = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty").ok()?;
     let s = style();
     println!("\n{}{}{}", s.bold, tr("The installer can bring what is missing:", "El instalador puede poner lo que falta:"), s.off);
     for r in &missing {
@@ -574,7 +600,7 @@ fn bring(rows: &[Check]) -> bool {
     let _ = std::io::stdout().flush();
     let mut answer = String::new();
     if std::io::BufReader::new(tty).read_line(&mut answer).is_err() || !said_yes(&answer) {
-        return false;
+        return None;
     }
     println!();
     let mut all = true;
@@ -585,7 +611,7 @@ fn bring(rows: &[Check]) -> bool {
             _ => false,
         };
     }
-    all
+    Some(all)
 }
 
 /// herdr into ~/.local/bin, from its GitHub release and checked against HERDR's
@@ -633,6 +659,7 @@ fn bring_r_packages() -> bool {
         true
     } else {
         step(&trf!("couldn't install {names}", "no pude instalar {names}"), State::Missing);
+        system_libs_step(&r, &missing);
         false
     }
 }
@@ -1072,20 +1099,69 @@ fn p3m_codename() -> Option<String> {
 
 /// R packages into your own R library: no sudo. On a system Posit's package manager
 /// builds for, they come already compiled; otherwise from CRAN, which needs a
-/// compiler. True when R can load them all afterwards.
+/// compiler. With pak in your R it installs them with pak, as you would, and with
+/// install.packages if pak couldn't. True when R can load them all afterwards.
 fn r_install(r: &Path, pkgs: &[&str]) -> bool {
-    let binaries = p3m_codename().map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", "));
+    let run = |code: String| Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null())
+        .stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+    (has_pak() && run(r_install_code(pkgs, true))) || run(r_install_code(pkgs, false))
+}
+
+/// The R code r_install runs: into the first library of R_LIBS_USER (yours), from
+/// Posit's compiled packages where there are some, then CRAN. pak runs with
+/// pkg.sysreqs off: it may list system libraries, but it never installs them (that
+/// takes sudo); system_libs_hint says which, when something doesn't load.
+fn r_install_code(pkgs: &[&str], pak: bool) -> String {
+    let binaries = p3m_codename().map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", ")).unwrap_or_default();
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
-    let code = format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
+    let install = if pak {
+        "options(pkg.sysreqs = FALSE)\n  pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)"
+    } else {
+        "install.packages(pkgs, lib = lib, quiet = TRUE)"
+    };
+    format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
 if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
 lib <- path.expand(lib)
 dir.create(lib, recursive = TRUE, showWarnings = FALSE)
-options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)),
+        repos = c({binaries}CRAN = "{CRAN}"))
 pkgs <- c({list})
-install.packages(pkgs, lib = lib, repos = c({}CRAN = "{CRAN}"), quiet = TRUE)
-quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#, binaries.unwrap_or_default());
-    Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
-        .status().is_ok_and(|s| s.success())
+try({{
+  {install}
+}}, silent = TRUE)
+quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#)
+}
+
+/// With pak in your R: the commands that install the system libraries these packages
+/// need (pak::pkg_sysreqs), each with sudo, for you to run; Corral never runs sudo
+/// itself. None without pak, or when pak has nothing to say.
+fn system_libs_hint(r: &Path, pkgs: &[&str]) -> Option<String> {
+    if !has_pak() {
+        return None;
+    }
+    let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+    let code = format!("sr <- tryCatch(pak::pkg_sysreqs(c({list})), error = function(e) NULL)
+if (!is.null(sr)) cat(c(sr$pre_install, sr$install_scripts, sr$post_install), sep = \"\\n\")");
+    let out = Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    with_sudo(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// pak's system commands (apt-get, dnf…), one per line, as one line to run with sudo.
+/// Anything else pak printed is left out.
+fn with_sudo(text: &str) -> Option<String> {
+    const TOOLS: [&str; 8] = ["apt-get", "apt", "dnf", "yum", "zypper", "apk", "pacman", "sudo"];
+    let lines: Vec<String> = text.lines().map(str::trim)
+        .filter(|l| l.split_whitespace().next().is_some_and(|w| TOOLS.contains(&w)))
+        .map(|l| if l.starts_with("sudo ") { l.to_string() } else { format!("sudo {l}") }).collect();
+    (!lines.is_empty()).then(|| lines.join(" && "))
+}
+
+/// After R packages didn't install or load: what pak says they need from the system.
+fn system_libs_step(r: &Path, pkgs: &[&str]) {
+    if let Some(cmd) = system_libs_hint(r, pkgs) {
+        println!("    {}", trf!("If a system library is missing, pak says what they need: {cmd}",
+                                "Si falta una librería del sistema, pak indica lo que necesitan: {cmd}"));
+    }
 }
 
 /// nanoparquet, which View() writes R's tables with (faster than arrow, and R's memory
@@ -1103,6 +1179,7 @@ fn r_nanoparquet() {
     } else {
         step(&trf!("couldn't install nanoparquet; View() uses arrow or CSV meanwhile. To try again: {}",
                    "no pude instalar nanoparquet; mientras tanto View() usa arrow o CSV. Para reintentarlo: {}", install_r(&["nanoparquet"])), State::Warn);
+        system_libs_step(&r, &["nanoparquet"]);
     }
 }
 
@@ -1120,6 +1197,7 @@ fn r_duckdb() {
     } else {
         step(&trf!("couldn't install duckdb; SQL in R needs it. To try again: {}",
                    "no pude instalar duckdb; SQL en R lo necesita. Para reintentarlo: {}", install_r(&["duckdb", "DBI"])), State::Warn);
+        system_libs_step(&r, &["duckdb", "DBI"]);
     }
 }
 
@@ -1134,14 +1212,15 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         // with your yes and checks again; if you say no or something fails, the steps to
         // do it yourself. Anything else missing, report already gave its steps.
         let only_brought = offer && rows.iter().filter(|r| r.state == State::Missing).all(|r| r.brings.is_some());
+        let mut brought = None;
         let ok = only_brought && {
-            let brought = bring(&rows);
+            brought = bring(&rows);
             rows = checks(in_place, src);
-            brought && rows.iter().all(|r| r.state != State::Missing)
+            brought == Some(true) && rows.iter().all(|r| r.state != State::Missing)
         };
         if !ok {
             if only_brought {
-                missing_steps(&rows, again, false);
+                missing_steps(&rows, again, false, brought.is_none());
             }
             let missing: Vec<&str> = rows.iter().filter(|r| r.state == State::Missing)
                 .map(|r| if r.id.is_empty() { "other" } else { r.id }).collect();
@@ -1879,6 +1958,24 @@ mod tests {
     }
 
     #[test]
+    fn r_packages_go_in_with_pak_when_your_r_has_it() {
+        assert_eq!(install_r_with(&["httpgd", "jsonlite"], true), r#"Rscript -e 'pak::pak(c("httpgd", "jsonlite"))'"#);
+        assert_eq!(install_r_with(&["rlang"], false), format!(r#"Rscript -e 'install.packages(c("rlang"), repos = "{CRAN}")'"#));
+        let pak = r_install_code(&["httpgd"], true);
+        assert!(pak.contains("pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)") && pak.contains("pkg.sysreqs = FALSE"), "{pak}");
+        let base = r_install_code(&["httpgd"], false);
+        assert!(base.contains("install.packages(pkgs, lib = lib, quiet = TRUE)") && !base.contains("pak"), "{base}");
+    }
+
+    #[test]
+    fn pak_s_system_commands_come_with_sudo_and_nothing_else() {
+        let text = "✔ Updated metadata database\napt-get -y update\napt-get -y install libcairo2-dev libpng-dev\n\n";
+        assert_eq!(with_sudo(text).as_deref(), Some("sudo apt-get -y update && sudo apt-get -y install libcairo2-dev libpng-dev"));
+        assert_eq!(with_sudo("sudo dnf install -y cairo-devel\n").as_deref(), Some("sudo dnf install -y cairo-devel"));
+        assert_eq!(with_sudo("ℹ nothing to install\n"), None);
+    }
+
+    #[test]
     fn enter_says_yes_to_bringing_what_is_missing() {
         for answer in ["", "\n", "y", "Yes\n", "s", "sí\n", " SI "] {
             assert!(said_yes(answer), "{answer:?}");
@@ -1892,9 +1989,9 @@ mod tests {
     fn what_it_can_bring_still_counts_as_missing() {
         let herdr = || check("required", State::Missing, "herdr", "", &["Install herdr:", "  curl …"]).id("herdr").brings("herdr", "herdr 0.9.5");
         let fine = || check("required", State::Ok, "System", "", &[]);
-        assert!(!missing_steps(&[herdr(), fine()], "again", true));
-        assert!(!missing_steps(&[herdr(), fine()], "again", false));
-        assert!(missing_steps(&[fine()], "again", true));
+        assert!(!missing_steps(&[herdr(), fine()], "again", true, true));
+        assert!(!missing_steps(&[herdr(), fine()], "again", false, false));
+        assert!(missing_steps(&[fine()], "again", true, true));
         assert_eq!(and_list(&["herdr"]), "herdr");
         assert!(and_list(&["a", "b", "c"]).starts_with("a, b"));
     }
