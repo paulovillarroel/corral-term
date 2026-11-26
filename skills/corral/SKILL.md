@@ -15,7 +15,7 @@ R is the default. Add `--lang python` to every command for Python. Running code 
 test "${HERDR_ENV:-}" = 1 && corral context --json
 ```
 
-One call, nothing started: for each console (`consoles.r`, `consoles.python`) whether it is `running`, its `session`, `version`, `cwd`, whether it is `showing`, and whether SQL works there (`sql`); and the rules the user set, as they apply to that session: `access` (`on` runs, `ask` waits for their approval in a popup, `off` runs nothing) and `output` (`full`, `review` or `structure`), stricter when it is `sensitive`. `agents` gives the rules for a console not started yet. Plan around them: with `ask`, put related code in one request; with `structure`, work from shapes; with `off`, ask the user to run it. (`corral eval --check [--lang python]` still answers for one console.)
+One call, nothing started: for each console (`consoles.r`, `consoles.python`) whether it is `running`, its `session`, `version`, `cwd`, whether it is `showing`, and whether SQL works there (`sql`); and the rules the user set, as they apply to that session: `access` (`on` runs, `ask` waits for their approval in a popup, `off` runs nothing) and `output` (`full`, `review` or `structure`), stricter when it is `sensitive`, and the `profile` they match (`open`, `standard`, `sensitive`; a project can have its own, and the stricter wins). `agents` gives the rules for a console not started yet. Plan around them: with `ask`, put related code in one request; with `structure`, work from shapes; with `off`, ask the user to run it. (`corral eval --check [--lang python]` still answers for one console.)
 
 For R, `running: false` means there is no console, or R runs there without Corral active (Corral is opt-in per R session): tell the user they can open one with `ctrl+b a` or by typing `corral` in a terminal (workspace layout), or activate Corral in an existing R pane with `ctrl+b m` (or `corral_activate()` in that R). For Python, no console yet is normal (`starts_on_request`): `corral eval --lang python` starts it. Fall back to `Rscript` or a separate Python only if the user agrees.
 
@@ -108,7 +108,7 @@ Don't save the scratch file on your own initiative; it is temporary on purpose.
 
 ## Panes, shortcuts, settings and docs
 
-When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. For a setting, a command's options or any question about how Corral works, read [reference/settings-and-docs.md](reference/settings-and-docs.md): it lists the settings, the R and Python versions the consoles run (rig, uv), which settings you must never change (`agents`, `agent_output`), and where Corral's docs are. The essentials:
+When the user asks to rearrange the Corral panes, or to see or change a keyboard shortcut, read [reference/panes-and-shortcuts.md](reference/panes-and-shortcuts.md) first. For a setting, a command's options or any question about how Corral works, read [reference/settings-and-docs.md](reference/settings-and-docs.md): it lists the settings, the R and Python versions the consoles run (rig, uv), which settings you must never change (`agents`, `agent_output`, the profiles), and where Corral's docs are. The essentials:
 
 ```bash
 corral toggle script            # the right column shows: script (agent, if focused on code), console or both
