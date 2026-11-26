@@ -530,6 +530,24 @@ fn context_tells_an_agent_where_it_is_and_its_rules() {
     wait_for(Duration::from_secs(20), "the context popup", running);
 }
 
+/// A crash while a command runs: the console says why, in words, and which command it
+/// was (an agent's request, read from its file), then what came back.
+#[test]
+#[ignore]
+fn a_crash_says_why_and_what_was_running() {
+    let live = Live::start("why");
+    assert_eq!(live.eval(&["kept <- 1:3"]).0, 0);
+    live.wait_checkpoint("r", &["kept"]);
+    std::thread::sleep(Duration::from_secs(5)); // older than 5 s: the console starts R again by itself
+    let mut request = live.command("corral").args(["eval", "Sys.sleep(60); cat('never\\n')"]).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+    live.wait_screen(&live.console, &["Sys.sleep(60)"]);
+    let old = live.kernel_pid();
+    crash(old);
+    live.wait_screen(&live.console, &["R ended unexpectedly: it was stopped from outside (signal 9), while running: Sys.sleep(60); cat('never\\n')",
+                                      "Back in", "with 1 object (kept)"]);
+    let _ = request.wait();
+}
+
 /// Python: the first request starts the console; objects stay between
 /// requests, and two agents asking at once take turns.
 #[test]
@@ -855,7 +873,13 @@ fn r_objects_survive_a_crash() {
         "package:tools" %in% search(), exists("con"), "\n")"#]);
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("same: TRUE 42 5 TRUE FALSE"), "{text}");
-    live.wait_screen(&live.console, &["Restored", "con (a connection)"]);
+    live.wait_screen(&live.console, &["R ended unexpectedly: it was stopped from outside (signal 9)", "Back in",
+                                      "with 5 objects (big, check, f, m, v) and 1 package (tools)", "con (a connection)"]);
+    // Said before the first command after the crash printed anything.
+    live.wait_screen(&live.console, &["same: TRUE 42 5"]);
+    let screen: String = live.screen(&live.console).split_whitespace().collect();
+    let (notice, output) = (screen.find("Backin"), screen.find("same:TRUE"));
+    assert!(matches!((notice, output), (Some(n), Some(o)) if n < o), "the notice came after the command:\n{screen}");
 }
 
 #[test]
@@ -878,7 +902,7 @@ fn r_plots_survive_a_crash() {
         assert!(Instant::now() < end, "no new R session after 60 s; the console shows:\n{}", live.screen(&live.console));
         std::thread::sleep(Duration::from_millis(200));
     }
-    live.wait_screen(&live.console, &["Restored 2 plots", "first in Mirador"]);
+    live.wait_screen(&live.console, &["Back in", "with 2 plots, first in Mirador"]);
     let (new_dir, _) = live.checkpoint("r");
     assert_eq!(count(&new_dir.join("kept"), "png"), 2, "{new_dir:?}");
     // Mirador lists them and serves them before the new R draws anything.
@@ -1444,7 +1468,7 @@ fn sensitive_sessions_stay_sensitive_after_a_crash() {
     let (status, text) = live.eval(&["cat(secret, \"\\n\")"]);
     assert_eq!(status, 3, "it ran without approval: {text}");
     assert!(!text.contains("42"), "{text}");
-    live.wait_screen(&live.console, &["Restored", "marked sensitive"]);
+    live.wait_screen(&live.console, &["Back in", "marked sensitive"]);
 
     assert_eq!(live.eval(&["--lang", "python", "s = 42"]).0, 0);
     live.wait_checkpoint("python", &["s"]);
