@@ -111,7 +111,7 @@
     </div>
     <div class="hero-shot">
       <figure class="hero-video">
-        <video src="assets/demo.mp4" poster="assets/demo-poster.webp" width="1600" height="900" autoplay muted loop playsinline preload="auto"
+        <video src="assets/demo.mp4" poster="assets/demo-poster.webp" width="1600" height="900" autoplay muted loop playsinline controls preload="auto"
                aria-label="A real Corral session: you type corral and the layout opens; Claude Code is asked to plot monthly revenue by region; Corral shows each request's exact code in an approval popup; it runs in the live R console and the variables pane fills; the plot opens in Mirador; Claude sums up what it found"></video>
       </figure>
   <p class="shot-caption">A real session, with the waits sped up: you ask, Corral shows you the code, it runs in your live R console and the plot opens in Mirador. <a href="assets/demo.mp4">Full size</a></p>
@@ -476,7 +476,7 @@
   try {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
       const v = document.querySelector(".hero-video video");
-      if (v) { v.removeAttribute("autoplay"); v.pause(); v.controls = true; }
+      if (v) { v.removeAttribute("autoplay"); v.pause(); }
     }
   } catch (e) {}
 </script>
