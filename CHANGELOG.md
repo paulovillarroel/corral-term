@@ -2,9 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.24
 
-Plots survive a crash too.
+Plots survive a crash too: the newest 30 come back first in Mirador, with the objects.
 
 - The plots you drew come back after a crash, like the objects. Each console keeps its newest 30 in its checkpoint, as images (an SVG up to 2 MB and a PNG), and the next console in the project shows them first, in Mirador and in the terminal's viewer, before its own: "[corral] Restored 4 plots from the R that ended without being closed (…), first in Mirador (ctrl+b f)." A plot removed in Mirador doesn't come back, and an R plot whose SVG is over 20 MB (a scatter of more than about 200,000 points) is left out. "Console: don't keep checkpoints of the objects and plots" in the palette turns it off with the rest.
 - In R, one small process per session, `corral _keep-plots`, writes them: it starts with the first plot, watches the file R rewrites when its plots change, and asks httpgd over HTTP, as Mirador does. A command that draws waits about 0.1 ms more; the watcher uses about 1 MB and next to no CPU at rest, and R's memory grows the same as without it. It isn't done in the checkpoint's forked copy, where httpgd's server thread can hold a lock at the moment of the fork and the copy then never ends, nor by starting a process from R for each plot, which forks R too (8 ms with 400 to 650 MB in use). Python's figures are already images in memory, and the checkpoint's copy writes them.
