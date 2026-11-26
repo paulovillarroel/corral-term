@@ -2013,6 +2013,28 @@ fn check_due(checked: Option<f64>, now: u64) -> bool {
     }
 }
 
+/// The latest version the daily check found, while it is newer than the Corral you
+/// have: the variables pane and the palette show it until you update, since herdr's
+/// toast, the other way it is told, is off unless you turn it on (`[ui.toast] delivery`
+/// is "off" by default). It reads two small files and never asks GitHub. Nothing with
+/// `corral config update_check off`.
+pub fn newer_version() -> Option<String> {
+    if env::config().get("update_check").str() == Some("off") {
+        return None;
+    }
+    let latest = env::read_json(&update_state()).get("latest").str().map(String::from);
+    let installed = env::read_json(&manifest()).get("version").str().map(String::from);
+    newer_than_installed(latest.as_deref(), installed.as_deref(), VERSION)
+}
+
+/// `latest` when it is newer than both the installed version and this binary's: the
+/// pane that shows it may still be the old binary after `corral update` replaced it.
+fn newer_than_installed(latest: Option<&str>, installed: Option<&str>, this: &str) -> Option<String> {
+    let latest = latest?;
+    let have = installed.map(as_tuple).unwrap_or((0, 0, 0)).max(as_tuple(this));
+    (as_tuple(latest) > have).then(|| latest.to_string())
+}
+
 /// Whether to tell about `latest`: newer than this corral, and not told yet.
 fn worth_telling(have: &str, latest: &str, told: Option<&str>) -> bool {
     as_tuple(latest) > as_tuple(have) && told != Some(latest)
@@ -2066,6 +2088,18 @@ pub fn cmd_update_check() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_newer_version_is_shown_until_it_is_installed() {
+        assert_eq!(newer_than_installed(Some("0.1.24"), Some("0.1.23"), "0.1.23").as_deref(), Some("0.1.24"));
+        // Installed by `corral update` while this (old) pane runs: no longer news.
+        assert_eq!(newer_than_installed(Some("0.1.24"), Some("0.1.24"), "0.1.23"), None);
+        // A build ahead of what was installed, or of what is published.
+        assert_eq!(newer_than_installed(Some("0.1.24"), Some("0.1.23"), "0.1.25"), None);
+        assert_eq!(newer_than_installed(Some("0.1.24"), None, "0.1.23").as_deref(), Some("0.1.24"));
+        assert_eq!(newer_than_installed(Some("0.1.10"), Some("0.1.9"), "0.1.9").as_deref(), Some("0.1.10"));
+        assert_eq!(newer_than_installed(None, Some("0.1.23"), "0.1.23"), None);
+    }
 
     #[test]
     fn the_ping_says_which_version_an_update_replaced() {

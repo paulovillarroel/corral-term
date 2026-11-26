@@ -145,6 +145,9 @@ struct Viewer {
     row_items: Vec<(usize, usize)>,
     colors: Colors,
     theme_asked: Option<Instant>,
+    /// A newer Corral, from the daily check: the hint row says so until you update.
+    newer: Option<String>,
+    newer_at: Instant,
 }
 
 impl Viewer {
@@ -332,7 +335,20 @@ impl Viewer {
             trf!("←/→ tabs · ↑↓ move · {action} · / search{quit} · ctrl+b space shortcuts",
                  "←/→ pestañas · ↑↓ mover · {action} · / buscar{quit} · ctrl+b space atajos")
         };
-        f += &format!("\x1b[{rows};1H\x1b[2K {}{}{RESET}", c.dim, clip(&hint, cols.saturating_sub(2)));
+        // A newer Corral goes first on that row, in the accent colour, until you update.
+        let news = match (&self.newer, self.typing || !self.status.is_empty()) {
+            (Some(v), false) => trf!("Corral {v} is out: ctrl+b space → Update", "Salió Corral {v}: ctrl+b space → Actualizar"),
+            _ => String::new(),
+        };
+        let room = cols.saturating_sub(2);
+        if news.is_empty() {
+            f += &format!("\x1b[{rows};1H\x1b[2K {}{}{RESET}", c.dim, clip(&hint, room));
+        } else {
+            let news = clip(&news, room);
+            let rest = room.saturating_sub(width(&news) + 3);
+            let tail = if rest > 8 { format!("{} · {}{RESET}", c.dim, clip(&hint, rest)) } else { String::new() };
+            f += &format!("\x1b[{rows};1H\x1b[2K {}{news}{RESET}{tail}", c.accent);
+        }
         out(&f);
     }
 
@@ -446,6 +462,7 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
         session, follow: !popup, keep_open: !popup, items: Vec::new(), meta: Value::obj(), rev: None,
         tab: 0, tab_chosen: false, sel: 0, top: 0, query: String::new(), typing: false, status: String::new(),
         tab_spans: Vec::new(), row_items: Vec::new(), colors: Colors::load(), theme_asked: None,
+        newer: crate::install::newer_version(), newer_at: Instant::now(),
     };
     v.load();
     v.tab = v.first_useful_tab();
@@ -476,6 +493,14 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                 if crate::i18n::es() != spanish {
                     spanish = !spanish;
                     changed = true;
+                }
+                // A newer Corral (found once a day) or one just installed: three small
+                // files, read every 10 s.
+                if v.newer_at.elapsed() >= Duration::from_secs(10) {
+                    v.newer_at = Instant::now();
+                    let newer = crate::install::newer_version();
+                    changed |= newer != v.newer;
+                    v.newer = newer;
                 }
                 if changed {
                     if !v.tab_chosen && v.in_tab(v.tab).is_empty() {
