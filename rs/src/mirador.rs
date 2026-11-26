@@ -175,6 +175,22 @@ fn kept_name(stem: &str) -> bool {
     stem.len() == 5 && stem.starts_with('k') && stem[1..].chars().all(|c| c.is_ascii_digit())
 }
 
+/// Plots removed outside Mirador (`corral eval --replace`): their copies in the
+/// checkpoint go too, so they don't come back after a crash, and plots-rev changes, so
+/// Mirador and R's watcher see it at once. Mirador's own remove does the same.
+pub(crate) fn forget_plots(sid: &str, ids: &[String]) {
+    if let Some(c) = kept_dir(sid).and_then(|k| k.parent().map(Path::to_path_buf)) {
+        for id in ids.iter().filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric())) {
+            for e in ["png", "svg"] {
+                let _ = std::fs::remove_file(c.join("plots").join(format!("{id}.{e}")));
+            }
+        }
+    }
+    if let Ok(dir) = session_dir(sid) {
+        let _ = std::fs::write(dir.join("plots-rev"), format!("removed {}", now()));
+    }
+}
+
 /// The plots to show for a session, as the page and the terminal's viewer list them:
 /// the kept ones first ("kept-k0001"…), then the session's own. `corral eval` keeps
 /// using the live list alone, where positions match the plot server's.

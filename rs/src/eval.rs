@@ -576,12 +576,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let mut removed = 0;
         if o.replace && !drawn.is_empty() {
             let previous: Vec<String> = env::read_json(&last_file).get("ids").arr().iter().filter_map(|v| v.str().map(String::from)).collect();
+            let mut gone = Vec::new();
             for id in previous.iter().filter(|id| !drawn.contains(id)) {
                 if let Some(k) = plot_ids(&sid).iter().position(|x| x == id) {
                     if plots_raw(&sid, "remove", &[("index", k.to_string())]).is_some() {
                         removed += 1;
+                        gone.push(id.clone());
                     }
                 }
+            }
+            if !gone.is_empty() {
+                crate::mirador::forget_plots(&sid, &gone);
             }
             current = plot_ids(&sid);
         }
