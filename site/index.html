@@ -182,6 +182,22 @@
     </div>
   </section>
 
+  <section class="showcase" id="survives">
+    <div class="show-text">
+      <div class="section-label"><span>Your work survives</span><span>checkpoints</span></div>
+      <h2>A crash doesn't take your work with it.</h2>
+      <p>herdr keeps the panes and your agent running when you close the window. Corral keeps what you built in the session: as you work, it saves a checkpoint of your objects, without the prompt feeling it, and puts them back when R or Python start again. The tables, the models, the functions you wrote, the packages you loaded, and every plot you kept in a variable.</p>
+      <ul class="points">
+        <li><b>Window closed</b><span>everything keeps running: R, Python, the agent and Mirador (herdr)</span></li>
+        <li><b>LSP drops</b><span>nothing is lost: the editor's language server only talks to R, which keeps its objects; completion comes back when the editor restarts it</span></li>
+        <li><b>R crashes</b><span>a new session about a second later, with your objects back; Python's come back the next time you run it (Corral)</span></li>
+        <li><b>Server stops</b><span>wsl --shutdown or a Windows restart: herdr brings the panes back, and Corral the objects, in the next console of the project</span></li>
+      </ul>
+      <p>What can't come back: connections to a database or a file, objects over 1 GB (you can raise it), and the plots Mirador drew but you didn't keep; a plot in a variable comes back and draws again.</p>
+      <p class="more-links"><a href="docs/consoles.html#survives">What survives what</a><a href="docs/performance.html#checkpoints">What it costs</a></p>
+    </div>
+  </section>
+
   <section class="showcase" id="layouts">
     <div class="layouts">
       <input type="radio" name="layout" id="lay-agent" checked>
