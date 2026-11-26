@@ -138,12 +138,18 @@
 
     <h2>Restart a console</h2>
     <p>If you quit the console with <code>q()</code> or <code>exit()</code>, its pane is left with a shell. The next <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>ctrl+b</kbd> <kbd>y</kbd> or <code>corral eval</code> starts the console again in the same pane. The variables pane follows the new session.</p>
-    <p>If R crashes instead (it was killed, or failed inside a package), the Ark console starts a new session by itself in the same pane and says so: "R ended unexpectedly; starting a new session", and the objects come back from their checkpoint (next section). An agent whose request was running hears at once that the console ended, instead of waiting out its timeout. If R crashes again right after starting, the console stops and leaves the shell, so a broken R doesn't restart over and over.</p>
+    <p>If R crashes instead (it was killed, or failed inside a package), the Ark console starts a new session by itself in the same pane and says why, in words, and what was running:</p>
+    <pre><code>[corral] R ended unexpectedly: the system ran out of memory (signal 9), while running: big &lt;- merge(sales, events, by = "id"). Starting a new session.
+[corral] Back in 0.4 s with 5 objects (sales, events, model, clean, f) and 1 package (data.table).
+[corral] Not kept: con (a connection).</code></pre>
+    <p>The cause: out of memory, when the system's count of processes it ended for lack of memory (<code>oom_kill</code> in <code>/proc/vmstat</code>, read when R started and again when it ended) went up; stopped from outside (<code>kill -9</code>, say) when it didn't; a crash in R or a package (signal 11); R aborted (signal 6). For an agent's request, the code is the request's own, not the call that runs it. What came back is said before anything typed meanwhile runs. The command that was running didn't finish: what it was changing is lost, and what came before it is in the checkpoint (next section). The console reads the memory count once when R starts and once when it ends, so this costs nothing while you work.</p>
+    <p> An agent whose request was running hears at once that the console ended, instead of waiting out its timeout. If R crashes again right after starting, the console stops and leaves the shell, so a broken R doesn't restart over and over.</p>
 
     <h2 id="checkpoints">Objects that outlive a crash</h2>
     <p>Corral keeps a checkpoint of the objects of each R and Python console. If the session ends without you closing it (R or Python crashed, or herdr or WSL closed), the next console in the same project gets them back and says which:</p>
-    <pre><code>[corral] Restored 12 objects from the R that ended without being closed (2026-11-23 14:32): sales, model, clean, …
+    <pre><code>[corral] Restored 12 objects (sales, model, clean, …), 2 packages (dplyr, ggplot2) and 4 plots from the R that ended without being closed (2026-11-23 14:32), first in Mirador (ctrl+b f).
 [corral] Not kept: con (a connection).</code></pre>
+    <p>When it is the same console starting R again after a crash, the line says how long it took instead: "Back in 0.4 s with …".</p>
     <p>The packages you attached in R, and the modules you imported in Python (<code>pd</code> too), come back first. Functions and classes you defined in the session come back as well. If you close the console yourself (<code>q()</code>, <code>exit</code>, <kbd>Ctrl</kbd>+<kbd>D</kbd> or <kbd>ctrl+b</kbd> <kbd>shift+q</kbd>), the checkpoint goes and the next console starts empty, as before.</p>
     <h3 id="survives">What survives what</h3>
     <table>
@@ -157,7 +163,7 @@
     </tbody>
     </table>
     <p>The plots come back too. Each console keeps the newest 30 it drew in its checkpoint, as images, and the next console in the project shows them first, in Mirador and in the terminal's viewer, before its own:</p>
-    <pre><code>[corral] Restored 4 plots from the R that ended without being closed (2026-11-26 10:15), first in Mirador (ctrl+b f).</code></pre>
+    <pre><code>[corral] Back in 0.4 s with 3 objects (sales, model, p) and 4 plots, first in Mirador (ctrl+b f).</code></pre>
     <p>They come back as pictures: to change one, draw it again. A plot you kept in a variable (a ggplot in <code>p</code>, say) also comes back as an object, and draws again: killing R with <code>kill -9</code>, R was back in 0.9 seconds with <code>p</code>, a model and the rest, and <code>print(p)</code> drew it. An R plot whose SVG is over 20 MB, a scatter of more than about 200,000 points, is left out, and a plot you remove in Mirador doesn't come back.</p>
     <p>You don't notice it while you work. After a command that changed an object, a copy of the process writes what changed while you keep going; the prompt only waits for the copy to start, 2 to 7 ms in R and under half a millisecond in Python. A command that changes nothing costs about 0.3 ms. Once a minute the copy also looks at every object, for changes made in place, and still writes only what changed. R's plots are written by one small process per session, which asks httpgd for each new plot as Mirador does: a command that draws waits about 0.1 ms more, and the process uses about 1 MB and next to no CPU while you don't draw. Python's figures are already images, and the copy writes them. <a href="performance.html#checkpoints">Performance</a> has the measurements.</p>
     <p>What can't come back: connections (to a database or a file) and objects that live outside R or Python, like some models; they show as "Not kept". Objects over 1024 MB in memory aren't kept either: <code>corral config checkpoint_max_mb 4096</code> raises the limit. A command that crashes R loses what it was changing; what came before it is kept.</p>
