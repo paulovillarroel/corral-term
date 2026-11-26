@@ -55,6 +55,7 @@ Code and data
   send         sends code to the console (Ctrl+R, F5, ctrl+b enter)
   eval         runs code in your console and prints the result (for agents)
   context      what your agent sees: consoles, SQL, its rules (--json for agents)
+  profile      security profile for agents: open, standard, sensitive (--project for one folder)
   audit        what agents ran in your consoles (--last N, --json)
   vars         the variables (window, --json for agents, --split)
   view         opens a table (parquet, csv…), --mirador for the browser
@@ -91,6 +92,7 @@ Código y datos
   send         envía código a la consola (Ctrl+R, F5, ctrl+b enter)
   eval         ejecuta código en tu consola e imprime el resultado (para agentes)
   context      lo que ve tu agente: consolas, SQL, sus reglas (--json para agentes)
+  profile      perfil de seguridad para agentes: open, standard, sensitive (--project para una carpeta)
   audit        lo que los agentes ejecutaron en tus consolas (--last N, --json)
   vars         las variables (ventana, --json para agentes, --split)
   view         abre una tabla (parquet, csv…), --mirador para el navegador
