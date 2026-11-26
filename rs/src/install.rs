@@ -1,11 +1,12 @@
 //! `corral install` and `corral uninstall`. install.sh downloads Corral (or
 //! uses a clone), makes sure this program is built, and runs `corral install`
 //! from there. First it checks everything Corral needs and says what to do
-//! about what is missing, offering to bring herdr and R's two packages itself;
+//! about what is missing, offering to bring herdr and jsonlite itself;
 //! only when nothing required is missing does it install. It never uses sudo
 //! and only writes inside HOME. Every file of the
-//! user's it edits (herdr's config, ~/.Rprofile, Fresh's config) is backed up
-//! first, and `corral uninstall` takes out what it added.
+//! user's it edits (herdr's config, ~/.Rprofile, Fresh's config, and ~/.bashrc or
+//! ~/.zshrc for the PATH) is backed up first, and `corral uninstall` takes out what
+//! it added, except the PATH line.
 
 use crate::env;
 use crate::i18n::tr;
@@ -62,9 +63,10 @@ const DOWNLOADS: [Download; 3] = [
 const HERDR: (&str, &str, &str) = ("0.9.5", "https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-linux-x86_64",
                                    "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d");
 
-/// The R packages Corral can't work without: httpgd draws the plots, jsonlite carries
-/// the variables.
-const R_NEEDS: [&str; 2] = ["httpgd", "jsonlite"];
+/// The R package Corral can't work without: jsonlite carries the variables (the
+/// variables pane, `corral vars`, the plot index). httpgd, for plots, goes in too, but
+/// Corral works without it, so it doesn't stop the install (r_httpgd).
+const R_NEEDS: [&str; 1] = ["jsonlite"];
 
 // ----------------------------------------------------------------------- places
 
@@ -355,8 +357,13 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             let v = version_of(&h, "--version");
             let ok = !v.is_empty() && as_tuple(&v) >= HERDR_MIN;
             let update = [tr("Corral needs herdr 0.9.5 or newer. Update it:", "Corral necesita herdr 0.9.5 o más nuevo. Actualízalo:"), "  herdr update"];
-            out.push(check("required", if ok { State::Ok } else { State::Missing }, "herdr",
-                           if v.is_empty() { tr("unknown version", "versión desconocida").into() } else { v }, if ok { &[] } else { &update }).id("herdr_old"));
+            let shown = if v.is_empty() { tr("unknown version", "versión desconocida").to_string() } else { v.clone() };
+            let row = check("required", if ok { State::Ok } else { State::Missing }, "herdr", shown.clone(), if ok { &[] } else { &update }).id("herdr_old");
+            // Too old: herdr's own updater brings the latest, with your yes (bring).
+            out.push(if ok { row } else {
+                row.brings("herdr", trf!("herdr update, from {shown} to its latest version: herdr's own updater, which checks what it downloads",
+                                         "herdr update, de {shown} a su última versión: el actualizador del propio herdr, que comprueba lo que descarga"))
+            });
         }
     }
     match crate::versions::rscript().or_else(|| which("Rscript")) {
@@ -370,20 +377,30 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             let _ = HAS_PAK.set(has[7]);
             let missing: Vec<&str> = R_NEEDS.into_iter().filter(|p| !has[pkgs.iter().position(|x| x == p).unwrap_or(0)]).collect();
             if missing.is_empty() {
-                out.push(check("required", State::Ok, tr("R packages", "Paquetes de R"), tr("httpgd and jsonlite", "httpgd y jsonlite"), &[]));
+                out.push(check("required", State::Ok, tr("R packages", "Paquetes de R"), "jsonlite", &[]));
             } else {
                 let cmd = format!("  {}", install_r(&missing));
                 let (list, names) = (missing.join(", "), and_list(&missing));
-                out.push(check("required", State::Missing, tr("R packages", "Paquetes de R"), trf!("missing {list}", "faltan {list}"),
-                               &[tr("Install the R packages (httpgd draws the plots, jsonlite carries the variables):",
-                                    "Instala los paquetes de R (httpgd dibuja los gráficos, jsonlite lleva las variables):"), &cmd]).id("r_packages")
+                out.push(check("required", State::Missing, tr("R packages", "Paquetes de R"), trf!("missing {list}", "falta {list}"),
+                               &[tr("Install jsonlite, which carries the variables to Corral:",
+                                    "Instala jsonlite, que lleva las variables a Corral:"), &cmd]).id("r_packages")
                          .brings(names.clone(), if has[7] {
-                             trf!("{names}, R packages: with pak, into your R library, without sudo",
-                                  "{names}, paquetes de R: con pak, en tu biblioteca de R, sin sudo")
+                             trf!("{names}, the R package that carries the variables: with pak, into your R library, without sudo",
+                                  "{names}, el paquete de R que lleva las variables: con pak, en tu biblioteca de R, sin sudo")
                          } else {
-                             trf!("{names}, R packages: into your R library, without sudo",
-                                  "{names}, paquetes de R: en tu biblioteca de R, sin sudo")
+                             trf!("{names}, the R package that carries the variables: into your R library, without sudo",
+                                  "{names}, el paquete de R que lleva las variables: en tu biblioteca de R, sin sudo")
                          }));
+            }
+            // httpgd draws R's plots for Mirador and the agent. Corral works without it
+            // (no plots there), so it doesn't stop the install: the installer puts it in
+            // your R library, and if it can't, it says how (r_httpgd).
+            if has[0] {
+                out.push(check("installer", State::Ok, "httpgd", tr("you already have it (R's plots)", "ya lo tienes (los gráficos de R)"), &[]));
+            } else {
+                out.push(check("installer", State::Download, "httpgd",
+                               tr("will install it in your R library (R's plots, in Mirador and for the agent)",
+                                  "lo instalo en tu biblioteca de R (los gráficos de R, en Mirador y para el agente)"), &[]));
             }
             // nanoparquet even with arrow there: View() with arrow is slower, and in a
             // long session R's memory keeps growing with each table (bench/repeat.R).
@@ -581,37 +598,112 @@ fn said_yes(answer: &str) -> bool {
     matches!(answer.trim().to_lowercase().as_str(), "" | "y" | "yes" | "s" | "si" | "sí")
 }
 
-/// When all that is missing is what the installer can bring (herdr, httpgd and
-/// jsonlite), it offers to, and Enter says yes. None when it didn't bring anything
+/// A yes-or-no question on the terminal, where Enter says yes. The answer comes from
+/// /dev/tty, since the install line reads its script from a pipe; None when there is
+/// no terminal to ask in.
+fn ask(question: &str) -> Option<bool> {
+    use std::io::{BufRead, Write};
+    let tty = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty").ok()?;
+    print!("{question} {} ", tr("[Y/n]", "[S/n]"));
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    std::io::BufReader::new(tty).read_line(&mut answer).ok()?;
+    Some(said_yes(&answer))
+}
+
+/// When all that is missing is what the installer can bring (herdr, or a newer one,
+/// and jsonlite), it offers to, and Enter says yes. None when it didn't bring anything
 /// (it couldn't ask, or you said no); otherwise whether everything came.
 fn bring(rows: &[Check]) -> Option<bool> {
-    use std::io::{BufRead, Write};
     let missing: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
     if missing.is_empty() || missing.iter().any(|r| r.brings.is_none()) {
         return None;
     }
-    let tty = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty").ok()?;
     let s = style();
     println!("\n{}{}{}", s.bold, tr("The installer can bring what is missing:", "El instalador puede poner lo que falta:"), s.off);
     for r in &missing {
         println!("  • {}", r.brings.as_ref().map(|b| b.1.as_str()).unwrap_or_default());
     }
-    print!("{}", tr("Install it now? [Y/n] ", "¿Lo instalo ahora? [S/n] "));
-    let _ = std::io::stdout().flush();
-    let mut answer = String::new();
-    if std::io::BufReader::new(tty).read_line(&mut answer).is_err() || !said_yes(&answer) {
+    if ask(tr("Install it now?", "¿Lo instalo ahora?"))? {
+        println!();
+    } else {
         return None;
     }
-    println!();
     let mut all = true;
     for r in &missing {
         all &= match r.id {
             "herdr" => bring_herdr(),
+            "herdr_old" => bring_herdr_update(),
             "r_packages" => bring_r_packages(),
             _ => false,
         };
     }
     Some(all)
+}
+
+/// `herdr update`, herdr's own updater (it checks what it downloads), when your herdr
+/// is older than Corral needs. Its output shows as it goes.
+fn bring_herdr_update() -> bool {
+    let Some(h) = which("herdr") else { return false };
+    println!("  … herdr update");
+    let ran = Command::new(&h).arg("update").stdin(Stdio::null()).status().is_ok_and(|s| s.success());
+    let v = version_of(&h, "--version");
+    if ran && !v.is_empty() && as_tuple(&v) >= HERDR_MIN {
+        step(&trf!("herdr {v}, updated with herdr update", "herdr {v}, actualizado con herdr update"), State::Ok);
+        true
+    } else {
+        step(tr("herdr update didn't leave a version Corral can use; run it yourself to see why",
+                "herdr update no dejó una versión que Corral pueda usar; córrelo tú para ver por qué"), State::Missing);
+        false
+    }
+}
+
+/// The line that puts ~/.local/bin on the PATH, in bash or zsh.
+const PATH_LINE: &str = "export PATH=\"$HOME/.local/bin:$PATH\"";
+
+/// ~/.local/bin on the PATH, so a new terminal finds herdr and corral. When it isn't,
+/// the installer offers to add PATH_LINE to your shell's startup file (~/.bashrc or
+/// ~/.zshrc), after a copy of it, as with the other files it edits. Uninstalling
+/// leaves the line: other tools (herdr, uv) live there too. True when the line is in
+/// that file now, added or already there.
+fn path_step(saved: &mut Vec<String>) -> bool {
+    use std::io::Write;
+    if on_path(&bin()) {
+        return false;
+    }
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let rc = match Path::new(&shell).file_name().and_then(|n| n.to_str()) {
+        Some("zsh") => ".zshrc",
+        Some("bash") => ".bashrc",
+        _ => return false,
+    };
+    let path = env::home().join(rc);
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    if text.lines().any(|l| l.trim() == PATH_LINE) {
+        return true;
+    }
+    if !can_ask() {
+        return false;
+    }
+    println!("\n  {}", trf!("{} isn't on your PATH, so a new terminal won't find herdr or corral.",
+                            "{} no está en tu PATH, así que una terminal nueva no encontrará herdr ni corral.", short(&bin())));
+    if ask(&format!("  {}", trf!("Add it in ~/{rc}?", "¿Lo agrego en ~/{rc}?"))) != Some(true) {
+        return false;
+    }
+    backup(&path, saved);
+    let gap = if text.is_empty() { "" } else if text.ends_with('\n') { "\n" } else { "\n\n" };
+    let block = format!("{gap}# Corral's installer: ~/.local/bin on the PATH (herdr, corral)\n{PATH_LINE}\n");
+    let written = std::fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut f| f.write_all(block.as_bytes()));
+    match written {
+        Ok(()) => {
+            step(&trf!("~/.local/bin on the PATH, in ~/{rc}", "~/.local/bin en el PATH, en ~/{rc}"), State::Ok);
+            true
+        }
+        Err(e) => {
+            step(&format!("~/{rc}: {e}"), State::Warn);
+            false
+        }
+    }
 }
 
 /// herdr into ~/.local/bin, from its GitHub release and checked against HERDR's
@@ -643,7 +735,7 @@ fn bring_herdr() -> bool {
     true
 }
 
-/// httpgd and jsonlite, whichever are missing, into your R library (r_install).
+/// jsonlite, if it's missing, into your R library (r_install).
 fn bring_r_packages() -> bool {
     let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return false };
     let has = setup::r_packages(&r, &R_NEEDS);
@@ -1164,6 +1256,26 @@ fn system_libs_step(r: &Path, pkgs: &[&str]) {
     }
 }
 
+/// httpgd, which draws R's plots for Mirador and the agent. If it can't be installed
+/// (it needs cairo and libpng from the system), Corral works without plots there, and
+/// the step says how to add it later, with pak's list of what the system lacks.
+fn r_httpgd() {
+    let Some(r) = crate::versions::rscript().or_else(|| which("Rscript")) else { return };
+    if setup::r_packages(&r, &["httpgd"])[0] {
+        return;
+    }
+    println!("  {}", tr("… installing httpgd in your R library, for R's plots (seconds; a few minutes if it has to compile)",
+                        "… instalo httpgd en tu biblioteca de R, para los gráficos de R (segundos; unos minutos si hay que compilarlo)"));
+    if r_install(&r, &["httpgd"]) {
+        step(tr("httpgd in your R library (R's plots in Mirador)", "httpgd en tu biblioteca de R (los gráficos de R en Mirador)"), State::Ok);
+    } else {
+        step(&trf!("couldn't install httpgd: Corral works, but R's plots won't reach Mirador or the agent until you install it: {}",
+                   "no pude instalar httpgd: Corral funciona, pero los gráficos de R no llegan a Mirador ni al agente hasta que lo instales: {}",
+                   install_r(&["httpgd"])), State::Warn);
+        system_libs_step(&r, &["httpgd"]);
+    }
+}
+
 /// nanoparquet, which View() writes R's tables with (faster than arrow, and R's memory
 /// stays steady in a long session). If it fails, View() keeps working with arrow or CSV.
 fn r_nanoparquet() {
@@ -1263,6 +1375,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         }
     }
     ark();
+    r_httpgd();
     r_nanoparquet();
     r_duckdb();
     python_ready();
@@ -1272,6 +1385,7 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     fresh(&dest, &mut done, &mut saved);
     skill(&dest);
     ask_agent(&before, &mut done);
+    let path_in_rc = path_step(&mut saved);
     theme::apply();
     step(tr("herdr's theme colors in the editor, the console and Mirador", "colores del tema de herdr en el editor, la consola y Mirador"), State::Ok);
     done.set("backups", Value::Arr(saved.iter().map(|b| Value::from(b.as_str())).collect()));
@@ -1280,10 +1394,12 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let (bold, off) = (s.bold, s.off);
     println!("\n{}{}{}{off} {}", s.green, bold, tr("Done.", "Listo."), tr("To get started:", "Para empezar:"));
     let mut n = 1;
-    if !on_path(&bin()) {
-        let line = "export PATH=\"$HOME/.local/bin:$PATH\"";
-        println!("  {n}. {}", trf!("Add {bold}{line}{off} at the end of ~/.bashrc and open a new terminal.",
-                                   "Agrega {bold}{line}{off} al final de ~/.bashrc y abre una terminal nueva."));
+    if path_in_rc {
+        println!("  {n}. {}", tr("Open a new terminal, so it finds herdr and corral.", "Abre una terminal nueva, para que encuentre herdr y corral."));
+        n += 1;
+    } else if !on_path(&bin()) {
+        println!("  {n}. {}", trf!("Add {bold}{PATH_LINE}{off} at the end of ~/.bashrc and open a new terminal.",
+                                   "Agrega {bold}{PATH_LINE}{off} al final de ~/.bashrc y abre una terminal nueva."));
         n += 1;
     }
     println!("  {n}. {}", trf!("Go to a project folder and type {bold}corral{off}: herdr opens with the agent, the script, the R console and the variables.",
