@@ -27,6 +27,10 @@
 // is checked here against a list or a pattern, so nothing else can get in. An
 // uninstall says only what every ping says (kind "uninstall").
 //
+// Since Corral 0.1.23 an install or update also says which of the R packages it
+// installs by itself didn't go in (httpgd, nanoparquet, duckdb), so the project sees
+// where installs on Linux get stuck: f_<package>[+<package>…], only those three names.
+//
 // A ping must have exactly that shape, or nothing is stored: a POST that isn't JSON,
 // is over 2 KB, lacks a field or carries a value outside its list or pattern gets a
 // 400 and never reaches the Blob store. Optional fields a real client may send
@@ -37,8 +41,8 @@
 //
 // GET /api/installed?token=STATS_TOKEN returns the totals; `updates` counts each
 // "<from> -> <version>" ("unknown" when the ping didn't say), `missing` how many
-// stops each check caused, and agent, distro, herdr, r and python the pings that
-// said where Corral runs.
+// stops each check caused, agent, distro, herdr, r and python the pings that said
+// where Corral runs, and r_failed how many installs each R package failed in.
 import { put, list } from "@vercel/blob";
 import { timingSafeEqual } from "node:crypto";
 
@@ -48,6 +52,8 @@ const CHECKS = ["herdr", "herdr_old", "r", "r_packages", "folder", "other", "sys
   "sha256", "sha256_missing", "attestation"];
 const AGENTS = ["claude", "codex", "gemini", "opencode", "none", "other"];
 const ENV = ["agent", "distro", "herdr", "r", "python"];
+// The R packages an install puts in by itself and can report as failed.
+const R_PACKAGES = ["httpgd", "nanoparquet", "duckdb"];
 const MAX_BODY = 2048;
 const one = (value, allowed) => typeof value === "string" && allowed.includes(value);
 const like = (value, pattern) => typeof value === "string" && pattern.test(value);
@@ -63,6 +69,11 @@ export function pingName(body, country, day) {
   if (!(like(version, VERSION) || (version === "unknown" && kind === "stopped"))) return null;
   let extra = "";
   if (kind === "update" && like(body.from, VERSION)) extra = `-${body.from}`;
+  // Optional, like `from`: left out unless it is a short list of known names.
+  if ((kind === "new" || kind === "update") && Array.isArray(body.r_failed)) {
+    const failed = [...new Set(body.r_failed)];
+    if (failed.length > 0 && failed.length <= R_PACKAGES.length && failed.every((p) => one(p, R_PACKAGES))) extra += `-f_${failed.join("+")}`;
+  }
   if (kind === "stopped") {
     const missing = Array.isArray(body.missing) ? [...new Set(body.missing)] : [];
     if (missing.length === 0 || missing.length > CHECKS.length || !missing.every((m) => one(m, CHECKS))) return null;
@@ -121,7 +132,7 @@ export default async function handler(req, res) {
       return;
     }
     const counts = { total: 0, country: {}, system: {}, kind: {}, source: {}, version: {}, updates: {}, missing: {},
-      agent: {}, distro: {}, herdr: {}, r: {}, python: {}, day: {} };
+      agent: {}, distro: {}, herdr: {}, r: {}, python: {}, r_failed: {}, day: {} };
     const add = (group, key) => { counts[group][key] = (counts[group][key] || 0) + 1; };
     let cursor;
     do {
@@ -132,6 +143,8 @@ export default async function handler(req, res) {
         const sixth = rest[0];
         const env = rest.find((r) => r.startsWith("e_"));
         if (env) env.slice(2).split("_").forEach((v, i) => ENV[i] && add(ENV[i], v));
+        const failed = rest.find((r) => r.startsWith("f_"));
+        if (failed) failed.slice(2).split("+").forEach((p) => add("r_failed", p));
         counts.total += 1;
         add("day", day);
         add("country", country);
