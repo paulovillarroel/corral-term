@@ -108,8 +108,25 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
         }
     };
+    if lang == "r" {
+        cmd.envs(r_profile_env());
+    }
     let err = cmd.env("CORRAL", "1").exec();
     Err(trf!("could not open the console: {err}", "no pude abrir la consola: {err}"))
+}
+
+/// What loads Corral in an R console whatever profile the project has (renv's, for
+/// one): R reads r/profile.R as its user profile, and that reads the profile R would
+/// have read (yours in R_PROFILE_USER, kept here in CORRAL_R_PROFILE_USER; the
+/// project's .Rprofile; or ~/.Rprofile) and then corral.R (CORRAL_R_FILE).
+pub fn r_profile_env() -> Vec<(&'static str, String)> {
+    let ours = env::repo().join("r/profile.R");
+    let own = std::env::var("R_PROFILE_USER").ok().filter(|p| !p.is_empty() && std::path::Path::new(p) != ours);
+    vec![
+        ("R_PROFILE_USER", ours.display().to_string()),
+        ("CORRAL_R_PROFILE_USER", own.unwrap_or_default()),
+        ("CORRAL_R_FILE", env::repo().join("r/corral.R").display().to_string()),
+    ]
 }
 
 fn shell(command: &str) -> Command {
