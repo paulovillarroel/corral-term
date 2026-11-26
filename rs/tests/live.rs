@@ -794,6 +794,12 @@ impl Timing {
     }
 }
 
+/// The 99th percentile and the maximum of times already sorted by stats(): the
+/// pauses a median hides.
+fn tail(v: &[f64]) -> (f64, f64) {
+    (v[((v.len() - 1) as f64 * 0.99).round() as usize], v[v.len() - 1])
+}
+
 fn stats(v: &mut [f64]) -> (f64, f64, f64) {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let at = |q: f64| v[((v.len() - 1) as f64 * q).round() as usize];
@@ -865,14 +871,16 @@ fn checkpoints_cost_report() {
         std::thread::sleep(Duration::from_secs(3));
         timing.after(&live, &["invisible(1)"]); // collects the last copy
         let (m, _, p90) = stats(&mut waits);
-        phases.push((on, rss0, rss_mb(pid), m, p90, zombies_of(pid)));
+        let (p99, max) = tail(&waits);
+        phases.push((on, rss0, rss_mb(pid), m, p90, zombies_of(pid), p99, max));
     }
     // Then 1,000 more with checkpoints on: memory every 200 commands should level off.
     live.config(r#"{"agents":"on"}"#);
     let mut samples = vec![rss_mb(pid)];
+    let mut more = Vec::new();
     for i in 0..1000 {
         let code = match i % 5 { 0 => "d$x <- d$x + 1", 1 => "s <- summary(d$x)", _ => "invisible(nrow(d))" };
-        timing.after(&live, &[code]);
+        more.push(timing.after(&live, &[code]));
         if i % 200 == 199 {
             samples.push(rss_mb(pid));
         }
@@ -881,10 +889,13 @@ fn checkpoints_cost_report() {
     let (_, text) = live.eval(&[r#"cat(round(sum(sapply(ls(), function(n) length(serialize(get(n), NULL)))) / 2^20))"#]);
     let serialized: f64 = text.lines().last().unwrap_or("0").trim().parse().unwrap_or(0.0);
     println!("\nLong session, 200 commands in each phase:");
-    for (on, rss0, rss1, m, p90, z) in &phases {
-        println!("    checkpoints {:<3}  R {rss0:.0} -> {rss1:.0} MB  wait median {m:.2} ms, p90 {p90:.2} ms  leftover processes {z}",
+    for (on, rss0, rss1, m, p90, z, p99, max) in &phases {
+        println!("    checkpoints {:<3}  R {rss0:.0} -> {rss1:.0} MB  wait median {m:.2} ms, p90 {p90:.2} ms, p99 {p99:.2} ms, max {max:.2} ms  leftover processes {z}",
                  if *on { "on" } else { "off" });
     }
+    let (m, _, p90) = stats(&mut more);
+    let (p99, max) = tail(&more);
+    println!("    1,000 more, the wait: median {m:.2} ms, p90 {p90:.2} ms, p99 {p99:.2} ms, max {max:.2} ms");
     println!("    1,000 more with checkpoints on, R every 200: {}", samples.iter().map(|m| format!("{m:.0}")).collect::<Vec<_>>().join(" -> "));
     println!("    checkpoint on disk {:.0} MB; the objects, serialized: {serialized:.0} MB", folder_mb(&dir));
     // R hands memory back now and then, so it goes up and down: no new highs is what counts.
