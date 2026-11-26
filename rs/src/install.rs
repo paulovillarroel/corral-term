@@ -1189,10 +1189,11 @@ fn p3m_codename() -> Option<String> {
     linux_codename().filter(|c| ["focal", "jammy", "noble", "bullseye", "bookworm"].contains(&c.as_str()))
 }
 
-/// R packages into your own R library: no sudo. On a system Posit's package manager
-/// builds for, they come already compiled; otherwise from CRAN, which needs a
-/// compiler. With pak in your R it installs them with pak, as you would, and with
-/// install.packages if pak couldn't. True when R can load them all afterwards.
+/// R packages into your own R library: no sudo. From where r_repos_code says: by
+/// default Posit's snapshot of three days ago, already compiled on the systems it
+/// builds for (otherwise from source, which needs a compiler). With pak in your R it
+/// installs them with pak, as you would, and with install.packages if pak couldn't.
+/// True when R can load them all afterwards.
 fn r_install(r: &Path, pkgs: &[&str]) -> bool {
     let run = |code: String| Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null())
         .stderr(Stdio::null()).status().is_ok_and(|s| s.success());
@@ -1204,24 +1205,52 @@ fn r_install(r: &Path, pkgs: &[&str]) -> bool {
 /// pkg.sysreqs off: it may list system libraries, but it never installs them (that
 /// takes sudo); system_libs_hint says which, when something doesn't load.
 fn r_install_code(pkgs: &[&str], pak: bool) -> String {
-    let binaries = p3m_codename().map(|c| format!("P3M = \"https://p3m.dev/cran/__linux__/{c}/latest\", ")).unwrap_or_default();
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
     let install = if pak {
         "options(pkg.sysreqs = FALSE)\n  pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)"
     } else {
         "install.packages(pkgs, lib = lib, quiet = TRUE)"
     };
+    let repos = r_repos_code(p3m_codename().as_deref());
     format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
 if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
 lib <- path.expand(lib)
 dir.create(lib, recursive = TRUE, showWarnings = FALSE)
-options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)),
-        repos = c({binaries}CRAN = "{CRAN}"))
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+{repos}
 pkgs <- c({list})
 try({{
   {install}
 }}, silent = TRUE)
 quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#)
+}
+
+/// The R code that picks where R packages come from, in this order:
+/// 1. CORRAL_R_REPOS, if you set it: repository URLs, separated by spaces or commas.
+/// 2. The repository R already has, when it isn't a public one: an institution's
+///    mirror, set by its administrators in R's Rprofile.site (R runs here without your
+///    own .Rprofile). In a network that blocks CRAN and Posit, it's the one that works.
+/// 3. Otherwise Posit's package manager as it was three days ago: no package newer than
+///    72 hours, the same versions for everyone installing that day, compiled for your
+///    system when `codename` is one Posit builds for, and source packages otherwise.
+///    Live CRAN isn't added: install.packages takes the newest version it finds, and
+///    that would undo the snapshot.
+fn r_repos_code(codename: Option<&str>) -> String {
+    let binaries = codename.map(|c| format!("P3M = paste0(\"https://p3m.dev/cran/__linux__/{c}/\", day), ")).unwrap_or_default();
+    format!(r#"own <- getOption("repos")
+own <- own[!is.na(own) & nzchar(own) & own != "@CRAN@"]
+public <- "cloud[.]r-project[.]org|cran[.]r-project[.]org|cran[.]rstudio[.]com|p3m[.]dev|packagemanager[.](posit|rstudio)[.]com"
+set <- trimws(Sys.getenv("CORRAL_R_REPOS"))
+day <- format(Sys.Date() - 3)
+repos <- if (nzchar(set)) {{
+  urls <- strsplit(set, "[[:space:],]+")[[1]]
+  stats::setNames(urls, paste0("CORRAL", seq_along(urls)))
+}} else if (length(own) && any(!grepl(public, own))) {{
+  own
+}} else {{
+  c({binaries}CRAN = paste0("https://p3m.dev/cran/", day))
+}}
+options(repos = repos)"#)
 }
 
 /// With pak in your R: the commands that install the system libraries these packages
@@ -2081,6 +2110,19 @@ mod tests {
         assert!(pak.contains("pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)") && pak.contains("pkg.sysreqs = FALSE"), "{pak}");
         let base = r_install_code(&["httpgd"], false);
         assert!(base.contains("install.packages(pkgs, lib = lib, quiet = TRUE)") && !base.contains("pak"), "{base}");
+    }
+
+    #[test]
+    fn r_packages_come_from_your_repos_or_a_snapshot_at_least_three_days_old() {
+        let code = r_repos_code(Some("noble"));
+        assert!(code.contains(r#"Sys.getenv("CORRAL_R_REPOS")"#) && code.contains("any(!grepl(public, own))"), "{code}");
+        assert!(code.contains("day <- format(Sys.Date() - 3)"), "{code}");
+        assert!(code.contains(r#"P3M = paste0("https://p3m.dev/cran/__linux__/noble/", day)"#), "{code}");
+        assert!(code.contains(r#"CRAN = paste0("https://p3m.dev/cran/", day)"#), "{code}");
+        // No live repository next to the snapshot: the newest version would win.
+        assert!(!code.contains("/latest") && !code.contains(r#"= "https://cloud.r-project.org""#), "{code}");
+        assert!(!r_repos_code(None).contains("__linux__"));
+        assert!(r_install_code(&["jsonlite"], false).contains("options(repos = repos)"));
     }
 
     #[test]
