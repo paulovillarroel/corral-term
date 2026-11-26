@@ -32,12 +32,18 @@ impl Live {
     }
 
     fn start_with(name: &str, extra: &[(&str, &str)]) -> Live {
+        Live::start_full(name, extra, |_| {})
+    }
+
+    /// As start_with, with `setup` run in the project folder before the console opens.
+    fn start_full(name: &str, extra: &[(&str, &str)], setup: impl FnOnce(&Path)) -> Live {
         // Under /tmp itself: herdr's socket path must stay short.
         let dir = PathBuf::from(format!("/tmp/corral-live-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         for d in ["bin", "config/corral", "state", "proj"] {
             std::fs::create_dir_all(dir.join(d)).unwrap();
         }
+        setup(&dir.join("proj"));
         std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_corral"), dir.join("bin/corral")).unwrap();
         // The panes' shell: bash with its line editor, like a real terminal, but
         // without rc files, which could put an installed corral first on the PATH.
@@ -412,6 +418,34 @@ fn python_keeps_its_objects_and_takes_turns() {
 
 /// Without --lang, `corral vars --json` lists the console in view, like the variables
 /// pane: Python's objects while Python shows, R's again once R does.
+#[test]
+#[ignore]
+fn corral_loads_in_a_project_with_renv() {
+    // A project with renv: R reads its .Rprofile, not the user's, and its library
+    // hides the user's, where Corral's packages are. Corral loads anyway (r/profile.R),
+    // its variables pane works (jsonlite from the user's library), and the project's
+    // .libPaths() stay renv's alone. No R_PROFILE_USER of the test's own here, so the
+    // project's .Rprofile is the one R would read.
+    let live = Live::start_full("renv", &[("R_PROFILE_USER", "")], |proj| {
+        let out = Command::new("Rscript").current_dir(proj)
+            .args(["--no-init-file", "-e", "renv::init(bare = TRUE, restart = FALSE)"]).output().unwrap();
+        assert!(out.status.success(), "renv::init: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(proj.join(".Rprofile").exists(), "renv made no .Rprofile");
+    });
+    let (code, text) = live.eval(&["--lang", "r", "in_renv_project <- 42"]);
+    assert_eq!(code, 0, "{text}");
+    wait_for(Duration::from_secs(10), "the object in the variables pane", || {
+        String::from_utf8_lossy(&live.corral(&["vars", "--json"]).stdout).contains("in_renv_project")
+    });
+    let probe = r#"cat(sep = "", "renv first: ", grepl("renv", .libPaths()[1]),
+        "; jsonlite: ", "jsonlite" %in% loadedNamespaces(),
+        "; user library added: ", any(normalizePath(strsplit(Sys.getenv("CORRAL_R_LIBS_USER"), ":")[[1]], mustWork = FALSE) %in%
+                                      normalizePath(.libPaths(), mustWork = FALSE)), "\n")"#;
+    let (code, text) = live.eval(&["--lang", "r", probe]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("renv first: TRUE; jsonlite: TRUE; user library added: FALSE"), "{text}");
+}
+
 #[test]
 #[ignore]
 fn vars_follow_the_console_in_view() {
