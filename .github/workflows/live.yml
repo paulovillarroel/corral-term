@@ -35,8 +35,17 @@ jobs:
         with:
           use-public-rspm: true
 
+      # httpgd's system libraries, as pak::pkg_sysreqs("httpgd") lists them for Ubuntu 24.04:
+      # without them its binary installs but doesn't load.
+      - name: System libraries for httpgd
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libfontconfig1-dev libfreetype6-dev libcairo2-dev libpng-dev libtiff-dev zlib1g-dev
+
       - name: R packages
-        run: Rscript -e 'install.packages(c("jsonlite", "rlang", "duckdb", "DBI", "renv", "httpgd"))'
+        run: |
+          Rscript -e 'install.packages(c("jsonlite", "rlang", "duckdb", "DBI", "renv", "httpgd"))'
+          Rscript -e 'library(httpgd)'
 
       - uses: astral-sh/setup-uv@v10.4.0
 
