@@ -423,6 +423,34 @@ fn r_comes_back_by_itself_after_a_crash() {
     assert!(started.elapsed() < Duration::from_secs(5), "it took {:?}", started.elapsed());
 }
 
+/// When R starts its plot watcher again during `corral eval` (it had died), the eval
+/// doesn't wait: the watcher keeps none of R's descriptors, httpgd's socket among them.
+#[test]
+#[ignore]
+fn an_eval_that_starts_the_watcher_again_doesnt_wait() {
+    let live = Live::start_with("rwatch2", &[("CORRAL_BROWSER", "print")]);
+    assert_eq!(live.eval(&["plot(1:3)"]).0, 0);
+    let sid = live.session_id("r");
+    let pid_file = live.dir.join(format!("state/corral/sessions/{sid}/keep-plots.pid"));
+    let read_pid = || std::fs::read_to_string(&pid_file).ok().and_then(|p| p.trim().parse::<i64>().ok());
+    wait_for(Duration::from_secs(10), "the watcher", || read_pid().is_some_and(alive));
+    let first = read_pid().unwrap();
+    crash(first);
+    let start = Instant::now();
+    let (code, text) = live.eval(&["plot(3:1)"]);
+    let took = start.elapsed();
+    assert!(code == 0 && text.contains("saved to"), "{text}");
+    assert!(took < Duration::from_secs(5), "the eval took {took:?}");
+    wait_for(Duration::from_secs(10), "a new watcher", || read_pid().is_some_and(|p| p != first && alive(p)));
+    // Its own requests to httpgd open sockets too; one that R also has, it got from R.
+    let sockets = |pid: i64| std::fs::read_dir(format!("/proc/{pid}/fd")).map(|d| d.flatten()
+        .filter_map(|e| std::fs::read_link(e.path()).ok()).map(|l| l.to_string_lossy().to_string())
+        .filter(|l| l.starts_with("socket:")).collect::<Vec<_>>()).unwrap_or_default();
+    let r = sockets(live.kernel_pid());
+    let shared: Vec<String> = sockets(read_pid().unwrap()).into_iter().filter(|s| r.contains(s)).collect();
+    assert!(shared.is_empty(), "the watcher holds R's sockets: {shared:?}");
+}
+
 /// Python: the first request starts the console; objects stay between
 /// requests, and two agents asking at once take turns.
 #[test]
