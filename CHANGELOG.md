@@ -2,6 +2,11 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- When your R has pak, the installer installs R packages with it, as you would: httpgd and jsonlite, nanoparquet, and duckdb with DBI. The commands it shows to do it yourself use pak too. pak runs with `pkg.sysreqs` off, so it never installs system libraries (that takes sudo). If a package arrives but doesn't load, the installer shows the `apt-get` line `pak::pkg_sysreqs()` gives, for you to run. Without pak, or if pak fails, it uses `install.packages()` as before.
+- After installing part of what was missing and stopping on the rest, the installer no longer says "Nothing was changed".
+
 ## 0.1.22
 
 The installer brings herdr and R's two packages when they are missing.
