@@ -837,6 +837,37 @@ fn python_figures_survive_a_crash() {
     let _ = live.corral(&["mirador", "--stop"]);
 }
 
+/// A figure an agent replaces (`corral eval --replace`) leaves the checkpoint too, so it
+/// doesn't come back after a crash. In Python the checkpoint's copy writes the figures
+/// at the end of the cell, before `corral eval` removes the old one.
+#[test]
+#[ignore]
+fn replaced_figures_leave_the_checkpoint() {
+    let live = Live::start_with("pyreplace", &[("CORRAL_BROWSER", "print")]);
+    let startup = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("py/startup.py");
+    live.config(&format!(r#"{{"agents":"on","update_check":"off","python_console":"uv run --with ipython --with cloudpickle --with pyarrow --with duckdb --with matplotlib ipython --no-banner -i {}"}}"#,
+                         startup.display()));
+    let draw = |n: i32, replace: bool| {
+        let code = format!("import matplotlib.pyplot as plt\nplt.figure(); plt.plot([1, {n}]); plt.show()");
+        let mut args = vec!["--lang", "python", "--timeout", "180"];
+        if replace { args.push("--replace"); }
+        args.push(&code);
+        let (status, text) = live.eval(&args);
+        assert_eq!(status, 0, "{text}");
+        text
+    };
+    draw(2, false);
+    let (dir, _) = live.checkpoint("python");
+    let plots = dir.join("plots");
+    wait_for(Duration::from_secs(30), "the first figure in the checkpoint", || count(&plots, "png") == 1);
+    let first: Vec<_> = std::fs::read_dir(&plots).unwrap().flatten().map(|f| f.file_name()).filter(|n| n.to_string_lossy().ends_with(".png")).collect();
+    let text = draw(3, true);
+    assert!(text.contains("replaced 1 plot"), "{text}");
+    std::thread::sleep(Duration::from_secs(2));
+    let now: Vec<_> = std::fs::read_dir(&plots).unwrap().flatten().map(|f| f.file_name()).filter(|n| n.to_string_lossy().ends_with(".png")).collect();
+    assert!(now.len() == 1 && !now.contains(&first[0]), "the replaced figure is still kept: before {first:?}, now {now:?}");
+}
+
 /// Python too, after a crash: values, a function defined in the session, an
 /// instance of a class defined there, and a module imported under another name.
 #[test]
