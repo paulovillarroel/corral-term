@@ -1045,6 +1045,31 @@ fn cpu_s(pid: i64) -> f64 {
     (tick(11) + tick(12)) / 100.0
 }
 
+/// R starts its plot watcher again when it isn't running, and a process that only looks
+/// like one (another session's watcher on a reused pid) doesn't count.
+#[test]
+#[ignore]
+fn r_starts_its_plot_watcher_again() {
+    let live = Live::start_with("rwatch", &[("CORRAL_BROWSER", "print")]);
+    assert_eq!(live.eval(&["plot(1:3)"]).0, 0);
+    let sid = live.session_id("r");
+    let pid_file = live.dir.join(format!("state/corral/sessions/{sid}/keep-plots.pid"));
+    let read_pid = || std::fs::read_to_string(&pid_file).ok().and_then(|p| p.trim().parse::<i64>().ok());
+    wait_for(Duration::from_secs(10), "the watcher", || read_pid().is_some_and(alive));
+    let first = read_pid().unwrap();
+    // Another session's watcher on the pid R knows: R must not take it for its own.
+    let mut other = Command::new("bash").args(["-c", "exec -a 'corral _keep-plots w0-p0-1 1' sleep 120"]).spawn().unwrap();
+    wait_for(Duration::from_secs(5), "the look-alike", || std::fs::read(format!("/proc/{}/cmdline", other.id())).is_ok_and(|c| String::from_utf8_lossy(&c).contains("_keep-plots")));
+    crash(first);
+    std::fs::write(&pid_file, other.id().to_string()).unwrap();
+    assert_eq!(live.eval(&["plot(3:1)"]).0, 0);
+    wait_for(Duration::from_secs(10), "a new watcher for this session", || {
+        read_pid().is_some_and(|p| p != other.id() as i64 && p != first && alive(p))
+    });
+    let _ = other.kill();
+    let _ = other.wait();
+}
+
 /// What keeping R's plots costs (docs/performance.html#checkpoints-plots): the wait
 /// after a command that draws, checkpoints off and on, the one watcher process
 /// (`corral _keep-plots`) at rest, the time from a plot to its file, and the disk.
