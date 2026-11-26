@@ -262,6 +262,18 @@ fn remove_shown(sid: &str, index: Option<i64>) -> bool {
     ok
 }
 
+/// The checkpoint's plots folder, made when missing, but never the checkpoint itself:
+/// R removes that when the console closes, and a watcher that comes in just after must
+/// leave it gone instead of bringing back a folder without an index for a week.
+fn plots_dir(checkpoint: &Path) -> Option<PathBuf> {
+    let dir = checkpoint.join("plots");
+    match std::fs::create_dir(&dir) {
+        Ok(()) => Some(dir),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Some(dir),
+        Err(_) => None,
+    }
+}
+
 /// `corral _keep-plots SESSION PID`: keeps an R session's plots in its checkpoint, so
 /// they outlive a crash. corral.R starts it with the first plot and it stays while that
 /// R (PID) lives, one per session (a second one finds the lock taken and leaves). Every
@@ -292,9 +304,10 @@ pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
         // R writes the checkpoint folder soon after it starts; until then, look again.
         if rev != last && checkpoint.is_dir() {
             last = rev;
-            let dir = checkpoint.join("plots");
-            if env::config().get("checkpoints").str() != Some("off") && std::fs::create_dir_all(&dir).is_ok() {
-                write_plots(sid, &dir);
+            if env::config().get("checkpoints").str() != Some("off") {
+                if let Some(dir) = plots_dir(&checkpoint) {
+                    write_plots(sid, &dir);
+                }
             }
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -1017,5 +1030,19 @@ mod tests {
         assert_eq!(plot_size("1000x"), None);
         assert_eq!(plot_size_text(Some((1000, 650))), "1000x650");
         assert_eq!(plot_size_text(None), "window");
+    }
+
+    #[test]
+    fn plots_dir_never_makes_the_checkpoint() {
+        let root = std::env::temp_dir().join(format!("corral-plots-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("r-live")).unwrap();
+        assert_eq!(plots_dir(&root.join("r-live")), Some(root.join("r-live/plots")));
+        assert!(root.join("r-live/plots").is_dir());
+        assert_eq!(plots_dir(&root.join("r-live")), Some(root.join("r-live/plots")), "already there");
+        // Closed: R removed the checkpoint; it stays removed.
+        assert_eq!(plots_dir(&root.join("r-closed")), None);
+        assert!(!root.join("r-closed").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
