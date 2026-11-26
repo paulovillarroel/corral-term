@@ -214,6 +214,7 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("output-full", Group::Agents, "Agents: see full results", "Agentes: ven los resultados completos"),
     ("output-review", Group::Agents, "Agents: you review results before they see them", "Agentes: revisas los resultados antes de que los vean"),
     ("output-structure", Group::Agents, "Agents: see only the structure of results", "Agentes: ven solo la estructura de los resultados"),
+    ("context", Group::Agents, "Agents: what your agent sees (consoles, SQL, its rules)", "Agentes: lo que ve tu agente (consolas, SQL, sus reglas)"),
     ("audit-30", Group::Agents, "Agents: keep the audit log 30 days", "Agentes: guardar el registro de auditoría 30 días"),
     ("audit-90", Group::Agents, "Agents: keep the audit log 90 days (Corral's)", "Agentes: guardar el registro de auditoría 90 días (el de Corral)"),
     ("audit-365", Group::Agents, "Agents: keep the audit log a year", "Agentes: guardar el registro de auditoría un año"),

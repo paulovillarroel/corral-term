@@ -149,7 +149,20 @@ fn access_mode() -> &'static str {
     access_from(env::config().get("agents").str())
 }
 
-fn access_from(setting: Option<&str>) -> &'static str {
+/// The rules for an agent's request in one session: who must approve it (`on`, `ask`,
+/// `off`) and what comes back (`full`, `review`, `structure`). A sensitive session
+/// always asks and never gives full output. `corral context` reports the same.
+pub(crate) fn policy(access: &'static str, output: Option<&str>, sensitive: bool) -> (&'static str, &'static str) {
+    let output = match (output, sensitive) {
+        (Some("review"), _) => "review",
+        (Some("structure"), _) | (_, true) => "structure",
+        _ => "full",
+    };
+    let access = if sensitive && access != "off" { "ask" } else { access };
+    (access, output)
+}
+
+pub(crate) fn access_from(setting: Option<&str>) -> &'static str {
     match setting {
         Some("off") => "off",
         Some("on") => "on",
@@ -399,13 +412,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let sensitive = sdir.join("sensitive").exists();
-    // full, review or structure; a sensitive session never gets full.
-    let output_mode = match (env::config().get("agent_output").str(), sensitive) {
-        (Some("review"), _) => "review",
-        (Some("structure"), _) | (_, true) => "structure",
-        _ => "full",
-    };
-    let access = if sensitive { "ask" } else { access };
+    // full, review or structure; a sensitive session never gets full, and always asks.
+    let (access, output_mode) = policy(access, env::config().get("agent_output").str(), sensitive);
     let secs = now() as u64;
     let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
     if access == "ask" {
