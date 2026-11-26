@@ -2,6 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+`corral context`: what your agent knows before it runs anything.
+
+- `corral context --json` gives an agent, in one call, where it is and what it may do: for each console, R and Python, whether it runs, its session, version and folder, whether it is in view and whether SQL works there; and the rules you set (`access`: on, ask or off; `output`: full, review or structure) as they apply to that session, stricter in one marked sensitive. Before, an agent learned the rules by being refused (exit 3) or by getting only structure back, and that SQL didn't work in R by trying. It reads files Corral already writes and herdr's list of panes, starts no console (Python included), and takes about 2 ms, less than the two `corral eval --check` calls it replaces. The rules it reports come from the same function `corral eval` applies. R and Python now note in their session file whether SQL works there, looked up once at start without loading duckdb.
+- In the palette, "Agents: what your agent sees" shows the same in words, in a window, so you see exactly what the agent knows. `corral context` without `--json` prints it in a terminal.
+- Corral's skill checks with `corral context --json` first and plans around the rules: related code in one request when each one asks, shapes instead of values with restricted output. `corral eval --check` still works.
+
 ## 0.1.25
 
 A new version shows in Corral's own window: at the foot of the variables pane and in the palette.
