@@ -737,6 +737,8 @@ class Session:
         self.dir = STATE_DIR / "sessions" / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
         self.started = time.time()
+        # Where it started: a project's security profile follows the session even if it moves.
+        self.started_in = os.getcwd()
         self.cwd = ""
         _clean_temp()
         self.tmp = Path(tempfile.mkdtemp(prefix=f"corral-py-{os.getpid()}-"))
@@ -759,7 +761,7 @@ class Session:
             "pane_id": self.pane or None,
             "workspace_id": os.environ.get("HERDR_WORKSPACE_ID") or None,
             "python_version": platform.python_version(), "executable": sys.executable,
-            "cwd": self.cwd, "started": self.started, "sql": self.sql_available(),
+            "cwd": self.cwd, "started_in": self.started_in, "started": self.started, "sql": self.sql_available(),
         })
 
     def sql_available(self) -> bool:

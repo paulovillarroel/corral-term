@@ -411,9 +411,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(20));
     }
 
-    let sensitive = sdir.join("sensitive").exists();
-    // full, review or structure; a sensitive session never gets full, and always asks.
-    let (access, output_mode) = policy(access, env::config().get("agent_output").str(), sensitive);
+    // The settings, the project's profile and the session's own mark, the stricter winning
+    // (a sensitive session always asks and never gives full output): crate::profile.
+    let rules = crate::profile::session_rules(&sdir, &session);
+    let (access, output_mode) = (rules.access, rules.output);
     let secs = now() as u64;
     let rid = format!("{:02}{:02}{:02}-{}", secs / 3600 % 24, secs / 60 % 60, secs % 60, env::random_hex(3));
     if access == "ask" {

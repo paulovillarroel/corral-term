@@ -303,6 +303,37 @@ title = "Corral: what your agent sees"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "context"]
 
+# Security profiles: for all your work, or for the project of the console in view.
+[[actions]]
+id = "profile-open"
+title = "Corral: open profile"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "profile", "open"]
+
+[[actions]]
+id = "profile-standard"
+title = "Corral: standard profile"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "profile", "standard"]
+
+[[actions]]
+id = "profile-sensitive"
+title = "Corral: sensitive profile"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "profile", "sensitive"]
+
+[[actions]]
+id = "profile-project-sensitive"
+title = "Corral: this project is sensitive"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "profile", "sensitive", "--project"]
+
+[[actions]]
+id = "profile-project-clear"
+title = "Corral: this project follows the global profile"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "profile", "--project", "--clear"]
+
 [[actions]]
 id = "update"
 title = "Corral: update to the latest version"
