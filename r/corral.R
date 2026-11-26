@@ -209,6 +209,17 @@ local({
          preview = substr(trimws(paste(preview, collapse = " ")), 1, 80), size = size, hash = hash)
   }
 
+  # SQL needs duckdb and DBI. Looked up, not loaded (loading duckdb takes a while), and
+  # once: `corral context` tells agents whether SQL works in this session.
+  sql_ok <- NULL
+  sql_available <- function() {
+    if (is.null(sql_ok)) {
+      found <- vapply(c("duckdb", "DBI"), function(p) system.file(package = p, lib.loc = c(.libPaths(), user_libs)), "")
+      sql_ok <<- all(nzchar(found))
+    }
+    sql_ok
+  }
+
   write_meta <- function() {
     dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
     write_json_atomic(list(
@@ -218,7 +229,7 @@ local({
       r_version = paste(R.version$major, R.version$minor, sep = "."),
       # Under Ark: the kernel's connection file, so `corral _lsp r` can reach its language server.
       ark_connection = if (nzchar(Sys.getenv("CORRAL_ARK_CONNECTION"))) Sys.getenv("CORRAL_ARK_CONNECTION") else NULL,
-      cwd = getwd(), started = started
+      cwd = getwd(), started = started, sql = sql_available()
     ), file.path(session_dir, "meta.json"))
   }
 

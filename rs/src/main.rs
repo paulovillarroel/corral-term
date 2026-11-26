@@ -7,6 +7,7 @@ mod approve;
 mod ark;
 mod audit;
 mod console;
+mod context;
 mod duckdb;
 mod editor;
 mod env;
@@ -52,6 +53,7 @@ Workspace
 Code and data
   send         sends code to the console (Ctrl+R, F5, ctrl+b enter)
   eval         runs code in your console and prints the result (for agents)
+  context      what your agent sees: consoles, SQL, its rules (--json for agents)
   audit        what agents ran in your consoles (--last N, --json)
   vars         the variables (window, --json for agents, --split)
   view         opens a table (parquet, csv…), --mirador for the browser
@@ -87,6 +89,7 @@ Espacio de trabajo
 Código y datos
   send         envía código a la consola (Ctrl+R, F5, ctrl+b enter)
   eval         ejecuta código en tu consola e imprime el resultado (para agentes)
+  context      lo que ve tu agente: consolas, SQL, sus reglas (--json para agentes)
   audit        lo que los agentes ejecutaron en tus consolas (--last N, --json)
   vars         las variables (ventana, --json para agentes, --split)
   view         abre una tabla (parquet, csv…), --mirador para el navegador
@@ -154,6 +157,8 @@ fn main() {
         Some("plots") => plots::cmd_plots(rest),
         Some("_plots") => plots::cmd_plots_tui(rest),
         Some("_plot-ready") => plots::cmd_plot_ready(rest),
+        Some("context") => context::run(rest, false),
+        Some("_context") => context::run(rest, true),
         Some("_keep-plots") => mirador::cmd_keep_plots(rest),
         Some("_show-object") => plots::cmd_show_object(rest),
         Some("view") => plots::cmd_view(rest),

@@ -296,6 +296,13 @@ contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "config", "plot_size", "1200x800"]
 
 # Corral's latest version, with the install line, in a popup.
+# What an agent sees here (corral context), in a popup.
+[[actions]]
+id = "context"
+title = "Corral: what your agent sees"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "context"]
+
 [[actions]]
 id = "update"
 title = "Corral: update to the latest version"
@@ -359,6 +366,15 @@ placement = "popup"
 width = "70%"
 height = "80%"
 command = ["../rs/target/release/corral", "_keys"]
+
+# What an agent sees here: consoles, SQL and its rules (corral context).
+[[panes]]
+id = "context"
+title = "Corral: what your agent sees"
+placement = "popup"
+width = "70%"
+height = "40%"
+command = ["../rs/target/release/corral", "_context"]
 
 # Corral's latest version, installed in a popup with the install line.
 [[panes]]

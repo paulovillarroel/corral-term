@@ -759,8 +759,16 @@ class Session:
             "pane_id": self.pane or None,
             "workspace_id": os.environ.get("HERDR_WORKSPACE_ID") or None,
             "python_version": platform.python_version(), "executable": sys.executable,
-            "cwd": self.cwd, "started": self.started,
+            "cwd": self.cwd, "started": self.started, "sql": self.sql_available(),
         })
+
+    def sql_available(self) -> bool:
+        """SQL needs duckdb. Looked up, not imported, and once: `corral context` tells
+        agents whether SQL works in this session."""
+        if getattr(self, "_sql", None) is None:
+            import importlib.util
+            self._sql = importlib.util.find_spec("duckdb") is not None
+        return self._sql
 
     def snapshot(self) -> None:
         if os.getcwd() != self.cwd:
