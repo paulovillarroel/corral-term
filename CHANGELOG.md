@@ -2,11 +2,11 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.25
 
-A new version shows in Corral's own window.
+A new version shows in Corral's own window: at the foot of the variables pane and in the palette.
 
-- When the daily check finds a newer Corral, the foot of the variables pane says so in the accent colour ("Corral 0.1.25 is out: ctrl+b space → Update") until you install it, and the palette's Update entry names the version. Before, the only notice was a herdr toast, and herdr's toasts are off by default (`[ui.toast] delivery = "off"`), so it wasn't seen: in a capture with herdr's default settings nothing reached the screen. The pane reads two small files every 10 s (6.5 µs), never the network, and drops the notice once the new version is installed, even while it is still the old binary. A live test checks the pane and the palette, and fails without the change.
+- When the daily check finds a newer Corral, the foot of the variables pane says so in the accent colour ("Corral 0.1.26 is out: ctrl+b space → Update") until you install it, and the palette's Update entry names the version. Before, the only notice was a herdr toast, and herdr's toasts are off by default (`[ui.toast] delivery = "off"`), so it wasn't seen: in a capture with herdr's default settings nothing reached the screen. The pane reads two small files every 10 s (6.5 µs), never the network, and drops the notice once the new version is installed, even while it is still the old binary. A live test checks the pane and the palette, and fails without the change.
 
 ## 0.1.24
 
