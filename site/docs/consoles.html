@@ -105,6 +105,9 @@
     <pre><code><span class="p">$ </span>corral config python_console 'uv run --with ipython --with cloudpickle --with pyarrow --with duckdb --with polars ipython --no-banner -i ~/.local/share/corral-term/py/startup.py'</code></pre>
     <p>Keep <code>-i …/py/startup.py</code> at the end: that file switches Corral on inside IPython. Your command replaces Corral's whole, so keep cloudpickle, pyarrow and duckdb in it: without them there are no checkpoints, pandas tables open slower in <code>View()</code>, and SQL doesn't run.</p>
 
+    <h2 id="renv">Projects with renv</h2>
+    <p>In a project with <a href="https://rstudio.github.io/renv/">renv</a>, R reads the project's <code>.Rprofile</code> (where renv switches on its library) instead of yours, and renv's library hides your R library, where Corral's packages are. Corral's consoles handle both: R reads Corral's profile, <code>r/profile.R</code>, which reads the profile R would have read (the project's, else <code>~/.Rprofile</code>, or the one you set in <code>R_PROFILE_USER</code>) and then loads Corral. Corral then loads jsonlite, httpgd, nanoparquet and duckdb from the project's library when it has them, and from yours when it doesn't, without adding yours to <code>.libPaths()</code>: the project keeps its own library and its versions. A package the project brings wins over yours.</p>
+
     <h2 id="versions">Choose the R or Python version</h2>
     <p>If you have several versions of R installed with <a href="https://github.com/r-lib/rig">rig</a>, or several Pythons with <a href="https://docs.astral.sh/uv/">uv</a>, you can choose which one the consoles run without leaving Corral. In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), "Console: R version (rig)" and "Console: Python version (uv)" open a window with the versions you have installed. <kbd>Enter</kbd> uses the one you pick. If that console is open, Corral asks whether to restart it now, which loses its objects, or later.</p>
 
