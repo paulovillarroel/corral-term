@@ -546,7 +546,7 @@ fn loosens(cfg: &Value, key: &str, value: &str) -> Option<(String, String)> {
 /// commands in one). Elsewhere, a terminal means the user typing, and a shell
 /// without one an agent. An agent bent on it can still pass for the user (the
 /// security docs list how): this stops the plain way, not a determined one.
-fn by_the_user() -> bool {
+pub(crate) fn by_the_user() -> bool {
     use std::io::IsTerminal;
     if std::env::var_os("HERDR_PLUGIN_ID").is_some() {
         return true;
@@ -576,7 +576,7 @@ fn meaning_of(key: &str, value: &str) -> Option<(String, String)> {
 /// Loosening the harness from an agent's pane, or a shell without a terminal, waits
 /// for the user's approval in a popup; from the palette or the user's own terminal
 /// it doesn't. Tightening never asks.
-fn confirm_if_loosened(cfg: &Value, key: &str, value: &str) -> Result<(), String> {
+pub(crate) fn confirm_if_loosened(cfg: &Value, key: &str, value: &str) -> Result<(), String> {
     match loosens(cfg, key, value) {
         Some((from, to)) if !by_the_user() => {
             let meaning = meaning_of(key, value).map(|(_, body)| body).unwrap_or_default();

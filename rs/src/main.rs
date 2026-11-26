@@ -19,6 +19,7 @@ mod layout;
 mod lsp;
 mod mirador;
 mod plots;
+mod profile;
 mod send;
 mod setup;
 mod sha256;
@@ -158,6 +159,7 @@ fn main() {
         Some("_plots") => plots::cmd_plots_tui(rest),
         Some("_plot-ready") => plots::cmd_plot_ready(rest),
         Some("context") => context::run(rest, false),
+        Some("profile") => profile::cmd_profile(rest),
         Some("_context") => context::run(rest, true),
         Some("_keep-plots") => mirador::cmd_keep_plots(rest),
         Some("_show-object") => plots::cmd_show_object(rest),

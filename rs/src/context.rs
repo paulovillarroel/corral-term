@@ -50,22 +50,21 @@ fn gather() -> Value {
     let in_herdr = panes.is_ok();
     let showing = panes.ok().map(|p| env::active_lang(ws.as_deref(), &p));
     let cfg = env::config();
-    let access = crate::eval::access_from(cfg.get("agents").str());
-    let output = cfg.get("agent_output").str().map(String::from);
     let python_starts = cfg.get("python_console").str().is_some() || env::which("uv").is_some();
     let consoles = ["r", "python"].iter().map(|&lang| {
         let found = if in_herdr { console::session(lang, ws.as_deref()) } else { Err(String::new()) };
         let entry = match found {
             Ok((pane, s)) => {
-                let sensitive = Path::new(s.get("dir").str().unwrap_or("")).join("sensitive").exists();
-                let (acc, out) = crate::eval::policy(access, output.as_deref(), sensitive);
+                let rules = crate::profile::session_rules(Path::new(s.get("dir").str().unwrap_or("")), &s);
+                let (sensitive, acc, out) = (rules.sensitive, rules.access, rules.output);
                 let version = s.get(if lang == "python" { "python_version" } else { "r_version" }).clone();
                 obj(vec![("running", true.into()), ("pane", pane.into()), ("session", s.get("id").clone()),
                          ("version", version), ("cwd", s.get("cwd").clone()),
                          ("showing", (showing.as_deref() == Some(lang)).into()),
                          // A session from before this field was written: unknown.
                          ("sql", s.get("sql").clone()),
-                         ("sensitive", sensitive.into()), ("access", acc.into()), ("output", out.into())])
+                         ("sensitive", sensitive.into()), ("access", acc.into()), ("output", out.into()),
+                         ("profile", rules.profile.into())])
             }
             Err(why) => {
                 let mut v = vec![("running", false.into())];
@@ -82,15 +81,15 @@ fn gather() -> Value {
         };
         (lang, entry)
     }).collect::<Vec<_>>();
-    // The rules for a session that isn't sensitive (any new one).
-    let (acc, out) = crate::eval::policy(access, output.as_deref(), false);
+    // The rules for a console that starts here now (the project's profile included).
+    let here = crate::profile::folder_rules(&std::env::current_dir().unwrap_or_else(|_| env::home()));
     obj(vec![
         ("corral", env!("CARGO_PKG_VERSION").into()),
         ("herdr", in_herdr.into()),
         ("workspace", ws.map(Value::from).unwrap_or(Value::Null)),
         ("showing", showing.map(Value::from).unwrap_or(Value::Null)),
         ("consoles", obj(consoles)),
-        ("agents", obj(vec![("access", acc.into()), ("output", out.into())])),
+        ("agents", obj(vec![("access", here.access.into()), ("output", here.output.into()), ("profile", here.profile.into())])),
     ])
 }
 

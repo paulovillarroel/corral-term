@@ -148,6 +148,8 @@ struct Viewer {
     /// A newer Corral, from the daily check: the hint row says so until you update.
     newer: Option<String>,
     newer_at: Instant,
+    /// The security profile this session runs under (crate::profile), in the header.
+    profile: &'static str,
 }
 
 impl Viewer {
@@ -218,6 +220,14 @@ impl Viewer {
         (0..TABS.len()).find(|&i| !self.in_tab(i).is_empty()).unwrap_or(0)
     }
 
+    /// The profile of the session shown, as the agents' requests to it get it.
+    fn current_profile(&self) -> &'static str {
+        match (&self.session, self.meta.get("id").is_null()) {
+            (Some(dir), false) => crate::profile::session_rules(dir, &self.meta).profile,
+            _ => crate::profile::folder_rules(&std::env::current_dir().unwrap_or_else(|_| env::home())).profile,
+        }
+    }
+
     fn render(&mut self, scr: &Screen) {
         let (cols, rows) = scr.size();
         let c = &self.colors;
@@ -240,8 +250,12 @@ impl Viewer {
         let n_vars = self.items.iter().filter(|v| self.matches(v)).count();
         let plural = if n_vars == 1 { "" } else { "s" };
         let count = trf!("{n_vars} object{plural}", "{n_vars} objeto{plural}");
-        f += &format!("\x1b[1;2H{}▸▸{RESET} {}{BOLD}Variables{RESET}  {}{}{RESET}", c.accent, c.text, c.dim,
-                      clip(&where_, cols.saturating_sub(width(&count) + 19)));
+        // The security profile first, so it is never the part clipped; in the accent
+        // colour when it is sensitive.
+        let profile = crate::profile::shown(self.profile);
+        let pcolor = if self.profile == "sensitive" { &c.accent } else { &c.muted };
+        f += &format!("\x1b[1;2H{}▸▸{RESET} {}{BOLD}Variables{RESET}  {pcolor}{profile}{RESET}{} · {}{RESET}", c.accent, c.text, c.dim,
+                      clip(&where_, cols.saturating_sub(width(&count) + width(profile) + 22)));
         f += &format!("\x1b[1;{}H{}{count}{RESET}", cols.saturating_sub(width(&count)).max(1), c.muted);
 
         // Tab bar
@@ -462,9 +476,10 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
         session, follow: !popup, keep_open: !popup, items: Vec::new(), meta: Value::obj(), rev: None,
         tab: 0, tab_chosen: false, sel: 0, top: 0, query: String::new(), typing: false, status: String::new(),
         tab_spans: Vec::new(), row_items: Vec::new(), colors: Colors::load(), theme_asked: None,
-        newer: crate::install::newer_version(), newer_at: Instant::now(),
+        newer: crate::install::newer_version(), newer_at: Instant::now(), profile: "standard",
     };
     v.load();
+    v.profile = v.current_profile();
     v.tab = v.first_useful_tab();
     let Some(scr) = Screen::enter(true) else { return Err(tr("not a terminal", "no hay una terminal").into()) };
     let mut size = scr.size();
@@ -501,6 +516,10 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                     let newer = crate::install::newer_version();
                     changed |= newer != v.newer;
                     v.newer = newer;
+                    // The profile too: a setting or a project's profile may have changed.
+                    let profile = v.current_profile();
+                    changed |= profile != v.profile;
+                    v.profile = profile;
                 }
                 if changed {
                     if !v.tab_chosen && v.in_tab(v.tab).is_empty() {
@@ -648,7 +667,8 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
     // Restricted output (a sensitive session, or agent_output structure): no previews of
     // values, which can be the data itself; dimensions and signatures stay.
     // review counts too: these previews would reach the agent without the user seeing them.
-    let restricted = dir.join("sensitive").exists() || matches!(env::config().get("agent_output").str(), Some("structure" | "review"));
+    let rules = crate::profile::session_rules(&dir, &session);
+    let restricted = rules.sensitive || matches!(rules.output, "structure" | "review");
     let mut vars = data.get("vars").clone();
     if restricted {
         if let Value::Arr(items) = &mut vars {

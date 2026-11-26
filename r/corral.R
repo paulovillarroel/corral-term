@@ -229,11 +229,13 @@ local({
       r_version = paste(R.version$major, R.version$minor, sep = "."),
       # Under Ark: the kernel's connection file, so `corral _lsp r` can reach its language server.
       ark_connection = if (nzchar(Sys.getenv("CORRAL_ARK_CONNECTION"))) Sys.getenv("CORRAL_ARK_CONNECTION") else NULL,
-      cwd = getwd(), started = started, sql = sql_available()
+      cwd = getwd(), started_in = started_in, started = started, sql = sql_available()
     ), file.path(session_dir, "meta.json"))
   }
 
   started <- as.numeric(Sys.time())
+  # Where it started: a project's security profile follows the session even if it moves.
+  started_in <- getwd()
   last_cwd <- ""
 
   # After every command the environment is described again, but only objects
