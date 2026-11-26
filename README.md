@@ -46,6 +46,8 @@ The installer downloads the latest published version, says which, and checks its
 - links Corral's plugin and shortcuts into herdr, one line into `~/.Rprofile` (it only acts in Corral's consoles), Corral's settings into Fresh, and the agent skill into `~/.agents/skills`, `~/.claude/skills` and, with Gemini CLI, `~/.gemini/skills`;
 - backs up every file it touches (`*.before-corral-DATE`) and never uses `sudo`.
 
+R packages are installed with [pak](https://pak.r-lib.org) when your R has it, otherwise with `install.packages()`. They come from Posit's package manager as it was three days ago, so none is newer than 72 hours; if R already uses a repository that isn't a public one, such as an institution's mirror, the installer uses that one, and `CORRAL_R_REPOS` names the repositories yourself ([where R packages come from](https://corral-term.dev/docs/install.html#what-the-installer-brings)). In a project with renv, the consoles keep the project's library and versions, and load Corral's packages from yours only when the project doesn't have them ([projects with renv](https://corral-term.dev/docs/consoles.html#renv)).
+
 `sh -s -- --check` at the end of the line only checks. `corral update` installs a newer version when there is one, and `corral uninstall` takes Corral out again, leaving your settings and sessions. When it finishes or stops, and when Corral is uninstalled, it sends one anonymous ping (version, system, country and the tools it found, in categories; no IP) to count installs; `corral config telemetry off` or `CORRAL_NO_TELEMETRY=1` turns it off. Details: [Install](https://corral-term.dev/docs/install.html).
 
 ### Then
