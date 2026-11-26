@@ -27,10 +27,10 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 extern "C" {
-    fn flock(fd: i32, operation: i32) -> i32;
+    pub(crate) fn flock(fd: i32, operation: i32) -> i32;
 }
-const LOCK_EX: i32 = 2;
-const LOCK_NB: i32 = 4;
+pub(crate) const LOCK_EX: i32 = 2;
+pub(crate) const LOCK_NB: i32 = 4;
 
 struct Opts {
     code: Vec<String>,

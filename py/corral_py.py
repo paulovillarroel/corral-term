@@ -463,6 +463,37 @@ def _checkpoint_max_bytes() -> float:
     return (mb if mb > 0 else 1024) * 2**20
 
 
+def session_id() -> str:
+    """This console's id: its herdr pane and process, as its folder and checkpoint are named."""
+    pane = os.environ.get("HERDR_PANE_ID", "")
+    return (re.sub(r"[^A-Za-z0-9._-]", "-", pane) if pane else "pid") + f"-{os.getpid()}"
+
+
+def keep_plots(old: Path, new: Path) -> int:
+    """At startup, from the checkpoint that comes back: its figures (those it had kept
+    from an earlier crash, then its own, in order) move to this session's checkpoint,
+    into kept/ as k0001.png/.svg and so on, the newest 30. Mirador and the terminal's
+    viewer show them before this session's own. How many came along."""
+    stems = []
+    for d in (old / "kept", old / "plots"):
+        if not d.is_dir():
+            continue
+        found = {f.stem for f in d.iterdir() if f.suffix in (".png", ".svg")}
+        order = sorted(found) if d.name == "kept" else sorted(found, key=lambda x: int(x) if x.isdigit() else -1)
+        stems += [d / x for x in order]
+    stems = stems[-30:]
+    if not stems:
+        return 0
+    dest = new / "kept"
+    dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for i, stem in enumerate(stems, 1):
+        for ext in (".png", ".svg"):
+            src = stem.with_suffix(ext)
+            if src.exists():
+                os.replace(src, dest / f"k{i:04d}{ext}")
+    return len(stems)
+
+
 class Checkpoints:
     def __init__(self, session) -> None:
         self.session = session
@@ -471,6 +502,8 @@ class Checkpoints:
         self.child = None
         self.sigs: dict | None = None
         self.full_at = time.time()
+        # A figure added, drawn over or removed since the last copy: the next one writes them.
+        self.plots_dirty = (self.dir / "kept").is_dir()
 
     def after(self, sigs: dict, names: list, modules: dict) -> None:
         """After each cell: start a copy when something changed (or a minute went by),
@@ -489,11 +522,13 @@ class Checkpoints:
         full = now - self.full_at > _checkpoint_every()
         old = self.sigs or {}
         changed = [n for n, v in sigs.items() if old.get(n) != v]
-        if not full and not changed and old.keys() == sigs.keys() and self.sigs is not None:
+        plots = self.plots_dirty
+        if not full and not plots and not changed and old.keys() == sigs.keys() and self.sigs is not None:
             return
         if full:
             self.full_at = now
         self.sigs = dict(sigs)
+        self.plots_dirty = False
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # "multi-threaded, fork() may deadlock": the copy only pickles and writes
@@ -501,6 +536,8 @@ class Checkpoints:
         if pid == 0:
             try:
                 self.write(set(changed), full, names, modules)
+                if plots:
+                    self.write_plots()
             finally:
                 os._exit(0)
         self.child = pid
@@ -573,6 +610,44 @@ class Checkpoints:
         except Exception:
             pass
 
+    def write_plots(self) -> None:
+        """In the forked copy, after the objects: the figures this Python drew, so a crash
+        doesn't take them. They are already drawn (PNG, and SVG unless huge), so this only
+        writes them: one file per figure in <checkpoint>/plots/, named by its id (the id
+        Mirador sees), rewritten when the figure was drawn over, the newest 30. Files of
+        figures no longer in the history go."""
+        import hashlib
+        try:
+            d = self.dir / "plots"
+            d.mkdir(parents=True, exist_ok=True, mode=0o700)
+            pages = list(self.session.plots.pages)[-30:]  # the copy has no other threads: no lock
+            live = {p["id"] for p in pages}
+            for f in d.iterdir():
+                if f.suffix in (".png", ".svg") and f.stem not in live:
+                    f.unlink(missing_ok=True)
+            digests_path = d / "digests.json"
+            try:
+                digests = json.loads(digests_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                digests = {}
+            digests = {k: v for k, v in digests.items() if k in live}
+            for p in pages:
+                digest = hashlib.blake2b(p["png"], digest_size=16).hexdigest()
+                if digests.get(p["id"]) == digest and (d / f"{p['id']}.png").exists():
+                    continue
+                for ext, data in ((".png", p["png"]), (".svg", p.get("svg"))):
+                    target = d / f"{p['id']}{ext}"
+                    if data is None:
+                        target.unlink(missing_ok=True)
+                        continue
+                    tmp = d / f"{p['id']}{ext}.tmp"
+                    tmp.write_bytes(data)
+                    os.replace(tmp, target)
+                digests[p["id"]] = digest
+            write_json_atomic(digests_path, digests)
+        except Exception:
+            pass
+
     def close(self) -> None:
         shutil.rmtree(self.dir, ignore_errors=True)
 
@@ -591,6 +666,12 @@ class Checkpoints:
             try:
                 idx = json.loads((d / "index.json").read_text(encoding="utf-8"))
             except (OSError, ValueError):
+                # Never got its index (kept figures only, say): gone after a week too.
+                try:
+                    if time.time() - d.stat().st_mtime > 7 * 86400:
+                        shutil.rmtree(d, ignore_errors=True)
+                except OSError:
+                    pass
                 continue
             if pid_alive(idx.get("pid")):
                 continue
@@ -620,11 +701,23 @@ class Checkpoints:
                 back.append(name)
             except Exception:
                 pass
+        try:
+            plots = keep_plots(d, CHECKPOINTS / f"py-{session_id()}")
+        except Exception:
+            plots = 0
         shutil.rmtree(d, ignore_errors=True)
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(idx["updated"])))
         shown = ", ".join(back[:8]) + (", …" if len(back) > 8 else "")
-        print(tr(f"[corral] Restored {len(back)} objects from the Python that ended without being closed ({when}): {shown}.",
-                 f"[corral] Restauré {len(back)} objetos del Python que terminó sin que lo cerraran ({when}): {shown}."))
+        if back or not plots:
+            print(tr(f"[corral] Restored {len(back)} objects from the Python that ended without being closed ({when}): {shown}.",
+                     f"[corral] Restauré {len(back)} objetos del Python que terminó sin que lo cerraran ({when}): {shown}."))
+        if plots and back:
+            print(tr(f"[corral] And its {plots} figures, first in Mirador (ctrl+b f).",
+                     f"[corral] Y sus {plots} gráficos, primero en Mirador (ctrl+b f)."))
+        elif plots:
+            # Only figures came back (no objects): one line says so.
+            print(tr(f"[corral] Restored {plots} figures from the Python that ended without being closed ({when}), first in Mirador (ctrl+b f).",
+                     f"[corral] Restauré {plots} gráficos del Python que terminó sin que lo cerraran ({when}), primero en Mirador (ctrl+b f)."))
         left = idx.get("skipped") or {}
         if left:
             mb = int(_checkpoint_max_bytes() / 2**20)
@@ -639,9 +732,8 @@ class Checkpoints:
 class Session:
     def __init__(self, shell) -> None:
         self.shell = shell
-        pane = os.environ.get("HERDR_PANE_ID", "")
-        self.pane = pane
-        self.id = (re.sub(r"[^A-Za-z0-9._-]", "-", pane) if pane else "pid") + f"-{os.getpid()}"
+        self.pane = os.environ.get("HERDR_PANE_ID", "")
+        self.id = session_id()
         self.dir = STATE_DIR / "sessions" / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
         self.started = time.time()
@@ -739,6 +831,7 @@ class Session:
             if rev != self.plots_rev:
                 self.plots_rev = rev
                 (self.dir / "plots-rev").write_text(f"{rev[0]} {rev[1]}")
+                self.checkpoints.plots_dirty = True  # the next checkpoint keeps them
             # Variables holding a figure that has a page: Enter on them shows that drawing.
             drawn = {}
             for name, value in list(self.shell.user_ns.items()):

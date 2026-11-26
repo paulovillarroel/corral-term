@@ -310,6 +310,7 @@ local({
     if (!identical(rev, plot_rev)) {
       plot_rev <<- rev
       writeLines(rev, file.path(session_dir, "plots-rev"))
+      keep_plots_now() # a new plot, one drawn over, or one removed: the checkpoint keeps them
     }
     pages <- st$hsize
     grew <- pages > plot_pages
@@ -440,6 +441,56 @@ local({
     }, error = function(e) FALSE)))
   }
 
+  # The plots this R drew, into its checkpoint (<checkpoint>/plots/, one SVG and one PNG
+  # per plot, named by its id in httpgd), so a crash doesn't take them. `corral
+  # _keep-plots` does it: one per session, started with the first plot, it watches
+  # plots-rev and asks httpgd over HTTP. Here R only checks that it still runs (0.1 ms)
+  # and starts it again if it doesn't. Not in the forked copy: httpgd's server thread
+  # may hold a lock at the fork, and unigd then hangs the copy for good, and every
+  # checkpoint after it. Not started for each plot either: system2() forks R, 8 ms
+  # with 400-650 MB in use. Rendered by httpgd for another process, R's memory stays put.
+  keep_bin <- NULL
+  keep_plots_now <- function() {
+    if (!checkpoints_on()) return(invisible())
+    pid_file <- file.path(session_dir, "keep-plots.pid")
+    pid <- if (file.exists(pid_file)) suppressWarnings(as.integer(readLines(pid_file, n = 1L, warn = FALSE))) else NA_integer_
+    cmdline <- sprintf("/proc/%d/cmdline", if (length(pid) == 1L && !is.na(pid)) pid else 0L)
+    if (file.exists(cmdline)) {
+      cmd <- tryCatch(readBin(cmdline, "raw", 512L), error = function(e) raw())
+      if (grepl("_keep-plots", rawToChar(cmd[cmd != as.raw(0L)]), fixed = TRUE)) return(invisible())
+    }
+    if (is.null(keep_bin)) keep_bin <<- tryCatch(env$corral_bin(), error = function(e) "")
+    if (nzchar(keep_bin)) {
+      system2(keep_bin, c("_keep-plots", session_id, r_pid), wait = FALSE, stdout = FALSE, stderr = FALSE)
+    }
+    invisible()
+  }
+
+  # At startup, from the checkpoint that comes back: its plots (those it had kept from
+  # an earlier crash, then its own, in order) move to this session's checkpoint, into
+  # kept/ as k0001.svg/.png and so on, the newest 30. Mirador and the terminal's viewer
+  # show them before this session's own. How many came along.
+  keep_plots <- function(old) {
+    stems <- character()
+    for (d in file.path(old, c("kept", "plots"))) {
+      f <- list.files(d, pattern = "\\.(svg|png)$")
+      s <- unique(sub("\\.[a-z]+$", "", f))
+      s <- if (basename(d) == "kept") sort(s) else s[order(suppressWarnings(as.integer(s)))]
+      stems <- c(stems, file.path(d, s))
+    }
+    stems <- utils::tail(stems, 30)
+    if (!length(stems)) return(0L)
+    dest <- file.path(checkpoint_dir, "kept")
+    dir.create(dest, recursive = TRUE, showWarnings = FALSE, mode = "0700")
+    for (i in seq_along(stems)) {
+      for (ext in c("svg", "png")) {
+        from <- paste0(stems[i], ".", ext)
+        if (file.exists(from)) file.rename(from, file.path(dest, sprintf("k%04d.%s", i, ext)))
+      }
+    }
+    length(stems)
+  }
+
   # After each command: start a copy when something changed (or a minute went
   # by), unless the last one is still writing; then it waits for the next command.
   checkpoint <- function(sigs) {
@@ -470,7 +521,13 @@ local({
         next
       }
       idx <- tryCatch(jsonlite::read_json(file.path(d, "index.json")), error = function(e) NULL)
-      if (is.null(idx) || is.null(idx$pid) || pid_alive(idx$pid)) next
+      if (is.null(idx)) {
+        # Never got its index (kept plots only, say): gone after a week too.
+        age <- as.numeric(Sys.time()) - as.numeric(file.mtime(d))
+        if (!is.na(age) && age > 7 * 86400) unlink(d, recursive = TRUE)
+        next
+      }
+      if (is.null(idx$pid) || pid_alive(idx$pid)) next
       if (as.numeric(Sys.time()) - as.numeric(idx$updated) > 7 * 86400) {
         unlink(d, recursive = TRUE) # a week old: nobody is coming back for it
         next
@@ -498,6 +555,7 @@ local({
       }, error = function(e) FALSE)
       if (ok) back <- c(back, n)
     }
+    plots <- tryCatch(keep_plots(best$dir), error = function(e) 0L)
     unlink(best$dir, recursive = TRUE)
     left <- names(idx$skipped)
     why <- vapply(left, function(n) switch(idx$skipped[[n]],
@@ -506,9 +564,20 @@ local({
       tr("couldn't be saved", "no se pudo guardar")), "")
     when <- format(as.POSIXct(as.numeric(idx$updated), origin = "1970-01-01"), "%Y-%m-%d %H:%M")
     shown <- function(x) if (length(x) > 8) paste(c(x[1:8], "\u2026"), collapse = ", ") else paste(x, collapse = ", ")
-    lines <- trf("[corral] Restored %d objects from the R that ended without being closed (%s): %s.",
-                 "[corral] Restaur\u00e9 %d objetos del R que termin\u00f3 sin que lo cerraran (%s): %s.",
-                 length(back), when, shown(back))
+    # Only plots came back (no objects): one line says so.
+    lines <- if (length(back) || !plots) {
+      trf("[corral] Restored %d objects from the R that ended without being closed (%s): %s.",
+          "[corral] Restaur\u00e9 %d objetos del R que termin\u00f3 sin que lo cerraran (%s): %s.",
+          length(back), when, shown(back))
+    }
+    if (plots > 0 && length(back)) {
+      lines <- c(lines, trf("[corral] And its %d plots, first in Mirador (ctrl+b f).",
+                            "[corral] Y sus %d gr\u00e1ficos, primero en Mirador (ctrl+b f).", plots))
+    } else if (plots > 0) {
+      lines <- trf("[corral] Restored %d plots from the R that ended without being closed (%s), first in Mirador (ctrl+b f).",
+                   "[corral] Restaur\u00e9 %d gr\u00e1ficos del R que termin\u00f3 sin que lo cerraran (%s), primero en Mirador (ctrl+b f).",
+                   plots, when)
+    }
     if (length(left)) {
       lines <- c(lines, trf("[corral] Not kept: %s.", "[corral] No se conservaron: %s.",
                             paste(sprintf("%s (%s)", left, why), collapse = ", ")))

@@ -154,6 +154,7 @@ fn main() {
         Some("plots") => plots::cmd_plots(rest),
         Some("_plots") => plots::cmd_plots_tui(rest),
         Some("_plot-ready") => plots::cmd_plot_ready(rest),
+        Some("_keep-plots") => mirador::cmd_keep_plots(rest),
         Some("_show-object") => plots::cmd_show_object(rest),
         Some("view") => plots::cmd_view(rest),
         Some("open") => plots::cmd_open(rest),

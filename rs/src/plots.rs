@@ -9,7 +9,7 @@ use crate::env;
 use crate::herdr;
 use crate::i18n::tr;
 use crate::json::{self, obj, Value};
-use crate::mirador::{plots_json, plots_raw};
+use crate::mirador::plots_json;
 use crate::term::{self, clip, out, Screen};
 use crate::vars::{message_screen, open_popup};
 use std::io::{Read, Write};
@@ -644,7 +644,8 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
                                              fg(&p, "dim", "#646464"), fg(&p, "green", "#4fc27c"));
     const RESET: &str = "\x1b[0m";
 
-    let mut ids = httpgd_ids(&dir);
+    // The kept plots of a session that crashed come first, then this session's own.
+    let mut ids = crate::mirador::shown_plot_ids(&session);
     if ids.is_empty() && httpgd_state(&dir).is_null() {
         message_screen(tr("httpgd isn't responding", "httpgd no responde"),
                        tr("Did you close R or the graphics device?\nDraw again and reopen the viewer.",
@@ -676,9 +677,9 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
                 // About 10x20 px per cell; zoom makes labels readable at character resolution.
                 (cols * 10, area * 20, 1.6)
             };
-            let params = [("id", ids[idx as usize].clone()), ("width", w.to_string()), ("height", h.to_string()),
+            let params = [("width", w.to_string()), ("height", h.to_string()),
                           ("renderer", "png".to_string()), ("zoom", zoom.to_string())];
-            match plots_raw(&session, "plot", &params) {
+            match crate::mirador::shown_plot(&session, &ids[idx as usize], &params) {
                 Some((png, _)) if std::fs::write(&tmp, &png).is_ok() => {
                     let mut chafa = Command::new("chafa");
                     if kitty {
@@ -748,7 +749,7 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
                 let state = httpgd_state(&dir);
                 if !state.is_null() && state.get("upid") != &upid {
                     upid = state.get("upid").clone();
-                    ids = httpgd_ids(&dir);
+                    ids = crate::mirador::shown_plot_ids(&session);
                     if follow || idx < 0 || idx >= ids.len() as isize {
                         idx = ids.len() as isize - 1;
                     }
