@@ -202,6 +202,7 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>) -> Result<Kernel, Str
         .arg("--connection_file").arg(conn_path)
         .args(["--session-mode", "console", "--default-repos", "none", "--log"]).arg(log_file())
         .envs(r_env(ark)?)
+        .envs(crate::console::r_profile_env())
         .env("CORRAL", "1")
         .env("CORRAL_ARK_CONNECTION", conn_path) // corral.R announces it, for the editor's language server
         .env("CORRAL_NOTICE", conn_path.with_extension("notice")) // what R says while starting

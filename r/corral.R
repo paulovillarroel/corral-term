@@ -2,6 +2,8 @@
 #
 # install.sh adds this line to ~/.Rprofile (the path is where Corral lives):
 #   if (interactive()) try(source("~/.local/share/corral-term/r/corral.R"))  # Corral
+# Corral's own consoles load it through r/profile.R instead, so it also loads in a
+# project whose .Rprofile R reads in place of yours (renv's).
 #
 # Corral only acts in R sessions that ask for it: the console that `corral layout`
 # (ctrl+b a) starts, which sets CORRAL=1, or any session where you run
@@ -24,6 +26,8 @@
 local({
   if (!interactive()) return(invisible())
   if (nzchar(Sys.getenv("RSTUDIO")) || nzchar(Sys.getenv("POSITRON"))) return(invisible())
+  # Loaded: profile.R doesn't load it a second time.
+  options(corral.loaded = TRUE)
 
   # This file, found through the `corral` command: up from it to Corral's folder
   # (the command is rs/target/release/corral there).
@@ -111,7 +115,30 @@ local({
     "-", Sys.getpid()
   )
   session_dir <- file.path(state_dir, "sessions", session_id)
-  has_json <- requireNamespace("jsonlite", quietly = TRUE)
+
+  # The packages Corral uses (jsonlite, httpgd, nanoparquet, duckdb, rlang) are in
+  # your R library. A project with its own library (renv) leaves yours out of
+  # .libPaths() and points R_LIBS_USER at its own; profile.R kept yours in
+  # CORRAL_R_LIBS_USER. has() loads a package from the project's libraries first, so
+  # the project's version wins, and else from yours, without adding it to
+  # .libPaths(): the project's library stays as it is. In a session without its own
+  # library, user_libs is empty and has() is requireNamespace(). A package that isn't
+  # in your library either is remembered, so looking for it costs no more than before.
+  user_libs <- local({
+    l <- Sys.getenv("CORRAL_R_LIBS_USER", Sys.getenv("R_LIBS_USER"))
+    l <- path.expand(strsplit(l, .Platform$path.sep, fixed = TRUE)[[1]])
+    l <- l[nzchar(l) & dir.exists(l)]
+    l[!normalizePath(l, mustWork = FALSE) %in% normalizePath(.libPaths(), mustWork = FALSE)]
+  })
+  not_in_user_libs <- character()
+  has <- function(pkg) {
+    if (requireNamespace(pkg, quietly = TRUE)) return(TRUE)
+    if (!length(user_libs) || pkg %in% not_in_user_libs) return(FALSE)
+    ok <- !inherits(try(loadNamespace(pkg, lib.loc = c(.libPaths(), user_libs)), silent = TRUE), "try-error")
+    if (!ok) not_in_user_libs <<- c(not_in_user_libs, pkg)
+    ok
+  }
+  has_json <- has("jsonlite")
 
   env$corral_bin <- function() {
     bin <- getOption("corral.bin", Sys.getenv("CORRAL_BIN"))
@@ -175,7 +202,7 @@ local({
     size <- if (is.environment(x) || kind == "plotobj" || isTRUE(n > 1e6)) NA_real_
       else tryCatch(as.numeric(utils::object.size(x)), error = function(e) NA_real_)
     # A fingerprint lets Corral reuse a drawing instead of printing the same plot again.
-    hash <- if (kind == "plotobj" && requireNamespace("rlang", quietly = TRUE)) {
+    hash <- if (kind == "plotobj" && has("rlang")) {
       tryCatch(rlang::hash(x), error = function(e) NULL)
     }
     list(name = name, kind = kind, class = class(x)[1],
@@ -208,7 +235,7 @@ local({
   address_of <- tryCatch({
     .Internal(address(globalenv()))
     function(x) .Internal(address(x))
-  }, error = function(e) if (requireNamespace("rlang", quietly = TRUE)) rlang::obj_address)
+  }, error = function(e) if (has("rlang")) rlang::obj_address)
   described <- new.env(hash = TRUE, parent = emptyenv())
   last_signature <- NULL
 
@@ -273,7 +300,7 @@ local({
   plot_rev <- ""
   remember_plot <- function(value, ok) {
     dev <- plot_device()
-    if (is.na(dev) || !requireNamespace("unigd", quietly = TRUE)) {
+    if (is.na(dev) || !has("unigd")) {
       plot_pages <<- 0L
       return(invisible())
     }
@@ -288,7 +315,7 @@ local({
     grew <- pages > plot_pages
     plot_pages <<- pages
     if (!isTRUE(ok) || !grew || !inherits(value, plot_classes) ||
-        !requireNamespace("rlang", quietly = TRUE)) return(invisible())
+        !has("rlang")) return(invisible())
     f <- file.path(session_dir, "plotobj-map.json")
     drawn <- if (file.exists(f)) tryCatch(jsonlite::read_json(f), error = function(e) list()) else list()
     drawn[[rlang::hash(value)]] <- as.character(unigd::ugd_id(0, which = dev)$id)
@@ -309,7 +336,7 @@ local({
   checkpoint_root <- file.path(state_dir, "checkpoints")
   checkpoint_dir <- file.path(checkpoint_root, paste0("r-", session_id))
   r_pid <- Sys.getpid()
-  can_hash <- requireNamespace("rlang", quietly = TRUE)
+  can_hash <- has("rlang")
   ck <- new.env(parent = emptyenv())
   ck$job <- NULL
   ck$sigs <- NULL
@@ -596,7 +623,7 @@ local({
       arrow = function(f) arrow::write_parquet(x, f)
     )
     for (pkg in names(writers)) {
-      if (!requireNamespace(pkg, quietly = TRUE)) next
+      if (!has(pkg)) next
       f <- tempfile("corral-", fileext = ".parquet")
       ok <- tryCatch({ writers[[pkg]](f); TRUE }, error = function(e) FALSE)
       if (ok) return(f)
@@ -655,7 +682,7 @@ local({
 
   sql_connection <- function() {
     if (!is.null(sql_db) && DBI::dbIsValid(sql_db)) return(sql_db)
-    if (!requireNamespace("duckdb", quietly = TRUE) || !requireNamespace("DBI", quietly = TRUE)) {
+    if (!has("duckdb") || !has("DBI")) {
       stop(tr("SQL needs the duckdb package: install.packages(\"duckdb\")",
               "SQL necesita el paquete duckdb: install.packages(\"duckdb\")"), call. = FALSE)
     }
@@ -789,6 +816,8 @@ local({
   }
 
   start_httpgd <- function(...) {
+    # Loaded through has(), so in a project with its own library it comes from yours.
+    if (!has("httpgd")) stop(tr("install httpgd first", "instala httpgd primero"), call. = FALSE)
     httpgd::hgd(silent = TRUE)
     url <- httpgd::hgd_url()
     dir.create(session_dir, recursive = TRUE, showWarnings = FALSE)
@@ -799,7 +828,7 @@ local({
   }
 
   env$corral_plots <- function() {
-    if (!requireNamespace("httpgd", quietly = TRUE)) stop(tr("install httpgd first", "instala httpgd primero"), call. = FALSE)
+    if (!has("httpgd")) stop(tr("install httpgd first", "instala httpgd primero"), call. = FALSE)
     if (is.na(plot_device())) return(start_httpgd())
     url <- httpgd::hgd_url()
     open_viewer(url, force = TRUE)
@@ -811,7 +840,7 @@ local({
   # lifecycle and cli) loads with the first plot, so a session without plots
   # starts faster and uses less memory.
   use_httpgd <- function() {
-    if (nzchar(system.file(package = "httpgd")) && !isFALSE(getOption("corral.httpgd"))) {
+    if (nzchar(system.file(package = "httpgd", lib.loc = c(.libPaths(), user_libs))) && !isFALSE(getOption("corral.httpgd"))) {
       options(device = start_httpgd)
     }
     invisible()
