@@ -15,7 +15,6 @@ use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::mem::ManuallyDrop;
-use std::net::TcpListener;
 use std::os::fd::FromRawFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -163,24 +162,36 @@ const SOCKET_PATH_MAX: usize = 100;
 /// Where Ark's sockets go, named BASE:N. Next to the connection file, in Corral's own
 /// folder (700), so only this user's processes reach them. When that path is too long
 /// for a socket address, in a new folder of their own with a short path, made 700,
-/// under the runtime folder or /tmp. None only if no such folder can be made.
+/// under the runtime folder or /tmp; a note beside the connection file (KERNEL.sockets)
+/// names it, so it goes even when no Corral process sees the console end. None only if
+/// no such folder can be made: then Ark doesn't start (never on TCP, where any user on
+/// the machine could read its output).
 pub(crate) fn socket_base(conn_path: &Path) -> Option<PathBuf> {
     let base = conn_path.with_extension("");
     if base.is_absolute() && base.as_os_str().len() + 2 <= SOCKET_PATH_MAX {
         return Some(base);
     }
-    short_socket_dir().map(|d| d.join("kernel"))
+    let dir = short_socket_dir()?;
+    std::fs::write(conn_path.with_extension("sockets"), dir.to_string_lossy().as_bytes()).ok()?;
+    Some(dir.join("kernel"))
+}
+
+/// Why Ark can't start when socket_base found nowhere private for its sockets.
+pub(crate) fn no_private_sockets() -> String {
+    tr("couldn't make a private folder for Ark's sockets (Corral's folder has too long a path, and neither the runtime folder nor /tmp would take one); Corral doesn't start Ark on TCP, where other users could read it",
+       "no pude crear una carpeta privada para los sockets de Ark (la carpeta de Corral tiene una ruta demasiado larga, y ni la carpeta de ejecución ni /tmp aceptaron una); Corral no inicia Ark por TCP, donde otros usuarios podrían leerlo").into()
 }
 
 /// A new private folder with a short path: created here (so nobody else made it), 700,
-/// under a parent that is ours or sticky like /tmp (so nobody else can swap it).
+/// under a parent nobody else can swap it in: sticky like /tmp, or ours with no write
+/// access for group or others.
 fn short_socket_dir() -> Option<PathBuf> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
     let me = std::fs::metadata("/proc/self").ok()?.uid();
     let parents = [std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))];
     parents.into_iter().flatten().filter(|p| p.is_absolute()).find_map(|parent| {
         let m = std::fs::metadata(&parent).ok()?;
-        if !(m.is_dir() && (m.uid() == me || m.mode() & 0o1000 != 0)) {
+        if !(m.is_dir() && (m.mode() & 0o1000 != 0 || (m.uid() == me && m.mode() & 0o022 == 0))) {
             return None;
         }
         let dir = parent.join(format!("corral-{}", env::random_hex(4)));
@@ -193,15 +204,13 @@ fn short_socket_dir() -> Option<PathBuf> {
     })
 }
 
-/// Where Ark listens. Unix sockets (socket_base), which only this user's processes
-/// reach. The key signs each message but doesn't hide it: on TCP, any user on the
-/// machine can subscribe to IOPub on 127.0.0.1 and read the code and everything R
-/// prints. TCP only as a last resort, when no folder for the sockets can be made.
+/// Where Ark listens: Unix sockets (socket_base), which only this user's processes
+/// reach. Never TCP: the key signs each message but doesn't hide it, and on 127.0.0.1
+/// any user on the machine can subscribe to IOPub and read the code and everything R
+/// prints.
 fn endpoints(conn_path: &Path) -> Result<(&'static str, String, Vec<u16>), String> {
-    match socket_base(conn_path) {
-        Some(base) => Ok(("ipc", base.to_string_lossy().into_owned(), (1..=5).collect())),
-        None => Ok(("tcp", "127.0.0.1".into(), free_ports(5)?)),
-    }
+    let base = socket_base(conn_path).ok_or_else(no_private_sockets)?;
+    Ok(("ipc", base.to_string_lossy().into_owned(), (1..=5).collect()))
 }
 
 /// For the Jupyter console frontend: jupyter_client connects to BASE-N where Ark binds
@@ -219,11 +228,36 @@ pub(crate) fn link_for_jupyter(base: &Path) -> Result<(), String> {
 
 /// Sockets a crashed Ark left behind (kernel-ID:N, beside kernel-ID.json): once the
 /// connection file is gone (two days) and nothing answers on them, they go too.
-fn remove_stale_sockets(folder: &Path) {
+pub(crate) fn remove_stale_sockets(folder: &Path) {
     use std::os::unix::fs::FileTypeExt;
     let Ok(entries) = std::fs::read_dir(folder) else { return };
+    let refused = |p: &Path| matches!(std::os::unix::net::UnixStream::connect(p), Err(err) if err.kind() == std::io::ErrorKind::ConnectionRefused);
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
+        // A short folder of its own (KERNEL.sockets names it), once its connection file
+        // is gone and nothing answers there: what Ark and jupyter_client left, then it.
+        if let Some(base) = name.strip_suffix(".sockets") {
+            if folder.join(format!("{base}.json")).exists() {
+                continue;
+            }
+            let dir = std::fs::read_to_string(e.path()).map(PathBuf::from).unwrap_or_default();
+            let ours = dir.is_absolute() && dir.file_name().is_some_and(|n| n.to_string_lossy().starts_with("corral-"));
+            let live = (1..=5).any(|n| {
+                let p = PathBuf::from(format!("{}/kernel:{n}", dir.display()));
+                p.exists() && !refused(&p)
+            });
+            if ours && !live {
+                for n in 1..=5 {
+                    let _ = std::fs::remove_file(format!("{}/kernel:{n}", dir.display()));
+                    let _ = std::fs::remove_file(format!("{}/kernel-{n}", dir.display()));
+                }
+                let _ = std::fs::remove_dir(&dir);
+            }
+            if !ours || !live {
+                let _ = std::fs::remove_file(e.path());
+            }
+            continue;
+        }
         let Some((base, _)) = name.split_once(':') else { continue };
         if !base.starts_with("kernel-") || !e.file_type().map(|t| t.is_socket()).unwrap_or(false) {
             continue;
@@ -234,9 +268,7 @@ fn remove_stale_sockets(folder: &Path) {
         }
         // Only a refused connection says no Ark is there: running out of descriptors,
         // say, says nothing about it.
-        let abandoned = matches!(std::os::unix::net::UnixStream::connect(e.path()),
-                                 Err(err) if err.kind() == std::io::ErrorKind::ConnectionRefused);
-        if abandoned {
+        if refused(&e.path()) {
             let _ = std::fs::remove_file(e.path());
         }
     }
@@ -248,6 +280,7 @@ fn remove_connection(conn_path: &Path) {
     // The sockets' base is in the file: beside it, or in a short folder of its own.
     let ip = env::read_json(conn_path).get("ip").str().map(PathBuf::from).filter(|p| p.is_absolute());
     let _ = std::fs::remove_file(conn_path);
+    let _ = std::fs::remove_file(conn_path.with_extension("sockets"));
     let base = ip.unwrap_or_else(|| conn_path.with_extension(""));
     for port in 1..=5 {
         let _ = std::fs::remove_file(format!("{}:{port}", base.display()));
@@ -257,11 +290,6 @@ fn remove_connection(conn_path: &Path) {
     if let Some(dir) = base.parent().filter(|d| d.file_name().is_some_and(|n| n.to_string_lossy().starts_with("corral-"))) {
         let _ = std::fs::remove_dir(dir);
     }
-}
-
-fn free_ports(n: usize) -> Result<Vec<u16>, String> {
-    let listeners = (0..n).map(|_| TcpListener::bind("127.0.0.1:0")).collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-    listeners.iter().map(|l| l.local_addr().map(|a| a.port()).map_err(|e| e.to_string())).collect()
 }
 
 fn connect(child: &mut Child, addr: &str, kind: &str, identity: Option<&[u8]>, end: Instant) -> Result<Socket, String> {
@@ -1477,22 +1505,34 @@ mod tests {
         let (transport, ip, ports) = endpoints(Path::new("/home/ana/.local/state/corral/ark/kernel-1a2b3c4d.json")).unwrap();
         assert_eq!((transport, ip.as_str(), ports), ("ipc", "/home/ana/.local/state/corral/ark/kernel-1a2b3c4d", vec![1, 2, 3, 4, 5]));
         // A path too long for a socket address: still Unix sockets, in a new short
-        // folder of their own, made 700; it goes with the connection.
-        let long = format!("/home/{}/.local/state/corral/ark/kernel-1a2b3c4d.json", "a".repeat(80));
-        let (transport, ip, ports) = endpoints(Path::new(&long)).unwrap();
+        // folder of their own, made 700, named in a note beside the connection file;
+        // both go with the connection.
+        let state = std::env::temp_dir().join(format!("corral-long-{}", std::process::id())).join("a".repeat(90));
+        std::fs::create_dir_all(&state).unwrap();
+        let conn = state.join("kernel-1a2b3c4d.json");
+        let (transport, ip, ports) = endpoints(&conn).unwrap();
         assert_eq!((transport, ports), ("ipc", vec![1, 2, 3, 4, 5]));
         assert!(ip.len() + 2 <= SOCKET_PATH_MAX, "{ip}");
         let dir = Path::new(&ip).parent().unwrap().to_path_buf();
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
         assert!(dir.file_name().unwrap().to_string_lossy().starts_with("corral-"));
-        let conn = std::env::temp_dir().join(format!("corral-conn-{}.json", std::process::id()));
+        assert_eq!(std::fs::read_to_string(conn.with_extension("sockets")).unwrap(), dir.to_string_lossy());
         std::fs::write(&conn, format!(r#"{{"ip":"{ip}","transport":"ipc"}}"#)).unwrap();
         std::fs::write(format!("{ip}:1"), "").unwrap(); // a socket Ark left
         link_for_jupyter(Path::new(&ip)).unwrap();
         assert_eq!(std::fs::read_link(format!("{ip}-2")).unwrap(), Path::new("kernel:2"));
         remove_connection(&conn);
-        assert!(!conn.exists() && !dir.exists(), "the connection file and its folder go");
+        assert!(!conn.exists() && !conn.with_extension("sockets").exists() && !dir.exists(), "the connection file, its note and its folder go");
+        // With jupyter-console nothing of Corral's sees the end: the next console's
+        // cleanup finds the note without its connection file, and takes the folder.
+        let conn2 = state.join("kernel-5e6f7a8b.json");
+        let (_, ip2, _) = endpoints(&conn2).unwrap();
+        let dir2 = Path::new(&ip2).parent().unwrap().to_path_buf();
+        drop(std::os::unix::net::UnixListener::bind(format!("{ip2}:1")).unwrap()); // Ark's, nobody behind it now
+        remove_stale_sockets(&state);
+        assert!(!dir2.exists() && !conn2.with_extension("sockets").exists(), "the note's folder goes once nothing answers");
+        let _ = std::fs::remove_dir_all(state.parent().unwrap());
     }
 
     #[test]

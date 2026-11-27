@@ -105,11 +105,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 // Unix sockets here too, as with Corral's own console: on TCP any user on
                 // the machine could read Ark's output. Fixed ports, so the links that let
                 // jupyter_client's names meet Ark's are known before it starts.
-                if let Some(base) = crate::ark::socket_base(&conn).filter(|b| crate::ark::link_for_jupyter(b).is_ok()) {
-                    c.arg("--ConnectionFileMixin.transport=ipc").arg(format!("--ConnectionFileMixin.ip={}", base.display()));
-                    for (port, n) in [("shell_port", 1), ("iopub_port", 2), ("stdin_port", 3), ("control_port", 4), ("hb_port", 5)] {
-                        c.arg(format!("--ConnectionFileMixin.{port}={n}"));
-                    }
+                // Never TCP: if there is nowhere private for the sockets, it doesn't start.
+                crate::ark::remove_stale_sockets(&folder);
+                let base = crate::ark::socket_base(&conn).ok_or_else(crate::ark::no_private_sockets)?;
+                crate::ark::link_for_jupyter(&base)?;
+                c.arg("--ConnectionFileMixin.transport=ipc").arg(format!("--ConnectionFileMixin.ip={}", base.display()));
+                for (port, n) in [("shell_port", 1), ("iopub_port", 2), ("stdin_port", 3), ("control_port", 4), ("hb_port", 5)] {
+                    c.arg(format!("--ConnectionFileMixin.{port}={n}"));
                 }
                 c
             }
