@@ -79,22 +79,22 @@
     </figure>
 <h2>The palette</h2>
     <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Results:</code>, <code>Agent:</code>, <code>Theme:</code>…), so typing a category lists just that, and so does a group's name (<code>security</code>). Settings show which value is in effect with "●". Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing security: 15 of 106 entries, the Security group, with the standard profile, the project folder's sensitive profile, asking before each request, full results and 90 days of audit log marked as in effect">
+    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing security: 15 of 106 entries, the Security group. The console runs in a sensitive project, so the sensitive profile and structure-only results are marked active, the standard profile and full results global, and asking before each request and 90 days of audit log in effect">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>
       <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">security</span><span style="color:#ffc799;">▏</span>                                                                           <span style="color:#5c5c5c;">15 of 106</span>
 <span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
   <span style="color:#a0a0a0;font-weight:700;">SECURITY</span>
 <span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Open profile: run without asking, full results </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                               </span>
-   <span style="color:#ffffff;">Standard profile: ask before each request, full results  </span><span style="color:#ffc799;">● active</span>
-   <span style="color:#ffffff;">Sensitive profile: ask, results without values</span>
+   <span style="color:#ffffff;">Standard profile: ask before each request, full results  </span><span style="color:#ffc799;">● global</span>
+   <span style="color:#ffffff;">Sensitive profile: ask, results without values  </span><span style="color:#ffc799;">● active</span>
    <span style="color:#ffffff;">Project clinic: sensitive in every session  </span><span style="color:#ffc799;">●</span>
    <span style="color:#ffffff;">Project clinic: remove its profile (back to standard)</span>
    <span style="color:#ffffff;">Requests: ask before each one  </span><span style="color:#ffc799;">●</span>
    <span style="color:#ffffff;">Requests: run without asking</span>
    <span style="color:#ffffff;">Requests: blocked, agents can&#x27;t run code</span>
-   <span style="color:#ffffff;">Results: full  </span><span style="color:#ffc799;">●</span>
+   <span style="color:#ffffff;">Results: full  </span><span style="color:#ffc799;">● global</span>
    <span style="color:#ffffff;">Results: you review them first</span>
-   <span style="color:#ffffff;">Results: only the structure, without values</span>
+   <span style="color:#ffffff;">Results: only the structure, without values  </span><span style="color:#ffc799;">● active</span>
    <span style="color:#ffffff;">Audit: keep the log 30 days</span>
    <span style="color:#ffffff;">Audit: keep the log 90 days (the default)  </span><span style="color:#ffc799;">●</span>
    <span style="color:#ffffff;">Audit: keep the log a year</span>
@@ -255,15 +255,15 @@
     <p>On terminals that draw images, <kbd>ctrl+b</kbd> <kbd>f</kbd> shows plots inside herdr instead (see <a href="plots.html">Plots and Mirador</a>). That viewer has three keys: <kbd>←</kbd> <kbd>→</kbd> go through the history, <kbd>o</kbd> opens Mirador in the browser, and <kbd>q</kbd> closes it.</p>
 
     <h2 id="security">Security and the agent</h2>
-    <p>These are in the palette, without a key; type <code>security</code> or <code>agent</code> to list them. The palette marks what is in effect with "●": the profile says "● active", or "● global" when the project of the console in view has a stricter one, which is then the one active (<a href="profiles.html">Profiles</a>). A mix of the two settings that is none of the three profiles shows as "Profile: custom (…)". What each one means is in the <a href="security.html">Security model</a>.</p>
+    <p>These are in the palette, without a key; type <code>security</code> or <code>agent</code> to list them. The palette marks what is in effect: the profile the console in view runs by says "● active", and each setting's value "●". When the console runs by stricter rules than the global ones (its project's profile, or its own sensitive mark), what it runs by says "● active" and the global value "● global" (<a href="profiles.html">Profiles</a>). A mix of the two settings that is none of the three profiles shows as "Profile: custom (…)". What each one means is in the <a href="security.html">Security model</a>.</p>
     <table>
     <thead><tr><th>In the palette</th><th>What it sets</th></tr></thead>
     <tbody>
     <tr><td>Open profile: run without asking, full results</td><td><code>corral profile open</code></td></tr>
     <tr><td>Standard profile: ask before each request, full results</td><td><code>corral profile standard</code>, the default</td></tr>
     <tr><td>Sensitive profile: ask, results without values</td><td><code>corral profile sensitive</code></td></tr>
-    <tr><td>Project <i>folder</i>: sensitive in every session</td><td><code>corral profile sensitive --project</code>, for the folder the console in view started in; only with a console open</td></tr>
-    <tr><td>Project <i>folder</i>: remove its profile</td><td><code>corral profile --project --clear</code>; only when that folder has a profile of its own</td></tr>
+    <tr><td>Project <i>folder</i>: sensitive in every session</td><td><code>corral profile sensitive --project</code>, for the folder the console in view started in; only with a console open in this workspace</td></tr>
+    <tr><td>Project <i>folder</i>: remove its profile</td><td><code>corral profile --project --clear</code>; only when that folder has a profile of its own, and it says what applies after it</td></tr>
     <tr><td>Requests: ask before each one</td><td><code>corral config agents ask</code>, the default</td></tr>
     <tr><td>Requests: run without asking</td><td><code>corral config agents on</code></td></tr>
     <tr><td>Requests: blocked, agents can't run code</td><td><code>corral config agents off</code></td></tr>
