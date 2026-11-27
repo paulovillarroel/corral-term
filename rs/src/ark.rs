@@ -157,6 +157,36 @@ pub(crate) fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
     Ok(vec![("R_HOME".into(), home), ("LD_LIBRARY_PATH".into(), lib)])
 }
 
+/// Where Ark listens. Unix sockets next to the connection file, in Corral's own folder
+/// (700), so only this user's processes reach them. The key signs each message but
+/// doesn't hide it: on TCP, any user on the machine can subscribe to IOPub on
+/// 127.0.0.1 and read the code and everything R prints. TCP only when that path is too
+/// long for a socket address (107 bytes, and Ark adds ":N").
+fn endpoints(conn_path: &Path) -> Result<(&'static str, String, Vec<u16>), String> {
+    let base = conn_path.with_extension("").to_string_lossy().into_owned();
+    if base.starts_with('/') && base.len() + 2 <= 100 {
+        return Ok(("ipc", base, (1..=5).collect()));
+    }
+    Ok(("tcp", "127.0.0.1".into(), free_ports(5)?))
+}
+
+/// Sockets a crashed Ark left behind (kernel-ID:N, beside kernel-ID.json): once the
+/// connection file is gone (two days) and nothing answers on them, they go too.
+fn remove_stale_sockets(folder: &Path) {
+    use std::os::unix::fs::FileTypeExt;
+    let Ok(entries) = std::fs::read_dir(folder) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some((base, _)) = name.split_once(':') else { continue };
+        if !base.starts_with("kernel-") || !e.file_type().map(|t| t.is_socket()).unwrap_or(false) {
+            continue;
+        }
+        if !folder.join(format!("{base}.json")).exists() && std::os::unix::net::UnixStream::connect(e.path()).is_err() {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
 fn free_ports(n: usize) -> Result<Vec<u16>, String> {
     let listeners = (0..n).map(|_| TcpListener::bind("127.0.0.1:0")).collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
     listeners.iter().map(|l| l.local_addr().map(|a| a.port()).map_err(|e| e.to_string())).collect()
@@ -221,7 +251,7 @@ fn first_line(code: &str) -> String {
 }
 
 fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>, crashed_at: Option<f64>) -> Result<Kernel, String> {
-    let ports = free_ports(5)?;
+    let (transport, ip, ports) = endpoints(conn_path)?;
     let key = env::secret_hex(16)?;
     let conn = obj(vec![
         ("shell_port", (ports[0] as f64).into()),
@@ -229,9 +259,9 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>, crashed_at: Option<f6
         ("stdin_port", (ports[2] as f64).into()),
         ("control_port", (ports[3] as f64).into()),
         ("hb_port", (ports[4] as f64).into()),
-        ("ip", "127.0.0.1".into()),
+        ("ip", ip.into()),
         ("key", key.as_str().into()),
-        ("transport", "tcp".into()),
+        ("transport", transport.into()),
         ("signature_scheme", "hmac-sha256".into()),
         ("kernel_name", "ark".into()),
     ]);
@@ -1323,6 +1353,7 @@ pub fn run() -> Result<(), String> {
     let folder = env::state_dir().join("ark");
     let _ = std::fs::create_dir_all(&folder);
     env::remove_old(&folder, "json", 2 * 86400);
+    remove_stale_sockets(&folder);
     let conn_path = folder.join(format!("kernel-{}.json", env::random_hex(4)));
     let (tx, rx) = mpsc::channel();
     let kernel = start(&ark, &conn_path, &tx, None)?;
@@ -1365,6 +1396,38 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ark_listens_on_unix_sockets_in_corrals_folder() {
+        let (transport, ip, ports) = endpoints(Path::new("/home/ana/.local/state/corral/ark/kernel-1a2b3c4d.json")).unwrap();
+        assert_eq!((transport, ip.as_str(), ports), ("ipc", "/home/ana/.local/state/corral/ark/kernel-1a2b3c4d", vec![1, 2, 3, 4, 5]));
+        // A path too long for a socket address: TCP on 127.0.0.1, five free ports.
+        let long = format!("/home/{}/.local/state/corral/ark/kernel-1a2b3c4d.json", "a".repeat(80));
+        let (transport, ip, ports) = endpoints(Path::new(&long)).unwrap();
+        assert_eq!((transport, ip.as_str(), ports.len()), ("tcp", "127.0.0.1", 5));
+        assert!(ports.iter().all(|&p| p > 1024));
+    }
+
+    #[test]
+    fn sockets_a_crash_left_go_once_their_file_does() {
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("corral-ark-sockets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let live = UnixListener::bind(dir.join("kernel-aaaa:1")).unwrap(); // a running Ark
+        drop(UnixListener::bind(dir.join("kernel-bbbb:1")).unwrap()); // a crashed one, file gone
+        drop(UnixListener::bind(dir.join("kernel-cccc:1")).unwrap()); // a crashed one, file kept
+        std::fs::write(dir.join("kernel-cccc.json"), "{}").unwrap();
+        std::fs::write(dir.join("notes:1"), "").unwrap(); // not Ark's
+        remove_stale_sockets(&dir);
+        let left = |n: &str| dir.join(n).exists();
+        assert!(left("kernel-aaaa:1"), "something answers on it");
+        assert!(!left("kernel-bbbb:1"), "nothing answers and its file is gone");
+        assert!(left("kernel-cccc:1"), "its connection file is still there");
+        assert!(left("notes:1"));
+        drop(live);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_crash_says_why_in_words() {

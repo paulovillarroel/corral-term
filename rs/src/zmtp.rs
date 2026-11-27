@@ -1,17 +1,77 @@
-//! Just enough ZeroMQ (ZMTP 3.0 over TCP, NULL security) and Jupyter messaging
-//! to talk to a kernel: DEALERs for the shell, stdin and control channels and a
-//! SUB for IOPub.
+//! Just enough ZeroMQ (ZMTP 3.0 over a Unix socket or TCP, NULL security) and
+//! Jupyter messaging to talk to a kernel: DEALERs for the shell, stdin and control
+//! channels and a SUB for IOPub.
 
 use crate::json::{self, obj, Value};
 use crate::sha256::hmac_hex;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
+use std::os::unix::net::UnixStream;
+use std::time::Duration;
 
 /// How long a kernel has to answer the ZMTP handshake.
-const HANDSHAKE: std::time::Duration = std::time::Duration::from_secs(10);
+const HANDSHAKE: Duration = Duration::from_secs(10);
+
+/// A connection to one of the kernel's channels. An address that is a path is a Unix
+/// socket ("ipc" in the connection file; Ark names it ip:port, as it does a TCP
+/// address): only processes that can open its folder reach it. Anything else is TCP.
+enum Stream {
+    Tcp(TcpStream),
+    Unix(UnixStream),
+}
+
+impl Stream {
+    fn connect(addr: &str) -> io::Result<Stream> {
+        if addr.starts_with('/') {
+            return Ok(Stream::Unix(UnixStream::connect(addr)?));
+        }
+        let s = TcpStream::connect(addr)?;
+        s.set_nodelay(true)?;
+        Ok(Stream::Tcp(s))
+    }
+
+    fn set_read_timeout(&self, limit: Option<Duration>) -> io::Result<()> {
+        match self {
+            Stream::Tcp(s) => s.set_read_timeout(limit),
+            Stream::Unix(s) => s.set_read_timeout(limit),
+        }
+    }
+
+    fn try_clone(&self) -> io::Result<Stream> {
+        Ok(match self {
+            Stream::Tcp(s) => Stream::Tcp(s.try_clone()?),
+            Stream::Unix(s) => Stream::Unix(s.try_clone()?),
+        })
+    }
+}
+
+impl Read for Stream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Stream::Tcp(s) => s.read(buf),
+            Stream::Unix(s) => s.read(buf),
+        }
+    }
+}
+
+impl Write for Stream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Stream::Tcp(s) => s.write(buf),
+            Stream::Unix(s) => s.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Stream::Tcp(s) => s.flush(),
+            Stream::Unix(s) => s.flush(),
+        }
+    }
+}
 
 pub struct Socket {
-    stream: TcpStream,
+    stream: Stream,
 }
 
 impl Socket {
@@ -28,9 +88,8 @@ impl Socket {
 
     /// The handshake has `limit` to finish: a kernel that stalls in the middle
     /// of it is an error, not a console that waits forever.
-    fn connect_within(addr: &str, socket_type: &str, identity: Option<&[u8]>, limit: std::time::Duration) -> io::Result<Socket> {
-        let mut stream = TcpStream::connect(addr)?;
-        stream.set_nodelay(true)?;
+    fn connect_within(addr: &str, socket_type: &str, identity: Option<&[u8]>, limit: Duration) -> io::Result<Socket> {
+        let mut stream = Stream::connect(addr)?;
         stream.set_read_timeout(Some(limit))?;
         // Greeting: signature, version 3.0, mechanism NULL, as-server 0, filler.
         let mut greeting = [0u8; 64];
@@ -296,7 +355,7 @@ mod tests {
     }
 
     /// One frame as the peer reads it, decoded on its own (RFC 23).
-    fn frame(s: &mut TcpStream) -> (u8, Vec<u8>) {
+    fn frame(s: &mut impl Read) -> (u8, Vec<u8>) {
         let mut flags = [0u8; 1];
         s.read_exact(&mut flags).unwrap();
         let len = if flags[0] & 0x02 != 0 {
@@ -313,7 +372,7 @@ mod tests {
         (flags[0], body)
     }
 
-    fn put(s: &mut TcpStream, flags: u8, body: &[u8]) {
+    fn put(s: &mut impl Write, flags: u8, body: &[u8]) {
         s.write_all(&[flags]).unwrap();
         if flags & 0x02 != 0 {
             s.write_all(&(body.len() as u64).to_be_bytes()).unwrap();
@@ -324,7 +383,7 @@ mod tests {
     }
 
     /// A message's frames, as the peer reads them, until one without MORE.
-    fn message(s: &mut TcpStream) -> Vec<(u8, Vec<u8>)> {
+    fn message(s: &mut impl Read) -> Vec<(u8, Vec<u8>)> {
         let mut out = vec![frame(s)];
         while out.last().unwrap().0 & 0x01 != 0 {
             out.push(frame(s));
@@ -350,6 +409,10 @@ mod tests {
     /// The kernel's side of the handshake: returns our greeting and READY.
     fn handshake(s: &mut TcpStream) -> ([u8; 64], Vec<u8>) {
         s.set_read_timeout(WAIT).unwrap();
+        handshake_on(s)
+    }
+
+    fn handshake_on(s: &mut (impl Read + Write)) -> ([u8; 64], Vec<u8>) {
         let mut theirs = [0u8; 64];
         s.read_exact(&mut theirs).unwrap();
         let mut ours = [0u8; 64];
@@ -385,6 +448,34 @@ mod tests {
             sock.stream.set_read_timeout(WAIT).unwrap();
         }
         (sock, peer)
+    }
+
+    #[test]
+    fn a_path_is_a_unix_socket() {
+        // Ark's "ipc" transport: the same handshake and frames, on a socket in a folder.
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("corral-zmtp-unix-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("kernel-1a2b3c4d:1");
+        let l = UnixListener::bind(&path).unwrap();
+        let peer = thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            s.set_read_timeout(WAIT).unwrap();
+            let (_, ready) = handshake_on(&mut s);
+            let got = message(&mut s);
+            put(&mut s, 0x01, b"one");
+            put(&mut s, 0x00, b"two");
+            (ready, got)
+        });
+        let mut sock = Socket::connect_as(path.to_str().unwrap(), "DEALER", Some(b"corral-shell")).unwrap();
+        sock.stream.set_read_timeout(WAIT).unwrap();
+        sock.send(&[b"hello", b"kernel"]).unwrap();
+        assert_eq!(sock.recv().unwrap(), vec![b"one".to_vec(), b"two".to_vec()]);
+        let (ready, got) = peer.join().unwrap();
+        assert!(properties(&ready).contains(&("Identity".to_string(), b"corral-shell".to_vec())));
+        assert_eq!(got.into_iter().map(|(_, b)| b).collect::<Vec<_>>(), vec![b"hello".to_vec(), b"kernel".to_vec()]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
