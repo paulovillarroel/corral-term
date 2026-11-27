@@ -86,7 +86,7 @@
   <span style="color:#a0a0a0;font-weight:700;">SECURITY</span>
 <span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Open profile: run without asking, full results </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                               </span>
    <span style="color:#ffffff;">Standard profile: ask before each request, full results  </span><span style="color:#ffc799;">● global</span>
-   <span style="color:#ffffff;">Sensitive profile: ask, results without values  </span><span style="color:#ffc799;">● active</span>
+   <span style="color:#ffffff;">Sensitive profile: ask, results without values, no connections of its own  </span><span style="color:#ffc799;">● active</span>
    <span style="color:#ffffff;">Project clinic: sensitive in every session  </span><span style="color:#ffc799;">●</span>
    <span style="color:#ffffff;">Project clinic: remove its profile (back to standard)</span>
    <span style="color:#ffffff;">Requests: ask before each one  </span><span style="color:#ffc799;">●</span>
@@ -261,7 +261,7 @@
     <tbody>
     <tr><td>Open profile: run without asking, full results</td><td><code>corral profile open</code></td></tr>
     <tr><td>Standard profile: ask before each request, full results</td><td><code>corral profile standard</code>, the default</td></tr>
-    <tr><td>Sensitive profile: ask, results without values</td><td><code>corral profile sensitive</code></td></tr>
+    <tr><td>Sensitive profile: ask, results without values, no connections of its own</td><td><code>corral profile sensitive</code> (<a href="profiles.html#local-only">no connections of its own</a>)</td></tr>
     <tr><td>Project <i>folder</i>: sensitive in every session</td><td><code>corral profile sensitive --project</code>, for the folder the console in view started in; only with a console open in this workspace</td></tr>
     <tr><td>Project <i>folder</i>: remove its profile</td><td><code>corral profile --project --clear</code>; only when that folder has a profile of its own, and it says what applies after it</td></tr>
     <tr><td>Requests: ask before each one</td><td><code>corral config agents ask</code>, the default</td></tr>
