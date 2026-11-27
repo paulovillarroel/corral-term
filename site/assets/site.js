@@ -25,6 +25,7 @@ const NAV = [
     ["profiles.html", "Security profiles"],
     ["agents.html", "Working with agents"],
     ["security.html", "Security model"],
+    ["threats.html", "Threat model"],
   ]],
   ["Configure", [
     ["themes.html", "Themes"],

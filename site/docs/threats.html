@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- Paint the page's own background from the first frame (no white flash between pages);
+     the saved theme applies before the stylesheets load. -->
+<style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<title>Threat model · Corral docs</title>
+<meta name="description" content="What Corral protects, from whom and how: the threats it guards against and what is left to the agent's permissions, the machine and your organization; the channels between its parts; the supply chain.">
+<link rel="canonical" href="https://corral-term.dev/docs/threats.html">
+<!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Corral">
+<meta property="og:title" content="Threat model · Corral docs">
+<meta property="og:description" content="What Corral protects, from whom and how: the threats it guards against and what is left to the agent's permissions, the machine and your organization; the channels between its parts; the supply chain.">
+<meta property="og:url" content="https://corral-term.dev/docs/threats.html">
+<meta property="og:image" content="https://corral-term.dev/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Corral, an agentic Data Science IDE that opens in milliseconds: R, Python and SQL in your terminal, next to your agent">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- Vercel Web Analytics: page views, no cookies. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Speed Insights: real visitors' load times. -->
+<script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs · 0.1.28</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Threat model</h1>
+    <p class="intro">What Corral protects, from whom, how, and what it leaves to the agent's own permissions, to the machine and to your organization. The <a href="security.html">Security model</a> explains each control; this page sets them against the threats.</p>
+
+    <h2 id="assets">What it protects</h2>
+    <ul>
+      <li><strong>Your data.</strong> The objects in your R and Python sessions, and the copies Corral keeps of them on disk: previews, plots, checkpoints, full outputs.</li>
+      <li><strong>Your code.</strong> Scripts, drafts and the history of what you typed.</li>
+      <li><strong>The rules.</strong> The access level, the output mode, profiles and sensitive sessions, and the audit log that records how they were used.</li>
+    </ul>
+
+    <h2 id="actors">Who it guards against</h2>
+    <table>
+    <thead><tr><th>Who</th><th>What they can do</th></tr></thead>
+    <tbody>
+    <tr><td>Your agent, doing its job</td><td>Writes code and reads results; it can misread what you asked or make a mistake.</td></tr>
+    <tr><td>Your agent, steered by what it read</td><td>A file, a web page or a package's documentation with instructions in it (prompt injection) can lead it to go after values or the rules, without anyone meaning it.</td></tr>
+    <tr><td>Another user on the same machine</td><td>On a shared server: lists processes, connects to ports on 127.0.0.1, reads any file open to them.</td></tr>
+    <tr><td>A web page in your browser</td><td>Sends requests to 127.0.0.1 from your browser; it can't read the answers unless the server lets it.</td></tr>
+    <tr><td>Another program running as you</td><td>Anything your user can do: read Corral's files and keys, change its settings, type into panes. An agent with an unrestricted shell is one.</td></tr>
+    <tr><td>Whoever tampers with a download</td><td>Changes Corral's package or one of its tools on the way to your machine.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="threats">Threats</h2>
+    <table>
+    <thead><tr><th>Threat</th><th>How</th><th>What stops it</th><th>What is left</th></tr></thead>
+    <tbody>
+    <tr><td>Code you didn't see runs in your session</td><td>The agent calls <code>corral eval</code></td><td>With <code>ask</code>, a popup shows the exact code before it runs, hidden characters written out (<a href="security.html#access-levels">access levels</a>); one request at a time; every request in the audit log</td><td>With <code>on</code>, you watch it run without reading it first. Code an agent runs with its own shell, outside Corral, isn't covered.</td></tr>
+    <tr><td>Values reach the model provider</td><td>The output of approved code goes back to the agent</td><td>Restricted output and review mode; sensitive sessions and projects; plots and previews held back</td><td>The agent writes the code, so it can put a value where the structure still shows: an error's first line, an object's name. Reading the code is what stops that.</td></tr>
+    <tr><td>Data leaves through the code itself</td><td>Approved code writes a file the agent reads, or uses the network</td><td>Approval shows the code first</td><td>Corral is not a sandbox: approved code can do whatever your user can. Limiting the network is the machine's job.</td></tr>
+    <tr><td>Text the agent read steers it</td><td>Instructions hidden in a file, a web page or a package's docs</td><td>Approval; restricted output; <code>corral context</code> gives the agent the rules up front, so it doesn't probe them</td><td>A harmful request that looks harmless and gets approved.</td></tr>
+    <tr><td>The rules are loosened</td><td>The agent runs <code>corral config</code> or <code>corral profile</code></td><td>From an agent's pane, or a shell without a terminal, loosening waits for your yes in a popup; the audit log records the request either way</td><td>An agent with an unrestricted shell can edit <code>config.json</code>, write the popup's answer itself or run the palette's action through herdr. Its own permissions close this (<a href="security.html#for-sensitive-data">how</a>).</td></tr>
+    <tr><td>Another user reads or drives your sessions</td><td>Reading Corral's files, connecting to its channels</td><td>Corral's folder is 700 and fixed if something opens it up; Ark's sockets are inside it; every local server asks for a token (<a href="#channels">below</a>)</td><td>The machine's administrator, and backups an administrator makes.</td></tr>
+    <tr><td>A web page talks to Corral's local servers</td><td>Requests from your browser to 127.0.0.1</td><td>Each server asks for a token the page can't know; Mirador also checks the <code>Host</code> header, against DNS rebinding</td><td>None we know of.</td></tr>
+    <tr><td>A program running as you acts in your name</td><td>It reads the keys and the files, or types into panes</td><td>Nothing in Corral: whatever runs as you has your rights</td><td>Give agents narrow permissions; for sensitive data, a separate machine or virtual machine.</td></tr>
+    <tr><td>A tampered download</td><td>A changed package or tool</td><td>Every download is checked by SHA-256 before use, and Corral's package by its build provenance attestation too; no sudo (<a href="#supply-chain">below</a>)</td><td>R and Python packages you install yourself, under their repositories' own checks.</td></tr>
+    <tr><td>Copies on disk outlive the work</td><td>Checkpoints, full outputs, previews, history</td><td>The 700 folder; each kind is deleted on a schedule (<a href="security.html#on-disk">what stays on your disk</a>); <code>corral config checkpoints off</code></td><td>Corral doesn't encrypt them, backups and snapshots copy them, and deleting a file doesn't wipe the disk. Disk encryption covers a lost or stolen machine.</td></tr>
+    <tr><td>The audit log is changed</td><td>A program running as you edits or deletes <code>audit.jsonl</code></td><td>The 700 folder keeps other users out</td><td>Your user can change it: it is an operational record, not a tamper-evident one.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="channels">Between Corral's parts</h2>
+    <p>Corral's processes talk to each other on your machine. Each channel is closed to other users and to web pages; a program running as you can use all of them, as it can everything else.</p>
+    <table>
+    <thead><tr><th>Channel</th><th>What goes through it</th><th>How it is closed</th></tr></thead>
+    <tbody>
+    <tr><td>An agent's request to the console</td><td>The code, in a file in the session's folder; herdr then types a call to it in the console</td><td>Corral's folder (700) and herdr's socket, which only you can open (0600)</td></tr>
+    <tr><td>The R console and Ark</td><td>Code, output and results, as Jupyter messages over ZeroMQ</td><td>Unix sockets in Corral's folder. Each message is signed with HMAC-SHA256, with a 128-bit key from the system's random source, new each time R starts, kept in a file only you can read. With the Jupyter console frontend (<code>ark_frontend jupyter</code>), or a folder path too long for a socket, Ark falls back to TCP on 127.0.0.1, where another user can read its output: the key signs messages, it doesn't hide them.</td></tr>
+    <tr><td>R's plots</td><td>httpgd's server, which Mirador and the plot watcher read</td><td>127.0.0.1 and httpgd's own random token</td></tr>
+    <tr><td>Python's plots</td><td>Corral's plot server inside the Python session</td><td>127.0.0.1 and a 96-bit random token, compared in constant time</td></tr>
+    <tr><td>Mirador</td><td>Plots, tables and variables, to your browser</td><td>127.0.0.1, a 96-bit token compared in constant time, and the <code>Host</code> check. The token is in <code>mirador.json</code>, in Corral's folder.</td></tr>
+    <tr><td>Approvals</td><td>Your answer in a popup</td><td>A file in Corral's folder</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="supply-chain">Supply chain</h2>
+    <ul>
+      <li><strong>Corral itself.</strong> One Rust binary with no dependencies beyond Rust's standard library: <code>Cargo.lock</code> lists only Corral.</li>
+      <li><strong>Each release.</strong> Built by GitHub Actions with <code>--locked</code>, in a workflow whose actions are pinned to a commit, since a tag can be moved. The package gets a SHA-256 and a build provenance attestation.</li>
+      <li><strong>The installer.</strong> Checks every download before using it: Corral's package by its SHA-256 and, with the GitHub CLI, its attestation; Fresh, DuckDB, Air, Ark, herdr and uv by SHA-256s written into Corral's code. It never uses sudo (<a href="install.html#how-the-download-is-checked">how the download is checked</a>).</li>
+      <li><strong>What it can't vouch for.</strong> The packages the consoles use come from their repositories, under those repositories' own checks: for Python, IPython, cloudpickle, pyarrow and duckdb from PyPI through uv (the version your project pins wins); for R, jsonlite, httpgd and the rest from CRAN or Posit's package manager; and any package you install. Also skills from others (<a href="security.html#for-sensitive-data">vet them before they load</a>) and the agent itself.</li>
+    </ul>
+
+    <div class="pager"></div>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R, Python and SQL, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>
