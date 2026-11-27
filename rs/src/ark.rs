@@ -183,15 +183,18 @@ pub(crate) fn no_private_sockets() -> String {
 }
 
 /// A new private folder with a short path: created here (so nobody else made it), 700,
-/// under a parent nobody else can swap it in: sticky like /tmp, or ours with no write
-/// access for group or others.
+/// under a parent nobody else can swap it out of: that parent and every folder above it
+/// belong to us or to root, and others can't write to them unless they are sticky (as
+/// /tmp is). Candidates: $XDG_RUNTIME_DIR, $TMPDIR, /tmp.
 fn short_socket_dir() -> Option<PathBuf> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
     let me = std::fs::metadata("/proc/self").ok()?.uid();
     let parents = [std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))];
     parents.into_iter().flatten().filter(|p| p.is_absolute()).find_map(|parent| {
-        let m = std::fs::metadata(&parent).ok()?;
-        if !(m.is_dir() && (m.mode() & 0o1000 != 0 || (m.uid() == me && m.mode() & 0o022 == 0))) {
+        let safe = parent.ancestors().all(|a| std::fs::metadata(a).is_ok_and(|m| {
+            m.is_dir() && (m.uid() == me || m.uid() == 0) && (m.mode() & 0o022 == 0 || m.mode() & 0o1000 != 0)
+        }));
+        if !safe {
             return None;
         }
         let dir = parent.join(format!("corral-{}", env::random_hex(4)));
