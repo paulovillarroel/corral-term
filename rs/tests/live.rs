@@ -563,7 +563,7 @@ fn a_sensitive_project_applies_to_its_sessions() {
     let vars = || String::from_utf8_lossy(&live.corral(&["vars", "--json"]).stdout).to_string();
     // Before: the value's preview reaches the agent.
     wait_for(Duration::from_secs(10), "v's preview", || vars().contains("patient-4711"));
-    live.wait_screen(&live.vars, &["open"]);
+    live.wait_screen(&live.vars, &["profile: open"]);
     // Tightening never asks.
     live.run("corral", &["profile", "sensitive", "--project", proj]);
     let shown = live.run("corral", &["profile", "--json", "--project", proj]);
@@ -580,7 +580,7 @@ fn a_sensitive_project_applies_to_its_sessions() {
     let listed = vars();
     assert!(listed.contains("\"v\"") && !listed.contains("patient-4711"), "{listed}");
     // The variables pane says so, in its header.
-    live.wait_screen(&live.vars, &["sensitive"]);
+    live.wait_screen(&live.vars, &["profile: sensitive"]);
     // Loosening it from a shell without a terminal, as an agent's, needs the user: refused.
     let out = live.corral(&["profile", "--project", "--clear", proj]);
     assert!(!out.status.success(), "an agent removed the project's profile: {}", String::from_utf8_lossy(&out.stdout));
