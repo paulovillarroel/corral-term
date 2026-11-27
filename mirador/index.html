@@ -673,9 +673,19 @@ function renderSizeMenu() {
   $("#plotsize").innerHTML = opts.map((v) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${v === "window" ? t("Window") : esc(v.replace("x", " × "))}</option>`).join("")
     + `<option value="other">${t("Other size…")}</option>`;
 }
+// Opened with the mouse, the menu gives the keys back to Mirador (← → between plots)
+// once a size is chosen, or at the next key if it closed without one. Reached with
+// the keyboard, it keeps them: its arrows choose a size, as any menu's do.
+let sizeByMouse = false;
+$("#plotsize").addEventListener("pointerdown", () => { sizeByMouse = true; });
+$("#plotsize").addEventListener("blur", () => { sizeByMouse = false; });
+$("#plotsize").addEventListener("keydown", (e) => {
+  if (!sizeByMouse || ["ArrowUp", "ArrowDown", "Enter", " ", "Tab", "Home", "End", "PageUp", "PageDown"].includes(e.key)) return;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
+  e.target.blur(); // the key goes on to Mirador's handler, with the menu no longer focused
+});
 $("#plotsize").addEventListener("change", async (e) => {
-  // Once chosen, the keys are Mirador's again (← → between plots).
-  e.target.blur();
+  if (sizeByMouse) e.target.blur();
   let size = e.target.value;
   if (size === "other") {
     const f = fixedSize();
