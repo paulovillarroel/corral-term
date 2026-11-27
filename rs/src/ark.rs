@@ -187,6 +187,16 @@ fn remove_stale_sockets(folder: &Path) {
     }
 }
 
+/// A connection file and the sockets beside it, once their Ark has ended (Ark leaves
+/// its sockets when it is stopped).
+fn remove_connection(conn_path: &Path) {
+    let _ = std::fs::remove_file(conn_path);
+    let base = conn_path.with_extension("");
+    for port in 1..=5 {
+        let _ = std::fs::remove_file(format!("{}:{port}", base.display()));
+    }
+}
+
 fn free_ports(n: usize) -> Result<Vec<u16>, String> {
     let listeners = (0..n).map(|_| TcpListener::bind("127.0.0.1:0")).collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
     listeners.iter().map(|l| l.local_addr().map(|a| a.port()).map_err(|e| e.to_string())).collect()
@@ -1254,7 +1264,7 @@ impl Console {
                 kept.push_back(ev);
             }
         }
-        let _ = std::fs::remove_file(&self.conn_path);
+        remove_connection(&self.conn_path);
         self.conn_path = self.conn_path.with_file_name(format!("kernel-{}.json", env::random_hex(4)));
         self.k = start(&self.ark, &self.conn_path, &self.tx, crashed_at)?;
         let id = self.k.request("kernel_info_request", Value::obj());
@@ -1389,7 +1399,7 @@ pub fn run() -> Result<(), String> {
     c.k.shutdown();
     out("\x1b[?2004l");
     drop(raw);
-    let _ = std::fs::remove_file(&c.conn_path);
+    remove_connection(&c.conn_path);
     std::process::exit(code)
 }
 
@@ -1425,6 +1435,9 @@ mod tests {
         assert!(!left("kernel-bbbb:1"), "nothing answers and its file is gone");
         assert!(left("kernel-cccc:1"), "its connection file is still there");
         assert!(left("notes:1"));
+        // A console that ends removes its own file and sockets.
+        remove_connection(&dir.join("kernel-cccc.json"));
+        assert!(!left("kernel-cccc.json") && !left("kernel-cccc:1"));
         drop(live);
         let _ = std::fs::remove_dir_all(&dir);
     }
