@@ -2,6 +2,10 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Mirador's plot size menu opens again. Clicking it did nothing: a handler that keeps buttons from taking the focus (so Enter and space stay the table's) also caught the menu, which needs that click to open. Now it opens, and once you choose a size it lets the focus go, so ← and → move between plots again. Checked with a real click in Chromium: the menu opens, 800 × 500 redraws the plot at that size, and Window fits it to the window again.
+
 ## 0.2.1
 
 A follow-up to 0.2.0's security work. Three ways an agent could get around the harness are closed, Ark's channels stay private in every case, and the palette's security entries say which profile and settings are in effect, for your work and for the console in view.
