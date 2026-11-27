@@ -169,6 +169,41 @@ fn callers_at_the_same_time_share_one_mirador() {
     }
 }
 
+/// With no Mirador page open, callers that ask for its window at the same moment (R's first
+/// plot and the variables pane) open one window: before, each saw no page yet and opened
+/// its own. The address says where Corral will place it (fit=), so the page draws once.
+#[test]
+fn callers_at_the_same_time_open_one_window() {
+    let home = Home(std::env::temp_dir().join(format!("corral-test-mirador-window-{}", std::process::id())));
+    let _ = std::fs::remove_dir_all(&home.0);
+    std::fs::create_dir_all(&home.0).unwrap();
+    // The "browser" writes down each address it is asked to open.
+    let log = home.0.join("opened");
+    let browser = home.0.join("browser.sh");
+    std::fs::write(&browser, format!("#!/bin/sh\necho \"$1\" >> '{}'\n", log.display())).unwrap();
+    let corral = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_corral"));
+        c.args(args).env_clear().env("HOME", &home.0).env("PATH", "/usr/bin:/bin").env("CORRAL_LANG", "en")
+            .env("CORRAL_MIRADOR_PORT", "0").env("CORRAL_NO_TELEMETRY", "1")
+            .env("CORRAL_BROWSER", format!("sh {} {{url}}", browser.display())).stdin(Stdio::null());
+        c
+    };
+    // The server first, so the callers only meet at the window.
+    assert!(corral(&["mirador", "--url"]).stdout(Stdio::null()).status().unwrap().success());
+    let callers: Vec<Child> = (0..4).map(|_| corral(&["mirador"]).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().unwrap()).collect();
+    for c in callers {
+        let out = c.wait_with_output().unwrap();
+        assert!(out.status.success(), "a caller failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+    // The browser runs detached: give it a moment to write.
+    std::thread::sleep(Duration::from_millis(800));
+    let opened = std::fs::read_to_string(&log).unwrap_or_default();
+    let lines: Vec<&str> = opened.lines().collect();
+    assert_eq!(lines.len(), 1, "windows opened: {lines:?}");
+    assert!(lines[0].contains("#fit=0.5x0.85"), "{}", lines[0]);
+    assert!(corral(&["mirador", "--stop"]).output().unwrap().status.success());
+}
+
 #[test]
 fn its_address_file_is_private() {
     use std::os::unix::fs::PermissionsExt;

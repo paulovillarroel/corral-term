@@ -99,6 +99,9 @@ impl Live {
             .env("SHELL", self.dir.join("bin/shell"))
             .env_remove("ENV")
             .envs(self.extra.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            // Tests never reach Windows from WSL: no PowerShell raising or moving the
+            // user's windows (a Mirador of theirs), no reading their clipboard.
+            .env_remove("WSL_DISTRO_NAME")
             .env_remove("HERDR_ENV")
             .env_remove("HERDR_PANE_ID")
             .env_remove("HERDR_PLUGIN_CONTEXT_JSON")
@@ -1695,6 +1698,42 @@ fn an_agent_cannot_loosen_the_harness_by_itself() {
     let audit = std::fs::read_to_string(live.dir.join("state/corral/audit.jsonl")).unwrap();
     assert!(audit.contains(r#""decision":"refused""#) && audit.contains("corral config agents on"), "{audit}");
     assert!(audit.contains(r#""decision":"allowed""#) && audit.contains("corral config agent_output full"), "{audit}");
+}
+
+/// Enter on a plot object in the variables pane with no Mirador page open: the window opens
+/// while R draws, not after (a new window takes about as long as a drawing), with where
+/// Corral will place it in its address, and only one, though R's first plot asks too.
+#[test]
+#[ignore]
+fn a_plot_object_opens_mirador_while_r_draws() {
+    // The "browser" writes down each address it is asked to open.
+    let script = PathBuf::from(format!("/tmp/corral-opens-{}.sh", std::process::id()));
+    let log = script.with_extension("log");
+    let _ = std::fs::remove_file(&log);
+    std::fs::write(&script, format!("#!/bin/sh\necho \"$1\" >> '{}'\n", log.display())).unwrap();
+    let browser = format!("sh {} {{url}}", script.display());
+    let live = Live::start_with("drawopen", &[("CORRAL_BROWSER", browser.as_str())]);
+    // R draws this one only once the test says so.
+    let go = live.dir.join("go");
+    let (code, text) = live.eval(&[&format!(r#"p_wait <- structure(list(), class = "waitplot"); print.waitplot <- function(x, ...) {{ while (!file.exists("{}")) Sys.sleep(0.05); plot(1:10) }}; cat("ok\n")"#, go.display())]);
+    assert_eq!(code, 0, "{text}");
+    let dir = live.session_dir("r").unwrap();
+    let sid = dir.file_name().unwrap().to_string_lossy().to_string();
+    let show = live.command("corral").args(["_show-object", dir.to_str().unwrap(), "p_wait"])
+        .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let opened = || std::fs::read_to_string(&log).unwrap_or_default();
+    wait_for(Duration::from_secs(15), "Mirador's window, while R hasn't drawn", || !opened().is_empty());
+    assert!(!dir.join("plots-url").exists(), "R had drawn already");
+    assert!(opened().contains(&format!("#plot:{sid}::fit=")), "{}", opened());
+    std::fs::write(&go, "").unwrap();
+    let out = show.wait_with_output().unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains("drawn and opened in Mirador"), "{}{}",
+            String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    // R's first plot asks for the window too (`_plot-ready`): it finds the one open.
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(opened().lines().count(), 1, "windows opened: {}", opened());
+    let _ = std::fs::remove_file(&script);
+    let _ = std::fs::remove_file(&log);
 }
 
 /// The palette says what is in effect, with a real herdr and console: the global profile,
