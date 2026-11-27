@@ -232,37 +232,74 @@ pub(crate) fn link_for_jupyter(base: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Sockets a crashed Ark left behind (kernel-ID:N, beside kernel-ID.json): once the
-/// connection file is gone (two days) and nothing answers on them, they go too.
+/// How long a note or a link is left alone, however it looks: one younger may be a
+/// console's that is still starting (jupyter-console writes its connection file once
+/// Python is up, a second or so after socket_base and link_for_jupyter, and Ark binds
+/// later still).
+const STARTING: Duration = Duration::from_secs(60);
+
+/// The short folder a note (KERNEL.sockets) names, if it is one of ours.
+fn noted_folder(note: &Path) -> Option<PathBuf> {
+    let dir = PathBuf::from(std::fs::read_to_string(note).ok()?);
+    let ours = dir.is_absolute() && dir.file_name().is_some_and(|n| n.to_string_lossy().starts_with("corral-"));
+    ours.then_some(dir)
+}
+
+/// What consoles that ended left in Corral's folder: Ark's sockets (kernel-ID:N),
+/// jupyter_client's links to them (kernel-ID-N; jupyter-console removes them only
+/// when it exits on its own, not when its pane is closed) and the short folders notes
+/// name (kernel-ID.sockets). Each goes once its connection file is gone (its console
+/// ended, or it is over two days old) and nothing answers there.
 pub(crate) fn remove_stale_sockets(folder: &Path) {
+    remove_stale(folder, STARTING)
+}
+
+/// remove_stale_sockets, leaving alone notes and links younger than `starting`.
+fn remove_stale(folder: &Path, starting: Duration) {
+    use std::io::ErrorKind;
     use std::os::unix::fs::FileTypeExt;
+    use std::os::unix::net::UnixStream;
     let Ok(entries) = std::fs::read_dir(folder) else { return };
-    let refused = |p: &Path| matches!(std::os::unix::net::UnixStream::connect(p), Err(err) if err.kind() == std::io::ErrorKind::ConnectionRefused);
+    // Only a refused connection says no Ark is there (or, through a link, nothing at
+    // its end): running out of descriptors, say, says nothing about it.
+    let refused = |p: &Path| matches!(UnixStream::connect(p), Err(err) if err.kind() == ErrorKind::ConnectionRefused);
+    let nothing_at = |p: &Path| matches!(UnixStream::connect(p), Err(err) if matches!(err.kind(), ErrorKind::ConnectionRefused | ErrorKind::NotFound));
+    let settled = |e: &std::fs::DirEntry| starting.is_zero()
+        || e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= starting);
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
         // A short folder of its own (KERNEL.sockets names it), once its connection file
         // is gone and nothing answers there: what Ark and jupyter_client left, then it.
         if let Some(base) = name.strip_suffix(".sockets") {
-            if folder.join(format!("{base}.json")).exists() {
+            if folder.join(format!("{base}.json")).exists() || !settled(&e) {
                 continue;
             }
-            let dir = std::fs::read_to_string(e.path()).map(PathBuf::from).unwrap_or_default();
-            let ours = dir.is_absolute() && dir.file_name().is_some_and(|n| n.to_string_lossy().starts_with("corral-"));
-            let live = (1..=5).any(|n| {
-                let p = PathBuf::from(format!("{}/kernel:{n}", dir.display()));
+            let dir = noted_folder(&e.path());
+            let live = dir.as_ref().is_some_and(|dir| (1..=5).any(|n| {
+                let p = dir.join(format!("kernel:{n}"));
                 p.exists() && !refused(&p)
-            });
-            if ours && !live {
+            }));
+            if live {
+                continue;
+            }
+            if let Some(dir) = dir {
                 for n in 1..=5 {
-                    let _ = std::fs::remove_file(format!("{}/kernel:{n}", dir.display()));
-                    let _ = std::fs::remove_file(format!("{}/kernel-{n}", dir.display()));
+                    let _ = std::fs::remove_file(dir.join(format!("kernel:{n}")));
+                    let _ = std::fs::remove_file(dir.join(format!("kernel-{n}")));
                 }
                 let _ = std::fs::remove_dir(&dir);
             }
-            if !ours || !live {
-                let _ = std::fs::remove_file(e.path());
-            }
+            let _ = std::fs::remove_file(e.path());
             continue;
+        }
+        // jupyter_client's links, kernel-ID-N → kernel-ID:N.
+        if let Some((base, n)) = name.rsplit_once('-') {
+            if base.starts_with("kernel-") && matches!(n, "1" | "2" | "3" | "4" | "5") && e.file_type().is_ok_and(|t| t.is_symlink()) {
+                if !folder.join(format!("{base}.json")).exists() && settled(&e) && nothing_at(&e.path()) {
+                    let _ = std::fs::remove_file(e.path());
+                }
+                continue;
+            }
         }
         let Some((base, _)) = name.split_once(':') else { continue };
         if !base.starts_with("kernel-") || !e.file_type().map(|t| t.is_socket()).unwrap_or(false) {
@@ -272,8 +309,6 @@ pub(crate) fn remove_stale_sockets(folder: &Path) {
         if folder.join(format!("{base}.json")).exists() {
             continue;
         }
-        // Only a refused connection says no Ark is there: running out of descriptors,
-        // say, says nothing about it.
         if refused(&e.path()) {
             let _ = std::fs::remove_file(e.path());
         }
@@ -283,11 +318,15 @@ pub(crate) fn remove_stale_sockets(folder: &Path) {
 /// A connection file and the sockets beside it, once their Ark has ended (Ark leaves
 /// its sockets when it is stopped).
 fn remove_connection(conn_path: &Path) {
-    // The sockets' base is in the file: beside it, or in a short folder of its own.
-    let ip = env::read_json(conn_path).get("ip").str().map(PathBuf::from).filter(|p| p.is_absolute());
+    // The sockets' base: in the short folder a note names (the note stays when cleanup
+    // took a connection file over two days old while its console ran), else where the
+    // connection file says, else beside it.
+    let note = conn_path.with_extension("sockets");
+    let base = noted_folder(&note).map(|dir| dir.join("kernel"))
+        .or_else(|| env::read_json(conn_path).get("ip").str().map(PathBuf::from).filter(|p| p.is_absolute()))
+        .unwrap_or_else(|| conn_path.with_extension(""));
     let _ = std::fs::remove_file(conn_path);
-    let _ = std::fs::remove_file(conn_path.with_extension("sockets"));
-    let base = ip.unwrap_or_else(|| conn_path.with_extension(""));
+    let _ = std::fs::remove_file(&note);
     for port in 1..=5 {
         let _ = std::fs::remove_file(format!("{}:{port}", base.display()));
         let _ = std::fs::remove_file(format!("{}-{port}", base.display()));
@@ -1530,15 +1569,57 @@ mod tests {
         assert_eq!(std::fs::read_link(format!("{ip}-2")).unwrap(), Path::new("kernel:2"));
         remove_connection(&conn);
         assert!(!conn.exists() && !conn.with_extension("sockets").exists() && !dir.exists(), "the connection file, its note and its folder go");
+        // Its connection file taken by cleanup (over two days old) while the console ran:
+        // the note still says where the folder is, and it goes when the console ends.
+        let conn3 = state.join("kernel-9c0d1e2f.json");
+        let (_, ip3, _) = endpoints(&conn3).unwrap();
+        let dir3 = Path::new(&ip3).parent().unwrap().to_path_buf();
+        std::fs::write(format!("{ip3}:1"), "").unwrap(); // a socket Ark left
+        remove_connection(&conn3);
+        assert!(!dir3.exists() && !conn3.with_extension("sockets").exists(), "the noted folder goes without its connection file");
         // With jupyter-console nothing of Corral's sees the end: the next console's
         // cleanup finds the note without its connection file, and takes the folder.
+        // Not while it starts, though: jupyter-console writes its connection file a
+        // second or so after the note and the links, and Ark binds later still.
         let conn2 = state.join("kernel-5e6f7a8b.json");
         let (_, ip2, _) = endpoints(&conn2).unwrap();
         let dir2 = Path::new(&ip2).parent().unwrap().to_path_buf();
-        drop(std::os::unix::net::UnixListener::bind(format!("{ip2}:1")).unwrap()); // Ark's, nobody behind it now
+        link_for_jupyter(Path::new(&ip2)).unwrap();
         remove_stale_sockets(&state);
+        assert!(dir2.exists() && conn2.with_extension("sockets").exists() && Path::new(&format!("{ip2}-1")).is_symlink(),
+                "a console still starting keeps its folder and its links");
+        drop(std::os::unix::net::UnixListener::bind(format!("{ip2}:1")).unwrap()); // Ark's, nobody behind it now
+        remove_stale(&state, Duration::ZERO); // as a minute later
         assert!(!dir2.exists() && !conn2.with_extension("sockets").exists(), "the note's folder goes once nothing answers");
         let _ = std::fs::remove_dir_all(state.parent().unwrap());
+    }
+
+    #[test]
+    fn jupyter_links_go_once_their_console_has() {
+        // jupyter_client removes its links (kernel-ID-N) only when jupyter-console exits on
+        // its own; closed with its pane, it leaves them beside Ark's sockets.
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("corral-ark-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        link_for_jupyter(&dir.join("kernel-aaaa")).unwrap(); // its console ended
+        drop(UnixListener::bind(dir.join("kernel-aaaa:1")).unwrap());
+        link_for_jupyter(&dir.join("kernel-bbbb")).unwrap(); // running; its file taken after two days
+        let live: Vec<UnixListener> = (1..=5).map(|n| UnixListener::bind(dir.join(format!("kernel-bbbb:{n}"))).unwrap()).collect();
+        link_for_jupyter(&dir.join("kernel-cccc")).unwrap(); // running, its file there
+        std::fs::write(dir.join("kernel-cccc.json"), "{}").unwrap();
+        link_for_jupyter(&dir.join("kernel-dddd")).unwrap(); // starting: no file, no Ark yet
+        let linked = |id: &str| (1..=5).filter(|n| dir.join(format!("kernel-{id}-{n}")).is_symlink()).count();
+        remove_stale_sockets(&dir);
+        assert_eq!([linked("aaaa"), linked("dddd")], [5, 5], "none older than a minute: any could be a console starting");
+        remove_stale(&dir, Duration::ZERO); // as a minute later
+        assert_eq!(linked("aaaa"), 0, "nothing answers and its file is gone");
+        assert!(!dir.join("kernel-aaaa:1").exists());
+        assert_eq!(linked("bbbb"), 5, "Ark answers through them");
+        assert_eq!(linked("cccc"), 5, "its connection file is there");
+        assert_eq!(linked("dddd"), 0, "a console that never got going");
+        drop(live);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
