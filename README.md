@@ -19,6 +19,7 @@ Written in Rust. DuckDB for your data.</p>
 - **Big tables at once.** `View()` saves the table as Parquet and asks DuckDB only for what's on screen: ten million rows take about a second to save with nanoparquet, then about 15 ms a screen.
 - **SQL in your session.** In a `.sql` file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query on DuckDB in the R or Python console: your data frames are its tables, and the result is a data frame you keep working with.
 - **Agents in your session.** Corral is the harness between your agent and your live session: the agent runs code in your console with `corral eval`, guided by an [Agent Skills](https://agentskills.io) skill, within rules you set ([the agent harness](https://corral-term.dev/docs/agents.html#the-agent-harness)).
+- **Your work survives a crash.** If R or Python crashes, the next console gets back the objects, the packages and the newest 30 plots, and says why R ended and what was running ([what survives what](https://corral-term.dev/docs/consoles.html#survives)).
 - **Light.** R ready in 0.45 s and 155 MB in use (200 MB counting herdr), against 13.3 s and 3.2 GB for Positron ([how it was measured](https://corral-term.dev/docs/performance.html)).
 
 ## Install
@@ -102,7 +103,7 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 ## Security
 
-Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents ask|on|off` (`ask`, the default, holds every request until you approve it in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, not values; keep `ask` on with it, since the agent writes the code), all also in the palette, `corral_sensitive()` for one session, and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
+Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents ask|on|off` (`ask`, the default, holds every request until you approve it in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, not values; keep `ask` on with it, since the agent writes the code), all also in the palette; `corral profile open|standard|sensitive` sets them in one step, for all your work or one project folder (the stricter wins, so a project with clinical data is sensitive in every session); `corral_sensitive()` for one session; `corral context`, which tells the agent the consoles and these rules before it runs anything; and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
 
 ## Problems and ideas
 

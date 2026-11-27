@@ -198,7 +198,7 @@
     <h2>For sensitive data</h2>
     <p>A setup for health records or anything that must not leave your organization:</p>
     <ol>
-      <li><strong>Turn on Corral's controls:</strong> keep <code>agents ask</code> (the default), and add <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
+      <li><strong>Turn on Corral's controls:</strong> in the project that holds the data, <code>corral profile sensitive --project</code>: every session there asks before each request and gets results without values, whatever your global profile (<a href="#profiles">profiles</a>). Or keep <code>agents ask</code> (the default) and add <code>corral config agent_output review</code> (you decide what each result shares) or <code>structure</code> (results come back without values); or <code>corral_sensitive()</code> in the sessions that hold sensitive data. Keep <code>ask</code> on with either: as the previous section says, only reading the code stops values going out on purpose. Use <code>off</code> when no agent should touch them.</li>
       <li><strong>Limit the agent's own tools.</strong> This is the boundary that holds: let it call <code>corral eval</code> and <code>corral vars</code>, and nothing that could change Corral, herdr or your data. In Claude Code, for example, in the project's <code>.claude/settings.json</code>:
 <pre><code>{
   "permissions": {
