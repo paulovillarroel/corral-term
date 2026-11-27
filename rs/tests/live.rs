@@ -1596,16 +1596,29 @@ fn the_palette_says_what_is_in_effect() {
     live.config(r#"{"agents":"ask","agent_output":"full","update_check":"off"}"#);
     let json = live.run("corral", &["keys", "--json"]);
     let standard = entry(&json, "profile-standard").unwrap();
-    assert!(standard.contains(r#""in_effect": true"#), "{standard}");
+    assert!(standard.contains(r#""in_effect": "active""#), "{standard}");
     let project = entry(&json, "profile-project-sensitive").unwrap();
     assert!(project.contains("Project proj: sensitive in every session") && project.contains(r#""in_effect": false"#), "{project}");
     assert!(entry(&json, "profile-project-clear").is_none(), "nothing to remove: {json}");
 
     live.config(&format!(r#"{{"agents":"ask","agent_output":"full","update_check":"off","projects":{{"{}":"sensitive"}}}}"#, proj.display()));
     let json = live.run("corral", &["keys", "--json"]);
-    assert!(entry(&json, "profile-project-sensitive").unwrap().contains(r#""in_effect": true"#), "{json}");
+    // The console runs by the project's sensitive profile; standard stays the global one.
+    for (id, state) in [("profile-project-sensitive", "active"), ("profile-sensitive", "active"), ("profile-standard", "global"),
+                        ("output-structure", "active"), ("output-full", "global"), ("agents-ask", "active")] {
+        let e = entry(&json, id).unwrap();
+        assert!(e.contains(&format!(r#""in_effect": "{state}""#)), "{id}: {e}");
+    }
     let clear = entry(&json, "profile-project-clear").unwrap();
     assert!(clear.contains("Project proj: remove its profile (back to standard)"), "{clear}");
+    // From another workspace with no console of its own, this one's project isn't offered.
+    let other_dir = live.dir.join("other");
+    std::fs::create_dir_all(&other_dir).unwrap();
+    let other = field(&live.run("herdr", &["workspace", "create", "--cwd", other_dir.to_str().unwrap()]), "workspace_id").expect("no workspace");
+    let out = live.command("corral").env("HERDR_ENV", "1").env("HERDR_WORKSPACE_ID", &other).args(["keys", "--json"]).output().unwrap();
+    let json = String::from_utf8_lossy(&out.stdout);
+    assert!(entry(&json, "profile-project-sensitive").is_none(), "another workspace's project: {json}");
+    assert!(entry(&json, "profile-standard").unwrap().contains(r#""in_effect": "active""#), "{json}");
     // The palette runs it as a herdr action, `corral profile --project --clear`: that folder's
     // profile goes (from an agent, loosening it would wait for the user's approval).
     let out = live.command("corral").env("HERDR_PLUGIN_ID", "corral").args(["profile", "--project", "--clear"]).output().unwrap();
