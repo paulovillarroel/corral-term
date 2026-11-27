@@ -241,6 +241,8 @@ impl Live {
 
 impl Drop for Live {
     fn drop(&mut self) {
+        // A test that drew plots started Mirador for its session; it outlives herdr.
+        let _ = self.corral(&["mirador", "--stop"]);
         let _ = self.command("herdr").args(["server", "stop"]).output();
         let _ = self.server.kill();
         let _ = self.server.wait();
