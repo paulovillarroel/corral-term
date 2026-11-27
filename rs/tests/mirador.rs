@@ -4,7 +4,8 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -109,6 +110,62 @@ fn a_session_id_cannot_leave_the_sessions_folder() {
     for sid in ["..", ".", "../..", "..%2F..", "a/b", "%2Fetc"] {
         let (code, body) = request(m.port, "GET", &here, &format!("/api/vars?session={sid}"), Some(&m.token));
         assert_eq!(code, 400, "session={sid} answered {code}: {body}");
+    }
+}
+
+/// The Mirador servers running with `home` as their HOME.
+fn servers(home: &Path) -> Vec<i64> {
+    let home_var = [b"HOME=", home.as_os_str().as_bytes()].concat();
+    std::fs::read_dir("/proc").unwrap().flatten()
+        .filter_map(|e| e.file_name().to_str()?.parse::<i64>().ok())
+        .filter(|pid| std::fs::read(format!("/proc/{pid}/cmdline")).is_ok_and(|c| c.split(|b| *b == 0).nth(1) == Some(b"_mirador")))
+        .filter(|pid| std::fs::read(format!("/proc/{pid}/environ")).is_ok_and(|e| e.split(|b| *b == 0).any(|v| v == home_var)))
+        .collect()
+}
+
+/// A HOME of its own, and no Mirador left running with it afterwards.
+struct Home(PathBuf);
+
+impl Drop for Home {
+    fn drop(&mut self) {
+        for pid in servers(&self.0) {
+            let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+        }
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Mirador starts on demand (the first plot of R and of Python, the palette): callers
+/// that come at the same moment share one server, the one mirador.json names, so
+/// `--stop` reaches it. Before, each started its own; one exited when their shared
+/// temporary file was moved, so mirador.json named a dead server and the other ran on.
+#[test]
+fn callers_at_the_same_time_share_one_mirador() {
+    let home = Home(std::env::temp_dir().join(format!("corral-test-mirador-race-{}", std::process::id())));
+    let _ = std::fs::remove_dir_all(&home.0);
+    std::fs::create_dir_all(&home.0).unwrap();
+    let corral = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_corral"));
+        c.args(args).env_clear().env("HOME", &home.0).env("PATH", "/usr/bin:/bin").env("CORRAL_LANG", "en")
+            .env("CORRAL_MIRADOR_PORT", "0").env("CORRAL_NO_TELEMETRY", "1").stdin(Stdio::null());
+        c
+    };
+    let callers: Vec<Child> = (0..4).map(|_| corral(&["mirador", "--url"]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap()).collect();
+    let urls: Vec<String> = callers.into_iter().map(|c| {
+        let out = c.wait_with_output().unwrap();
+        assert!(out.status.success(), "a caller failed: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }).collect();
+    assert!(urls.iter().all(|u| *u == urls[0]), "the callers got different servers: {urls:?}");
+    let running = servers(&home.0);
+    assert_eq!(running.len(), 1, "servers running: {running:?}");
+    let info = std::fs::read_to_string(home.0.join(".local/state/corral/mirador.json")).unwrap();
+    assert_eq!(field(&info, "pid").and_then(|p| p.parse::<i64>().ok()), Some(running[0]), "mirador.json names another server: {info}");
+    assert!(corral(&["mirador", "--stop"]).output().unwrap().status.success());
+    let end = Instant::now() + Duration::from_secs(5);
+    while !servers(&home.0).is_empty() {
+        assert!(Instant::now() < end, "`--stop` left {:?} running", servers(&home.0));
+        std::thread::sleep(Duration::from_millis(50));
     }
 }
 

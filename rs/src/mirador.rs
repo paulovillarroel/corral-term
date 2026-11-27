@@ -11,7 +11,6 @@ use crate::table;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1019,10 +1018,8 @@ pub fn serve() -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}/?token={token}");
     let info = obj(vec![("url", url.clone().into()), ("port", (port as f64).into()), ("token", token.into()),
                         ("pid", (std::process::id() as f64).into()), ("started", now().into()), ("version", VERSION.into())]);
-    let tmp = info_file.with_extension("tmp");
-    std::fs::write(&tmp, info.to_json()).map_err(|e| e.to_string())?;
-    let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
-    std::fs::rename(&tmp, &info_file).map_err(|e| e.to_string())?;
+    // A temporary file of its own, private from the start: it holds the token.
+    env::write_private(&info_file, info.to_json().as_bytes()).map_err(|e| e.to_string())?;
     println!("{}", trf!("Mirador at {url}", "Mirador en {url}"));
 
     for stream in listener.incoming().flatten() {
