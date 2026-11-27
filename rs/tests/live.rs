@@ -939,15 +939,23 @@ fn ark_listens_only_in_corrals_folder() {
 fn checkpoints_off_leaves_no_copy_on_disk() {
     // Turning checkpoints off deletes the copies of consoles that have ended at once, and
     // each running console's own at its next command, in R and in Python. Turned on
-    // again, the next copy is a whole one, not only what changed since.
-    let live = Live::start("ckoff");
-    assert_eq!(live.eval(&["kept_r <- 1:10; other_r <- letters"]).0, 0);
+    // again, the next copy is a whole one, not only what changed since: every object,
+    // and the plots and figures drawn before, without drawing them again.
+    let live = Live::start_with("ckoff", &[("CORRAL_BROWSER", "print")]);
+    let startup = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("py/startup.py");
+    live.config(&format!(r#"{{"agents":"on","update_check":"off","python_console":"uv run --with ipython --with cloudpickle --with pyarrow --with duckdb --with matplotlib ipython --no-banner -i {}"}}"#,
+                         startup.display()));
+    assert_eq!(live.eval(&["kept_r <- 1:10; other_r <- letters; plot(1:10)"]).0, 0);
     live.wait_checkpoint("r", &["kept_r", "other_r"]);
-    let (code, text) = live.eval(&["--lang", "python", "--timeout", "180", "kept_py = list(range(10))"]);
-    assert_eq!(code, 0, "{text}");
+    let code = "import matplotlib.pyplot as plt\nkept_py = list(range(10))\nplt.figure(); plt.plot([1, 2, 3]); plt.show()";
+    let (status, text) = live.eval(&["--lang", "python", "--timeout", "180", code]);
+    assert_eq!(status, 0, "{text}");
     live.wait_checkpoint("python", &["kept_py"]);
     let (r_dir, _) = live.checkpoint("r");
     let (py_dir, _) = live.checkpoint("python");
+    wait_for(Duration::from_secs(30), "the plot and the figure in the copies", || {
+        count(&r_dir.join("plots"), "png") == 1 && count(&py_dir.join("plots"), "png") == 1
+    });
     // Copies left by two consoles that crashed: pids nobody has.
     let root = live.dir.join("state/corral/checkpoints");
     for name in ["r-w9-p9-999999999", "py-w9-p9-999999998"] {
@@ -969,6 +977,9 @@ fn checkpoints_off_leaves_no_copy_on_disk() {
     live.wait_checkpoint("r", &["kept_r", "other_r", "new_r"]);
     assert_eq!(live.eval(&["--lang", "python", "new_py = 3"]).0, 0);
     live.wait_checkpoint("python", &["kept_py", "new_py"]);
+    wait_for(Duration::from_secs(30), "the plot and the figure back in the copies", || {
+        count(&r_dir.join("plots"), "png") == 1 && count(&py_dir.join("plots"), "png") == 1
+    });
 }
 
 /// Resident memory of a process, in MB.
