@@ -1639,6 +1639,40 @@ fn an_agent_cannot_loosen_the_harness_by_itself() {
     assert!(audit.contains(r#""decision":"allowed""#) && audit.contains("corral config agent_output full"), "{audit}");
 }
 
+/// The palette says what is in effect, with a real herdr and console: the global profile,
+/// and the console's project by its folder's name, the one in effect there when it is
+/// stricter. Its action acts on that same folder.
+#[test]
+#[ignore]
+fn the_palette_says_what_is_in_effect() {
+    let live = Live::start("palette");
+    let proj = std::fs::canonicalize(live.dir.join("proj")).unwrap();
+    let entry = |json: &str, id: &str| -> Option<String> {
+        let at = json.find(&format!(r#""id": "herdr:{id}""#))?;
+        let start = json[..at].rfind('{')?;
+        Some(json[start..at + json[at..].find('}')?].to_string())
+    };
+    live.config(r#"{"agents":"ask","agent_output":"full","update_check":"off"}"#);
+    let json = live.run("corral", &["keys", "--json"]);
+    let standard = entry(&json, "profile-standard").unwrap();
+    assert!(standard.contains(r#""in_effect": true"#), "{standard}");
+    let project = entry(&json, "profile-project-sensitive").unwrap();
+    assert!(project.contains("Project proj: sensitive in every session") && project.contains(r#""in_effect": false"#), "{project}");
+    assert!(entry(&json, "profile-project-clear").is_none(), "nothing to remove: {json}");
+
+    live.config(&format!(r#"{{"agents":"ask","agent_output":"full","update_check":"off","projects":{{"{}":"sensitive"}}}}"#, proj.display()));
+    let json = live.run("corral", &["keys", "--json"]);
+    assert!(entry(&json, "profile-project-sensitive").unwrap().contains(r#""in_effect": true"#), "{json}");
+    let clear = entry(&json, "profile-project-clear").unwrap();
+    assert!(clear.contains("Project proj: remove its profile (back to standard)"), "{clear}");
+    // The palette runs it as a herdr action, `corral profile --project --clear`: that folder's
+    // profile goes (from an agent, loosening it would wait for the user's approval).
+    let out = live.command("corral").env("HERDR_PLUGIN_ID", "corral").args(["profile", "--project", "--clear"]).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let config = std::fs::read_to_string(live.dir.join("config/corral/config.json")).unwrap();
+    assert!(!config.contains(&proj.display().to_string()), "{config}");
+}
+
 /// Three ways round the harness, closed: an agent's `corral send` (it would type code
 /// into the console with no approval, no output mode and no audit), `corral config
 /// projects` (it would replace every project's profile, unasked) and, with agents off,
