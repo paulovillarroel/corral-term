@@ -126,7 +126,7 @@
       </svg>
     </figure>
 <h2>Plot objects</h2>
-    <p>Plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>) appear in the Plots tab of the variables pane. <kbd>Enter</kbd> on one draws it and opens it in Mirador. A plot object that is already drawn opens without being drawn again.</p>
+    <p>Plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>) appear in the Plots tab of the variables pane. <kbd>Enter</kbd> on one draws it and opens it in Mirador. With no Mirador window open, the window opens while R draws, so neither waits for the other. A plot object that is already drawn opens without being drawn again.</p>
 
     <h2 id="python-figures">Python figures</h2>
     <p>matplotlib figures, and those of seaborn or plotnine, which draw with matplotlib, go to Mirador at the end of each run, as in Jupyter. <code>plt.show()</code> sends them at that moment. A figure saved in a variable appears in the Plots tab of the variables pane, and <kbd>Enter</kbd> shows it.</p>
@@ -140,7 +140,7 @@
     <p>The in-terminal viewer draws with <code>chafa</code> (<code>sudo apt install chafa</code>). Its keys: <kbd>←</kbd> <kbd>→</kbd> go through the history, <kbd>o</kbd> opens Mirador in the browser, <kbd>q</kbd> closes it. The repository keeps <a href="https://github.com/paulovillarroel/corral-term/blob/main/wezterm/wezterm.lua"><code>wezterm/wezterm.lua</code></a> as a reference configuration for WezTerm with WSL.</p>
 
     <h2>Where the window goes</h2>
-    <p>On Windows with WSL, Corral opens each new Mirador window unmaximized, on the right of the screen, and brings it to the front. To change that:</p>
+    <p>On Windows with WSL, Corral opens each new Mirador window unmaximized, on the right of the screen, and brings it to the front. Only one opens, however many things ask for it at once (R's first plot and the variables pane, say), and the page draws the plot at the size the window will have on the right, so R draws it once, not again when the window moves. To change that:</p>
     <pre><code><span class="p">$ </span>corral config mirador_size 0.4x0.7
 <span class="p">$ </span>corral config mirador_window free</code></pre>
     <p><code>mirador_size</code> is the fraction of the screen's width and height (<code>0.5x0.85</code> by default). <code>mirador_window free</code> leaves the window's size and position alone; <code>right</code> is the default.</p>
