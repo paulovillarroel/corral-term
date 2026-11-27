@@ -79,7 +79,7 @@ GROUP BY ALL;</code></pre>
     <h2 id="files">Files and databases</h2>
     <ul>
     <li>Files are tables too: <code>FROM 'data/sales.parquet'</code>, <code>FROM 'data/*.parquet'</code>, <code>FROM read_csv('sales.csv')</code>, <code>FROM 'events.json'</code>.</li>
-    <li>Tables and views you make with <code>CREATE TABLE</code> or <code>CREATE VIEW</code> last as long as the session.</li>
+    <li>Tables and views you make with <code>CREATE TABLE</code> or <code>CREATE VIEW</code> last as long as the session; they don't come back after a crash (DuckDB's database is in memory), while results kept as data frames do.</li>
     <li><code>ATTACH 'project.duckdb' AS project</code> works on a DuckDB database file. DuckDB's extensions attach PostgreSQL, MySQL and SQLite databases the same way; DuckDB downloads an extension the first time it is used.</li>
     </ul>
 
@@ -105,7 +105,7 @@ GROUP BY ALL;</code></pre>
     <thead><tr><th>Where</th><th>Which DuckDB</th><th>Who picks the version</th></tr></thead>
     <tbody>
     <tr><td>The table viewer and Mirador (<code>View()</code>)</td><td>The DuckDB command line, a program of its own that the viewer starts</td><td>Corral: the installer brings 1.5.6 and checks its SHA-256. DuckDB 2.0.1 starts three times slower (22 ms against 8 ms), so the viewer stays on 1.x for now.</td></tr>
-    <tr><td>SQL in R</td><td>The duckdb package, inside your R session</td><td>Your R library: whatever version is installed there, the latest from Posit's package manager when the installer adds it</td></tr>
+    <tr><td>SQL in R</td><td>The duckdb package, inside your R session</td><td>Your R library: whatever version is installed there; the installer adds the one Posit's package manager had three days earlier, already compiled</td></tr>
     <tr><td>SQL in Python</td><td>The duckdb package, inside your Python session</td><td>uv: the latest, or the version your project pins</td></tr>
     </tbody>
     </table>
@@ -113,7 +113,7 @@ GROUP BY ALL;</code></pre>
     <p>If you create a DuckDB database file from R or Python (<code>ATTACH 'project.duckdb'</code>) and open it by hand with the <code>duckdb</code> command, an older command line may not read a file a newer package wrote. Corral itself never opens such a file with the command line.</p>
 
     <h2 id="needs">What it needs</h2>
-    <p>In R, the duckdb and DBI packages: the installer puts them in your R library, already compiled, on Ubuntu and Debian; elsewhere duckdb has to compile for a while, so the installer shows the command instead. The Python console brings duckdb with it. R's duckdb keeps its extensions in <code>~/.duckdb</code> when that folder exists, shared with the DuckDB command line, and in a temporary folder for the session otherwise.</p>
+    <p>In R, the duckdb and DBI packages: the installer puts them in your R library, already compiled, on Ubuntu 20.04 to 24.04 and Debian 11 and 12; elsewhere duckdb has to compile for a while, so the installer shows the command instead. The Python console brings duckdb with it. R's duckdb keeps its extensions in <code>~/.duckdb</code> when that folder exists, shared with the DuckDB command line, and in a temporary folder for the session otherwise.</p>
   </main>
 
   <aside class="toc" aria-label="On this page"></aside>

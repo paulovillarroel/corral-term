@@ -61,7 +61,7 @@
     <tbody>
     <tr><td><code>open</code></td><td>run code without asking</td><td>everything printed</td><td>public or synthetic data</td></tr>
     <tr><td><code>standard</code></td><td>ask before each request</td><td>everything printed</td><td>the default</td></tr>
-    <tr><td><code>sensitive</code></td><td>ask before each request</td><td>only the structure; every session is sensitive</td><td>personal or clinical data</td></tr>
+    <tr><td><code>sensitive</code></td><td>ask before each request</td><td>only the structure; with <code>--project</code>, every session there is also marked sensitive</td><td>personal or clinical data</td></tr>
     </tbody>
     </table>
 
@@ -79,7 +79,7 @@
     <p><code>corral profile</code> shows the global profile, this project's, and the rules that result here; <code>--json</code> gives the same to scripts (<code>global</code>, <code>project</code> with its folder and profile, the resulting <code>profile</code>, <code>access</code>, <code>output</code> and <code>sensitive</code>, and every project with a profile). The variables pane's header names the profile in effect, <code>profile: open</code> say, in the accent colour when it is sensitive, and <code>corral context</code> gives it to the agent.</p>
 
     <h2 id="stricter-wins">The stricter wins</h2>
-    <p>Corral works out each request's rules from your global profile, the project's and the session's own mark (<code>corral_sensitive()</code>), and takes the strictest of each part: who approves (<code>off</code> before <code>ask</code> before <code>on</code>) and what comes back (<code>structure</code> before <code>review</code> before <code>full</code>). Nested projects with different profiles get the strictest of them. A session that started in a sensitive project stays sensitive if it moves to another folder. Working this out takes about 2 µs per request.</p>
+    <p>Corral works out each request's rules from your global profile, the project's and the session's own mark (<code>corral_sensitive()</code>), and takes the strictest of each part: who approves (<code>off</code> before <code>ask</code> before <code>on</code>) and what comes back (<code>structure</code> before <code>review</code> before <code>full</code>). Nested projects with different profiles get the strictest of them. A session that started in a sensitive project stays sensitive if it moves to another folder. In a sensitive project, <code>review</code> becomes <code>structure</code>; a session marked only with <code>corral_sensitive()</code> keeps your review. A mix that isn't one of the three profiles shows as <code>custom</code>.</p>
     <p>Making things stricter never asks. A looser profile, or removing a project's, from an agent's pane waits for your approval in a popup, as <code>corral config</code> does.</p>
 
     <h2 id="follows">What a project's profile follows</h2>

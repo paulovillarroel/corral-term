@@ -177,7 +177,7 @@
     <h3>corral audit</h3>
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
-    <p>What agents asked to run in your consoles, newest last: when, the outcome (ok, error, timeout, refused, blocked, not approved, not run), the language, the agent's pane and the code. <code>--json</code> prints the log's lines as they are. It shows the last 20 requests; <code>--last N</code> shows more. See the <a href="security.html">Security model</a>.</p>
+    <p>What agents asked to run in your consoles, newest last: when, the outcome (ok, error, timeout, console ended, expired, refused, blocked, not approved, not run; for an agent's change to a setting, allowed, refused or not asked), the language, the agent's pane and the code. <code>--json</code> prints the log's lines as they are. It shows the last 20 requests; <code>--last N</code> shows more. See the <a href="security.html">Security model</a>.</p>
 
     <h3>corral vars</h3>
     <p>The variables of the console in view, over the terminal (<kbd>ctrl+b</kbd> <kbd>d</kbd>).</p>
@@ -221,7 +221,7 @@
     <p>Reads or changes the settings: <code>corral config</code> prints them all, <code>corral config KEY</code> one, and <code>corral config KEY VALUE</code> sets it. <a href="config.html">Configuration</a> lists every key.</p>
 
     <h3>corral theme</h3>
-    <p>Applies herdr's theme to the editor, the viewers, VisiData and Mirador now. <code>--show</code> only prints the palette.</p>
+    <p>Applies the theme in use (herdr's, or Corral's own if you chose one) to the editor, the viewers, VisiData and Mirador now. <code>--show</code> only prints the palette.</p>
 
     <h3>corral ark</h3>
     <p>Shows whether the R console uses Ark and what is installed. <code>--install [VERSION]</code> downloads Ark (0.1.252 by default, the tested version).</p>
@@ -230,7 +230,7 @@
     <p>Checks the dependencies, the herdr plugin, the theme, Mirador, the browser, and which terminal it detects, one line each.</p>
 
     <h3>corral install</h3>
-    <p>Checks the requirements and repairs the installation, without downloading Corral. In a terminal, it offers to install herdr and the R package jsonlite when they are missing, to update herdr when it is too old, and to put <code>~/.local/bin</code> on the PATH; httpgd it installs by itself, and if it can't, Corral works without R's plots in Mirador. <code>--check</code> only checks.</p>
+    <p>Checks the requirements and repairs the installation, without downloading Corral. In a terminal, it offers to install herdr, uv (for Python) and the R package jsonlite when they are missing, to update herdr when it is too old, and to put <code>~/.local/bin</code> on the PATH. It downloads Ark, Fresh, DuckDB and Air if they are missing, and installs httpgd, nanoparquet and (where already compiled) duckdb by itself; if one fails, Corral works without it. <code>--check</code> only checks.</p>
 
     <h3 id="corral-update">corral update</h3>
     <p>Installs the latest published version when it is newer than yours, with the same install line as the first time: it checks the package's SHA-256 and its build provenance. <code>--check</code> only says whether there is a newer one. A Corral installed from a copy of the repository isn't replaced: it says to <code>git pull</code> there and run <code>sh install.sh</code> again. In the palette: "Update: install the latest version of Corral", in a popup that waits for <kbd>Enter</kbd>. Consoles already open keep the version they started with.</p>
@@ -251,6 +251,8 @@
     <tr><td><code>corral _mirador</code></td><td>Mirador's server</td></tr>
     <tr><td><code>corral _table FILE</code></td><td>The table viewer in its popup (<code>--bench</code> times its queries, for <a href="performance.html">Performance</a>)</td></tr>
     <tr><td><code>corral _vars</code>, <code>_plots</code>, <code>_keys</code>, <code>_versions</code>, <code>_approve</code>, <code>_update</code></td><td>The popups: variables, plots, the palette, the versions window, an agent's request, the update</td></tr>
+    <tr><td><code>corral _context</code></td><td>The palette's window "Agents: what your agent sees"</td></tr>
+    <tr><td><code>corral _keep-plots SESSION PID</code></td><td>One per R session, started with its first plot (with checkpoints on): keeps the newest 30 plots in the session's checkpoint while that R lives</td></tr>
     <tr><td><code>corral _editor</code>, <code>_show-object</code>, <code>_plot-ready</code></td><td>The script pane, an object opened from the variables, and the note R and Python leave when a plot is ready</td></tr>
     <tr><td><code>corral _update-check</code></td><td>The daily check for a new version, in the background</td></tr>
     </tbody>

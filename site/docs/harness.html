@@ -59,10 +59,10 @@
     <h2 id="a-request">The life of a request</h2>
     <ol>
       <li><strong>The agent asks.</strong> To look, <code>corral vars --json</code> and <code>corral context --json</code>, which run nothing. To run code, <code>corral eval</code>.</li>
-      <li><strong>Corral works out the rules for that session:</strong> your global profile, the project's, and the session's own mark, the stricter winning. It reads the folder the session is in from the process itself, so a <code>setwd()</code> counts at once. About 2 µs.</li>
+      <li><strong>Corral works out the rules for that session:</strong> your global profile, the project's, and the session's own mark, the stricter winning. It reads the folder the session is in from the process itself, so a <code>setwd()</code> counts at once.</li>
       <li><strong>You approve it, if the rules say so.</strong> With <code>ask</code>, a popup shows the exact code, which agent asks and what it will see back: <kbd>Enter</kbd> runs it, <kbd>n</kbd> refuses it, and with no answer in 5 minutes nothing runs. With <code>off</code>, nothing runs at all.</li>
       <li><strong>It runs where you see it.</strong> The code is typed into the console you are looking at, after a <code># corral eval</code> line, one request at a time; several agents queue.</li>
-      <li><strong>The agent gets what the rules allow:</strong> everything printed, your review of it first, or only whether it worked and the shape of the objects. If the code moved the session into a stricter project, that request already gets the stricter rule.</li>
+      <li><strong>The agent gets what the rules allow:</strong> everything printed, your review of it first, or only whether it worked and the shape of the objects. If the code moved the session into a stricter project, that request's result already comes back as the stricter project allows (its approval was asked under the old rules).</li>
       <li><strong>It is recorded</strong> in the audit log on your machine: when, which agent, the code, and whether it ran.</li>
     </ol>
 
@@ -87,7 +87,7 @@
       <li><strong>In plain sight.</strong> Nothing runs in a hidden process; characters that would hide part of the code are written out, in the console and in the popup.</li>
       <li><strong>One at a time.</strong> Requests to a console queue; several agents never interleave.</li>
       <li><strong>Bounded.</strong> The agent stops waiting after a time limit (the code keeps running in your console), and the output is clipped before it reaches the agent.</li>
-      <li><strong>Recorded.</strong> Every request, and every change of the rules an agent asks for, in the local audit log: <code>corral audit</code>.</li>
+      <li><strong>Recorded.</strong> Every request, and every loosening of the rules an agent asked you for, in the local audit log: <code>corral audit</code>.</li>
       <li><strong>Any agent.</strong> Claude Code, Codex, Gemini CLI, opencode or another: the harness is shell commands and a skill in the open Agent Skills format.</li>
     </ul>
 

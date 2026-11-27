@@ -149,7 +149,7 @@
     <tr><td><code>options(corral.viewer = "mirador")</code></td><td>The first plot opens Mirador inside herdr too. <code>"httpgd"</code> opens httpgd's own viewer.</td></tr>
     <tr><td><code>options(corral.open_plots = FALSE)</code></td><td>The first plot doesn't notify or open anything.</td></tr>
     <tr><td><code>options(corral.httpgd = FALSE)</code></td><td>Keeps R's default graphics device.</td></tr>
-    <tr><td><code>options(corral.vars = FALSE)</code></td><td>Doesn't publish the variables.</td></tr>
+    <tr><td><code>options(corral.vars = FALSE)</code></td><td>Doesn't publish the variables, and turns off Corral's work after each command with them: no checkpoints, and Mirador and the plot watcher aren't told about new plots.</td></tr>
     <tr><td><code>options(corral.always = TRUE)</code></td><td>Switches Corral on in every R session you open. It goes before Corral's line in <code>.Rprofile</code>.</td></tr>
     <tr><td><code>options(corral.bin = "/path/to/corral")</code></td><td>The <code>corral</code> command R calls, instead of the one on the <code>PATH</code>.</td></tr>
     </tbody>
@@ -161,7 +161,7 @@
     <tbody>
     <tr><td><code>~/.config/corral/config.json</code></td><td>The settings of <code>corral config</code>.</td></tr>
     <tr><td><code>~/.config/corral/palette.json</code></td><td>The palette in use, which the viewers, VisiData and Mirador read.</td></tr>
-    <tr><td><code>~/.local/state/corral/</code></td><td>Only you can open it (<a href="security.html#on-disk">what is there and for how long</a>). Sessions, the audit log (<code>audit.jsonl</code>), the R console's history (<code>history-r.jsonl</code>), Mirador's address and token (<code>mirador.json</code>), the pane sizes you left in each layout (<code>sizes.json</code>), the objects' checkpoints (<code>checkpoints/</code>), the last update check (<code>update-check.json</code>), and the logs <code>ark.log</code> and <code>mirador.log</code>.</td></tr>
+    <tr><td><code>~/.local/state/corral/</code></td><td>Only you can open it (<a href="security.html#on-disk">what is there and for how long</a>). Sessions, the audit log (<code>audit.jsonl</code>), the R console's history (<code>history-r.jsonl</code>), Mirador's address and token (<code>mirador.json</code>), the pane sizes you left in each layout (<code>sizes.json</code>), the objects' checkpoints (<code>checkpoints/</code>), Ark's connection files and its sockets (<code>ark/</code>), agents' requests to change a setting (<code>requests/</code>), copies of scripts sent whole (<code>run/</code>), the last update check (<code>update-check.json</code>), and the logs <code>ark.log</code> and <code>mirador.log</code>.</td></tr>
     <tr><td><code>~/.local/share/corral/</code></td><td>Ark and the programs the installer downloaded.</td></tr>
     <tr><td><code>~/.local/share/corral-term/</code></td><td>Corral itself.</td></tr>
     </tbody>

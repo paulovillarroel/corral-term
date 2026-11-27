@@ -70,7 +70,7 @@
     <p>The first plot of each session opens Mirador on its own, as a normal window, and brings it to the front. After that, Mirador updates without taking your focus.</p>
     <ul>
     <li><kbd>ctrl+b</kbd> <kbd>f</kbd> brings it to the front at the latest plot.</li>
-    <li><kbd>ctrl+b</kbd> <kbd>shift+m</kbd> or <code>corral mirador</code> opens it.</li>
+    <li><kbd>ctrl+b</kbd> <kbd>shift+m</kbd> (<code>corral mirador --open</code>) opens a window; <code>corral mirador</code> starts it and opens one only if none is showing.</li>
     </ul>
     <pre><code><span class="p">$ </span>corral mirador --url
 <span class="p">$ </span>corral mirador --stop</code></pre>
@@ -101,6 +101,9 @@
 
     <h3>Only on your machine</h3>
     <p>Mirador listens only on <code>127.0.0.1</code>, on port 7317 (or another free one if that is taken), and asks for a token on every request. The token is in <code>~/.local/state/corral/mirador.json</code>.</p>
+
+    <h2 id="after-a-crash">After a crash</h2>
+    <p>Your plots outlive a crash. In R, one small process per session (<code>corral _keep-plots</code>) copies each new plot into the session's checkpoint, the newest 30, as SVG (up to 20 MB) and PNG; Python's checkpoint writes its figures. The next console in the project shows them first, in Mirador and in the terminal's viewer (<a href="consoles.html#survives">what survives what</a>). Mirador's Delete removes a plot from the history and from that copy, so a deleted plot doesn't come back.</p>
 
     <h2>Plot objects</h2>
     <p>Plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>) appear in the Plots tab of the variables pane. <kbd>Enter</kbd> on one draws it and opens it in Mirador. A plot object that is already drawn opens without being drawn again.</p>

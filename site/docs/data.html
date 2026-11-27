@@ -57,7 +57,7 @@
     <p class="intro">The variables pane lists the objects in your session after every command. <code>View()</code> opens any table in a viewer that asks DuckDB for one page at a time, so a table with millions of rows opens at once.</p>
 
     <h2>The variables pane</h2>
-    <p>The pane under the console updates after every command, yours or your agent's, and follows the console when you restart R or switch to Python. It lists your objects, including plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>).</p>
+    <p>The pane under the console updates after every command, yours or your agent's, and follows the console when you restart R or switch to Python. It lists your objects, including plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>). Its header names the security profile in effect (<code>profile: standard</code>, in the accent colour when sensitive), and its foot says when a newer Corral is out ("Corral X is out: ctrl+b space → Update").</p>
     <p>The objects are sorted into five tabs: Data (data frames), Plots (plot objects), Values, Functions and Other. Move between them with <kbd>←</kbd> <kbd>→</kbd>, <kbd>Tab</kbd>, the keys <kbd>1</kbd> to <kbd>5</kbd>, or a click. <kbd>/</kbd> searches.</p>
 
     <h3>Enter on an object</h3>
@@ -80,7 +80,7 @@
     <h2>Variables for agents</h2>
     <pre><code><span class="p">$ </span>corral vars --json
 <span class="p">$ </span>corral vars --json --lang python</code></pre>
-    <p>This prints the objects in the session (name, kind, class, dimensions or a preview, size) as JSON, without typing anything in the console. Without <code>--lang</code> it lists the console in view. Corral's skill tells agents to use it before running code, so it doesn't guess names or overwrite your objects.</p>
+    <p>This prints the objects in the session (name, kind, class, dimensions or a preview, size) as JSON, without typing anything in the console. Without <code>--lang</code> it lists the console in view. Corral's skill tells agents to use it before running code, so it doesn't guess names or overwrite your objects. In a sensitive session, or when agents see only the structure or your review first, previews of values are left out (tables keep their dimensions, functions their signature) and the JSON says <code>"restricted": true</code>; with <code>agents off</code> it lists nothing.</p>
 
     <h2>The table viewer</h2>
     <p><code>View(df)</code> (in R or in Python), <kbd>Enter</kbd> on a data frame in the variables pane, or <code>corral view</code> on a file open the table over the terminal, in a viewer that queries the file with <a href="https://duckdb.org">DuckDB</a>.</p>
