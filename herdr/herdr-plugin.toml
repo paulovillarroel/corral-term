@@ -330,7 +330,7 @@ command = ["../rs/target/release/corral", "profile", "sensitive", "--project"]
 
 [[actions]]
 id = "profile-project-clear"
-title = "Corral: this project follows the global profile"
+title = "Corral: remove this project's own profile"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "profile", "--project", "--clear"]
 
