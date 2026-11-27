@@ -231,6 +231,23 @@ footer.foot a:hover { color: var(--fg); }
 .side a { display: block; padding: 4px 10px; color: var(--text); text-decoration: none; font-size: 14.5px; border-left: 2px solid transparent; margin-left: -13px; }
 .side a:hover { color: var(--fg); }
 .side a[aria-current="page"] { color: var(--fg); border-left-color: var(--accent); background: var(--raised); }
+/* Search: at the top of the docs menu; its results float over the page. */
+.doc-search { position: relative; margin: 0 0 22px; }
+.doc-search input { width: 100%; box-sizing: border-box; padding: 8px 30px 8px 10px; background: var(--raised); color: var(--fg);
+                    border: 1px solid var(--line-2); border-radius: 0; font: 14px/1.2 var(--sans); -webkit-appearance: none; appearance: none; }
+.doc-search input::placeholder { color: var(--dim); }
+.doc-search input:focus { outline: none; border-color: var(--accent); }
+.doc-search input::-webkit-search-cancel-button { display: none; }
+.doc-search kbd { position: absolute; right: 8px; top: 7px; font: 500 11px/1 var(--mono); color: var(--muted); border: 1px solid var(--line-2); padding: 3px 5px; pointer-events: none; }
+.doc-search input:focus + kbd { display: none; }
+.doc-hits { position: fixed; z-index: 50; max-height: 62vh; overflow-y: auto;
+            margin: 0; padding: 4px; list-style: none; background: var(--bg); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.side .doc-hits a { margin: 0; padding: 8px 10px; border-left: 0; font-size: 13.5px; }
+.side .doc-hits a.on, .side .doc-hits a:hover { background: var(--raised); }
+.doc-hits b { display: block; color: var(--fg); font-weight: 600; }
+.doc-hits span { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.doc-hits mark { background: none; color: var(--accent); font-weight: 600; }
+.doc-hits .none { padding: 10px; color: var(--muted); font-size: 13.5px; }
 .content { padding: 44px 56px 90px; max-width: 900px; width: 100%; }
 .content h1 { margin: 0 0 18px; color: var(--fg); font-size: 44px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
 .content .intro { font-size: 18px; color: var(--text); margin: 0 0 30px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
