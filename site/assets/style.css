@@ -542,7 +542,7 @@ kbd {
 /* Code shows what you type: no programming ligatures (JetBrains Mono turns <- and |> into arrows).
    Last in the file, because the `font` shorthand above resets font-variant-ligatures. */
 code, kbd, pre, .mono, .card, .install code, .stats, .meta,
-.tui-shot *, .tui-bar, .browser-bar, .points b, .arch text {
+.tui-shot *, .tui-shot pre, .tui-bar, .browser-bar, .points b, .arch text {
   font-variant-ligatures: none;
   font-feature-settings: "liga" 0, "calt" 0;
 }
