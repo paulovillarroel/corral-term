@@ -175,6 +175,7 @@
 
     <h2>Corral's skill</h2>
     <p>Corral's skill, <code>skills/corral</code> in Corral's folder, follows the open Agent Skills standard. The installer links it into <code>~/.agents/skills/corral</code>, where Codex, opencode and other agents look for skills, into <code>~/.claude/skills/corral</code> for Claude Code, and into <code>~/.gemini/skills/corral</code> for Gemini CLI. With it, your agent runs its code in your console instead of opening an R or a Python of its own. It switches on when the agent works inside herdr and a Corral layout exists.</p>
+    <p>It is text only: Markdown your agent reads, and nothing that runs when it loads the skill. Agent Skills can carry commands that run as a skill loads, before the model reads it and without a permission prompt (in Claude Code, a <code>!</code> followed by a command in backquotes), and scripts of their own; Corral's has neither, and a test in <code>rs/tests/skill.rs</code> fails the build if it ever does. Everything your agent does with Corral, it does by running <code>corral</code> commands it can see, through its own permissions and <a href="harness.html">the harness</a>.</p>
 
     <h3>What it does</h3>
     <ul>
