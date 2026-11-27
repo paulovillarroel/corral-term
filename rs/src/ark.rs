@@ -157,17 +157,64 @@ pub(crate) fn r_env(ark: &Path) -> Result<Vec<(String, String)>, String> {
     Ok(vec![("R_HOME".into(), home), ("LD_LIBRARY_PATH".into(), lib)])
 }
 
-/// Where Ark listens. Unix sockets next to the connection file, in Corral's own folder
-/// (700), so only this user's processes reach them. The key signs each message but
-/// doesn't hide it: on TCP, any user on the machine can subscribe to IOPub on
-/// 127.0.0.1 and read the code and everything R prints. TCP only when that path is too
-/// long for a socket address (107 bytes, and Ark adds ":N").
-fn endpoints(conn_path: &Path) -> Result<(&'static str, String, Vec<u16>), String> {
-    let base = conn_path.with_extension("").to_string_lossy().into_owned();
-    if base.starts_with('/') && base.len() + 2 <= 100 {
-        return Ok(("ipc", base, (1..=5).collect()));
+/// A socket address holds 107 bytes; Ark adds ":N", Jupyter's client "-N".
+const SOCKET_PATH_MAX: usize = 100;
+
+/// Where Ark's sockets go, named BASE:N. Next to the connection file, in Corral's own
+/// folder (700), so only this user's processes reach them. When that path is too long
+/// for a socket address, in a new folder of their own with a short path, made 700,
+/// under the runtime folder or /tmp. None only if no such folder can be made.
+pub(crate) fn socket_base(conn_path: &Path) -> Option<PathBuf> {
+    let base = conn_path.with_extension("");
+    if base.is_absolute() && base.as_os_str().len() + 2 <= SOCKET_PATH_MAX {
+        return Some(base);
     }
-    Ok(("tcp", "127.0.0.1".into(), free_ports(5)?))
+    short_socket_dir().map(|d| d.join("kernel"))
+}
+
+/// A new private folder with a short path: created here (so nobody else made it), 700,
+/// under a parent that is ours or sticky like /tmp (so nobody else can swap it).
+fn short_socket_dir() -> Option<PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    let me = std::fs::metadata("/proc/self").ok()?.uid();
+    let parents = [std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))];
+    parents.into_iter().flatten().filter(|p| p.is_absolute()).find_map(|parent| {
+        let m = std::fs::metadata(&parent).ok()?;
+        if !(m.is_dir() && (m.uid() == me || m.mode() & 0o1000 != 0)) {
+            return None;
+        }
+        let dir = parent.join(format!("corral-{}", env::random_hex(4)));
+        if dir.as_os_str().len() + "/kernel:5".len() > SOCKET_PATH_MAX {
+            return None;
+        }
+        std::fs::DirBuilder::new().mode(0o700).create(&dir).ok()?;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
+        Some(dir)
+    })
+}
+
+/// Where Ark listens. Unix sockets (socket_base), which only this user's processes
+/// reach. The key signs each message but doesn't hide it: on TCP, any user on the
+/// machine can subscribe to IOPub on 127.0.0.1 and read the code and everything R
+/// prints. TCP only as a last resort, when no folder for the sockets can be made.
+fn endpoints(conn_path: &Path) -> Result<(&'static str, String, Vec<u16>), String> {
+    match socket_base(conn_path) {
+        Some(base) => Ok(("ipc", base.to_string_lossy().into_owned(), (1..=5).collect())),
+        None => Ok(("tcp", "127.0.0.1".into(), free_ports(5)?)),
+    }
+}
+
+/// For the Jupyter console frontend: jupyter_client connects to BASE-N where Ark binds
+/// BASE:N, so a link BASE-N → BASE:N for each of the five channels lets them meet. The
+/// links point nowhere until Ark starts; ZeroMQ keeps trying until they do.
+pub(crate) fn link_for_jupyter(base: &Path) -> Result<(), String> {
+    let name = base.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    for n in 1..=5 {
+        let link = PathBuf::from(format!("{}-{n}", base.display()));
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(format!("{name}:{n}"), &link).map_err(|e| format!("{}: {e}", link.display()))?;
+    }
+    Ok(())
 }
 
 /// Sockets a crashed Ark left behind (kernel-ID:N, beside kernel-ID.json): once the
@@ -198,10 +245,17 @@ fn remove_stale_sockets(folder: &Path) {
 /// A connection file and the sockets beside it, once their Ark has ended (Ark leaves
 /// its sockets when it is stopped).
 fn remove_connection(conn_path: &Path) {
+    // The sockets' base is in the file: beside it, or in a short folder of its own.
+    let ip = env::read_json(conn_path).get("ip").str().map(PathBuf::from).filter(|p| p.is_absolute());
     let _ = std::fs::remove_file(conn_path);
-    let base = conn_path.with_extension("");
+    let base = ip.unwrap_or_else(|| conn_path.with_extension(""));
     for port in 1..=5 {
         let _ = std::fs::remove_file(format!("{}:{port}", base.display()));
+        let _ = std::fs::remove_file(format!("{}-{port}", base.display()));
+    }
+    // That short folder goes too, once empty; Corral's own folder is never named so.
+    if let Some(dir) = base.parent().filter(|d| d.file_name().is_some_and(|n| n.to_string_lossy().starts_with("corral-"))) {
+        let _ = std::fs::remove_dir(dir);
     }
 }
 
@@ -1368,6 +1422,9 @@ impl Console {
 pub fn run() -> Result<(), String> {
     let cfg = env::config();
     let ark = console::ark_binary(&cfg).ok_or(tr("Ark is not installed (corral ark --install)", "Ark no está instalado (corral ark --install)"))?;
+    // The console replaces itself with R, so `corral`'s own check at the end never runs
+    // for it: Corral's folder is made private here, before Ark's sockets go in it.
+    env::make_private(&env::state_dir());
     let folder = env::state_dir().join("ark");
     let _ = std::fs::create_dir_all(&folder);
     env::remove_old(&folder, "json", 2 * 86400);
@@ -1419,11 +1476,23 @@ mod tests {
     fn ark_listens_on_unix_sockets_in_corrals_folder() {
         let (transport, ip, ports) = endpoints(Path::new("/home/ana/.local/state/corral/ark/kernel-1a2b3c4d.json")).unwrap();
         assert_eq!((transport, ip.as_str(), ports), ("ipc", "/home/ana/.local/state/corral/ark/kernel-1a2b3c4d", vec![1, 2, 3, 4, 5]));
-        // A path too long for a socket address: TCP on 127.0.0.1, five free ports.
+        // A path too long for a socket address: still Unix sockets, in a new short
+        // folder of their own, made 700; it goes with the connection.
         let long = format!("/home/{}/.local/state/corral/ark/kernel-1a2b3c4d.json", "a".repeat(80));
         let (transport, ip, ports) = endpoints(Path::new(&long)).unwrap();
-        assert_eq!((transport, ip.as_str(), ports.len()), ("tcp", "127.0.0.1", 5));
-        assert!(ports.iter().all(|&p| p > 1024));
+        assert_eq!((transport, ports), ("ipc", vec![1, 2, 3, 4, 5]));
+        assert!(ip.len() + 2 <= SOCKET_PATH_MAX, "{ip}");
+        let dir = Path::new(&ip).parent().unwrap().to_path_buf();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
+        assert!(dir.file_name().unwrap().to_string_lossy().starts_with("corral-"));
+        let conn = std::env::temp_dir().join(format!("corral-conn-{}.json", std::process::id()));
+        std::fs::write(&conn, format!(r#"{{"ip":"{ip}","transport":"ipc"}}"#)).unwrap();
+        std::fs::write(format!("{ip}:1"), "").unwrap(); // a socket Ark left
+        link_for_jupyter(Path::new(&ip)).unwrap();
+        assert_eq!(std::fs::read_link(format!("{ip}-2")).unwrap(), Path::new("kernel:2"));
+        remove_connection(&conn);
+        assert!(!conn.exists() && !dir.exists(), "the connection file and its folder go");
     }
 
     #[test]
