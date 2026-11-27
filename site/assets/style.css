@@ -323,6 +323,16 @@ kbd {
 .content table { width: 100%; margin: 16px 0 24px; border-collapse: collapse; font-size: 14.5px; }
 .content th, .content td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
 .content th { color: var(--fg); font-weight: 600; border-bottom-color: var(--line-2); white-space: nowrap; }
+/* A wide table of prose (class "stack"): on a phone each row becomes a block, each cell
+   under its column's name (data-label), instead of a table that scrolls sideways. */
+@media (max-width: 640px) {
+  .content table.stack, .content table.stack tbody, .content table.stack tr, .content table.stack td { display: block; }
+  .content table.stack thead { display: none; }
+  .content table.stack tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .content table.stack td { padding: 4px 0; border: 0; }
+  .content table.stack td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font: 500 11px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .content table.stack td:first-child { color: var(--fg); font-weight: 600; }
+}
 .note { margin: 20px 0; padding: 14px 18px; border-left: 3px solid var(--accent); background: var(--raised); color: var(--text); }
 .note.warn { border-left-color: var(--warn); }
 .note p { margin: 0; }
