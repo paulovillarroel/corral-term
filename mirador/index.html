@@ -674,6 +674,8 @@ function renderSizeMenu() {
     + `<option value="other">${t("Other size…")}</option>`;
 }
 $("#plotsize").addEventListener("change", async (e) => {
+  // Once chosen, the keys are Mirador's again (← → between plots).
+  e.target.blur();
   let size = e.target.value;
   if (size === "other") {
     const f = fixedSize();
@@ -1228,7 +1230,10 @@ $("#session").addEventListener("change", (e) => {
 
 // ------------------------------------------------------------------ keys
 // Buttons and tabs don't keep the focus when clicked, so Enter and space stay the table's.
-document.addEventListener("mousedown", (e) => { if (e.target.closest(".btn, .tab, .chip button")) e.preventDefault(); });
+// A menu (the plot size) needs that mousedown to open: it lets the focus go once chosen.
+document.addEventListener("mousedown", (e) => {
+  if (e.target.closest(".btn, .tab, .chip button") && !e.target.closest("select")) e.preventDefault();
+});
 document.addEventListener("keydown", (e) => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "");
   const keysOpen = !$("#keys").classList.contains("hidden");
