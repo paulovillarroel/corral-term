@@ -213,6 +213,88 @@ pub(crate) fn in_effect() -> InEffect {
     InEffect { global, console, project }
 }
 
+/// Whether Corral and herdr keep to the machine: with the sensitive profile for all your
+/// work, or, for what happens in `folder`, that folder's project. Corral then opens no
+/// connection of its own: no daily version check, no install count, and uv doesn't fetch
+/// what the Python console or its editor lacks. herdr's two checks of herdr.dev follow the
+/// global profile only (sync_herdr): herdr is one for all your projects. What you install
+/// or update on purpose still downloads.
+pub(crate) fn local_only(folder: Option<&Path>) -> bool {
+    let cfg = env::config();
+    if combine(&cfg, &[], false).profile == "sensitive" {
+        return true;
+    }
+    folder.is_some_and(|f| {
+        let r = combine(&cfg, &[f.to_path_buf()], false);
+        r.sensitive || r.profile == "sensitive"
+    })
+}
+
+/// What Corral adds to herdr's config marks its own lines, so going back removes them and
+/// leaves yours: a key it added, or `# corral: was VALUE` on one of yours it changed.
+const HERDR_MARK: &str = "# corral: sensitive profile";
+const HERDR_WAS: &str = "# corral: was ";
+
+/// herdr's config.toml with its two checks of herdr.dev (new versions, agent-detection
+/// updates) off, or, with `off` false, back as it was before Corral turned them off. A
+/// check you turned off yourself stays off either way.
+pub(crate) fn herdr_checks(text: &str, off: bool) -> String {
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    if !off {
+        lines = lines.into_iter().filter(|l| !l.contains(HERDR_MARK)).map(|l| match l.split_once(HERDR_WAS) {
+            Some((code, was)) => format!("{} = {}", code.split('=').next().unwrap_or("").trim(), was.trim()),
+            None => l,
+        }).collect();
+    } else {
+        let header = |l: &str| l.split('#').next().unwrap_or("").trim() == "[update]";
+        let h = match lines.iter().position(|l| header(l)) {
+            Some(h) => h,
+            None => {
+                lines.push(format!("[update]  {HERDR_MARK}"));
+                lines.len() - 1
+            }
+        };
+        for key in ["version_check", "manifest_check"] {
+            let end = lines[h + 1..].iter().position(|l| l.trim_start().starts_with('[')).map_or(lines.len(), |i| h + 1 + i);
+            let at = (h + 1..end).find(|&i| {
+                let t = lines[i].trim_start();
+                t.strip_prefix(key).is_some_and(|rest| rest.trim_start().starts_with('='))
+            });
+            match at {
+                Some(i) => {
+                    let value = lines[i].split_once('=').map(|(_, v)| v.split('#').next().unwrap_or("").trim().to_string()).unwrap_or_default();
+                    if value != "false" {
+                        lines[i] = format!("{key} = false  {HERDR_WAS}{value}");
+                    }
+                }
+                None => lines.insert(h + 1, format!("{key} = false  {HERDR_MARK}")),
+            }
+        }
+    }
+    let mut out = lines.join("\n");
+    if !out.is_empty() && (text.ends_with('\n') || off) {
+        out.push('\n');
+    }
+    out
+}
+
+/// herdr's two checks of herdr.dev, off with the sensitive profile for all your work and
+/// back as they were without it; herdr reloads its config. Run whenever Corral's settings
+/// are written, and by the installer.
+pub(crate) fn sync_herdr(cfg: &Value) {
+    let off = combine(cfg, &[], false).profile == "sensitive";
+    let path = crate::theme::herdr_config();
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let new = herdr_checks(&text, off);
+    if new == text || path.parent().is_none_or(|d| !d.is_dir()) {
+        return;
+    }
+    if std::fs::write(&path, new).is_ok() {
+        let _ = std::process::Command::new("herdr").args(["server", "reload-config"])
+            .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    }
+}
+
 /// A mix of settings in words, for a custom profile: "ask, you review results".
 pub(crate) fn mix_in_words(access: &str, output: &str) -> String {
     let a = match access {
@@ -253,8 +335,8 @@ fn usage() -> &'static str {
 fn meaning(name: &str) -> &'static str {
     match name {
         "open" => tr("Agents run code without asking and see full results.", "Los agentes ejecutan código sin preguntar y ven los resultados completos."),
-        "sensitive" => tr("Each request waits for your approval, results come back without values, and every session is sensitive.",
-                          "Cada petición espera tu aprobación, los resultados vuelven sin valores y cada sesión es sensible."),
+        "sensitive" => tr("Each request waits for your approval, results come back without values, every session is sensitive, and neither Corral nor herdr connects to the internet of its own accord.",
+                          "Cada petición espera tu aprobación, los resultados vuelven sin valores, cada sesión es sensible, y ni Corral ni herdr se conectan a internet por su cuenta."),
         _ => tr("Each request waits for your approval; agents see full results.", "Cada petición espera tu aprobación; los agentes ven los resultados completos."),
     }
 }
@@ -377,6 +459,36 @@ fn show(json: bool, folder: Option<&String>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// herdr's two checks of herdr.dev: off with the sensitive profile, and back exactly as
+    /// they were without it; a setting of yours is kept, and doing it twice changes nothing.
+    #[test]
+    fn the_sensitive_profile_turns_herdrs_checks_off_and_back() {
+        // No config of herdr's yet: Corral's own section, gone again afterwards.
+        let off = herdr_checks("", true);
+        assert!(off.contains("[update]") && off.contains("version_check = false") && off.contains("manifest_check = false"), "{off}");
+        assert_eq!(herdr_checks(&off, false), "");
+        // Other sections and keys of yours stay as they are.
+        let mine = "[keys]\nprefix = \"ctrl+b\"\n\n[update]\nchannel = \"stable\"\n\n[ui]\ntheme = \"dark\"\n";
+        let off = herdr_checks(mine, true);
+        assert!(off.contains("[update]\nmanifest_check = false") && off.contains("version_check = false"), "{off}");
+        assert_eq!(off.matches("[update]").count(), 1, "{off}");
+        assert_eq!(herdr_checks(&off, false), mine);
+        assert_eq!(herdr_checks(&off, true), off, "twice changes nothing");
+        // A check you turned on is turned off, and back on after.
+        let on = "[update]\nversion_check = true\n";
+        let off = herdr_checks(on, true);
+        assert!(off.contains("version_check = false  # corral: was true"), "{off}");
+        assert_eq!(herdr_checks(&off, false), on);
+        // One you turned off yourself stays off, with or without the profile.
+        let yours = "[update]\nmanifest_check = false\n";
+        let off = herdr_checks(yours, true);
+        assert!(off.contains("manifest_check = false\n") && !off.contains("manifest_check = false  #"), "{off}");
+        assert_eq!(herdr_checks(&off, false), yours);
+        // herdr's own commented example lines are left alone.
+        let example = "[update]\n# version_check = true\n";
+        assert!(herdr_checks(example, true).contains("# version_check = true\nmanifest_check") || herdr_checks(example, true).contains("version_check = false  # corral: sensitive profile"));
+    }
 
     /// The palette names a console's profile by its settings, as name_of does without the
     /// mark: a sensitive session with agents off doesn't ask, so it isn't the sensitive

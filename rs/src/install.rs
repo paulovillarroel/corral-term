@@ -1492,6 +1492,8 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     python_ready();
     herdr_plugin(&dest);
     herdr_keys(&dest, &mut done, &mut saved);
+    // With the sensitive profile, herdr's checks of herdr.dev stay off.
+    crate::profile::sync_herdr(&env::config());
     rprofile_step(&dest, &mut done, &mut saved);
     fresh(&dest, &mut done, &mut saved);
     skill(&dest);
@@ -1579,10 +1581,11 @@ fn count_uninstall(in_place: bool) {
 
 /// The install count is off with CORRAL_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or with
 /// `corral config telemetry off`, which holds where no .bashrc is read too (an
-/// agent's shell, a script).
+/// agent's shell, a script), and with the sensitive profile.
 fn telemetry_off() -> bool {
     let set = |var: &str| std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0");
     set("CORRAL_NO_TELEMETRY") || set("DO_NOT_TRACK") || env::config().get("telemetry").str() == Some("off")
+        || crate::profile::local_only(None)
 }
 
 /// POSTs one ping to the site (api/installed.js): 5 seconds at most, never an error.
@@ -2045,11 +2048,12 @@ fn worth_telling(have: &str, latest: &str, told: Option<&str>) -> bool {
     as_tuple(latest) > as_tuple(have) && told != Some(latest)
 }
 
-/// Opening the workspace calls this. At most once a day it starts `corral
+/// Opening the workspace in `folder` calls this. At most once a day it starts `corral
 /// _update-check` on its own, which asks GitHub, so the layout never waits for the
-/// network. `corral config update_check off` stops it.
-pub fn check_for_update_later() {
-    if env::config().get("update_check").str() == Some("off") {
+/// network. `corral config update_check off` stops it, and so does the sensitive
+/// profile, for all your work or for the folder's project.
+pub fn check_for_update_later(folder: &Path) {
+    if env::config().get("update_check").str() == Some("off") || crate::profile::local_only(Some(folder)) {
         return;
     }
     if !check_due(env::read_json(&update_state()).get("checked").num(), now_secs()) {

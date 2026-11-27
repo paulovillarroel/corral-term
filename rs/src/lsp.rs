@@ -73,6 +73,13 @@ fn lintr_config_found() -> bool {
 /// there on first use, as uvx would), or from the PATH if it is installed as a
 /// tool. With `project_env`, the server reads the project's `.venv`
 /// (VIRTUAL_ENV), so it knows the project's packages.
+/// The sensitive profile: uvx uses only what uv's cache has, and fetches nothing.
+fn offline_if_sensitive(cmd: &mut Command) {
+    if crate::profile::local_only(std::env::current_dir().ok().as_deref()) {
+        cmd.env("UV_OFFLINE", "1");
+    }
+}
+
 fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
     let mut cmd = match tool_path(package, program) {
         Some(bin) => {
@@ -84,6 +91,7 @@ fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
             // net: language-servers: uvx fetches ruff or ty the first time
             let mut c = Command::new("uvx");
             c.args(["--quiet", "--from", package, program]).args(args);
+            offline_if_sensitive(&mut c);
             c
         }
     };
@@ -107,7 +115,9 @@ fn tool_path(package: &str, program: &str) -> Option<PathBuf> {
         return Some(p);
     }
     // net: language-servers
-    let out = Command::new("uvx")
+    let mut uvx = Command::new("uvx");
+    offline_if_sensitive(&mut uvx);
+    let out = uvx
         .args(["--quiet", "--from", package, "python", "-c", "import sys; print(sys.prefix)"])
         .stdin(Stdio::null())
         .stderr(Stdio::null())

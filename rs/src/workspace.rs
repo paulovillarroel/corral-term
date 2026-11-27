@@ -196,8 +196,14 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         // Forget the sizes you left; the open layout goes back to Corral's.
         return layout::forget_sizes(env::current_workspace().as_deref());
     }
+    let ctx = env::plugin_context();
+    let cwd = a.value("--cwd").map(String::from)
+        .or_else(|| ctx.get("focused_pane_cwd").str().map(String::from))
+        .or_else(|| ctx.get("workspace_cwd").str().map(String::from))
+        .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| ".".into());
     // Whether there is a newer Corral: in the background, once a day at most.
-    crate::install::check_for_update_later();
+    crate::install::check_for_update_later(Path::new(&cwd));
     let lang = match a.value("--lang") {
         Some(l @ ("r" | "python")) => l,
         Some(other) => return Err(trf!("--lang takes r or python, not {other}", "--lang acepta r o python, no {other}")),
@@ -220,12 +226,6 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         println!("{}", kept.to_json());
         return Ok(());
     }
-    let ctx = env::plugin_context();
-    let cwd = a.value("--cwd").map(String::from)
-        .or_else(|| ctx.get("focused_pane_cwd").str().map(String::from))
-        .or_else(|| ctx.get("workspace_cwd").str().map(String::from))
-        .or_else(|| std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()))
-        .unwrap_or_else(|| ".".into());
     // The agent pane runs any agent: --agent, then CORRAL_AGENT, then `corral config
     // agent` (none for a shell), else the first agent installed, else a shell.
     let agent = a.value("--agent").map(String::from)

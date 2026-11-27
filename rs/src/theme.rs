@@ -130,6 +130,8 @@ pub(crate) fn write_config(cfg: &Value) {
         let _ = std::fs::create_dir_all(d);
     }
     let _ = std::fs::write(&path, cfg.to_json_pretty(1).trim_end());
+    // The sensitive profile turns herdr's checks of herdr.dev off; any other, back on.
+    crate::profile::sync_herdr(cfg);
 }
 
 /// The theme stored in config.json ("tema" and "tema_herdr" are the names from before).
