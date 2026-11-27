@@ -111,8 +111,11 @@
     </div>
     <div class="hero-shot">
       <figure class="hero-video">
-        <video src="assets/demo.mp4" poster="assets/demo-poster.webp" width="1600" height="900" autoplay muted loop playsinline controls preload="auto"
-               aria-label="A real Corral session: you type corral and the layout opens; Claude Code is asked to plot monthly revenue by region; Corral shows each request's exact code in an approval popup; it runs in the live R console and the variables pane fills; the plot opens in Mirador; Claude sums up what it found"></video>
+        <video poster="assets/demo-poster.webp" width="1600" height="900" muted loop playsinline controls preload="none"
+               aria-label="A real Corral session: you type corral and the layout opens; Claude Code is asked to plot monthly revenue by region; Corral shows each request's exact code in an approval popup; it runs in the live R console and the variables pane fills; the plot opens in Mirador; Claude sums up what it found">
+          <source src="assets/demo-av1.mp4" type='video/mp4; codecs="av01.0.08M.08"'>
+          <source src="assets/demo.mp4" type="video/mp4">
+        </video>
       </figure>
   <p class="shot-caption">A real session, with the waits sped up: you ask, Corral shows you the code, it runs in your live R console and the plot opens in Mirador. <a href="assets/demo.mp4">Full size</a></p>
     </div>
@@ -490,13 +493,24 @@
 </footer>
 
 <script>
-  // With reduced motion, the demo waits to be played.
-  try {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const v = document.querySelector(".hero-video video");
-      if (v) { v.removeAttribute("autoplay"); v.pause(); }
-    }
-  } catch (e) {}
+  // The demo loads and plays only while it's on screen: a phone that never scrolls down
+  // to it doesn't download it, and off screen it stops drawing. With reduced motion or a
+  // data saver on, it waits to be played. AV1 where the browser decodes it (1.3 MB),
+  // H.264 elsewhere (2.2 MB).
+  (() => {
+    const v = document.querySelector(".hero-video video");
+    if (!v) return;
+    let follow = true, ours = false;
+    try { follow = !matchMedia("(prefers-reduced-motion: reduce)").matches && !(navigator.connection && navigator.connection.saveData); } catch (e) {}
+    if (!("IntersectionObserver" in window)) { if (follow) v.play().catch(() => {}); return; }
+    // A pause the reader makes holds until they play it again.
+    v.addEventListener("pause", () => { if (!ours) follow = false; ours = false; });
+    v.addEventListener("play", () => { follow = true; });
+    new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { if (follow && v.paused) v.play().catch(() => {}); }
+      else if (!v.paused) { ours = true; v.pause(); }
+    }, { threshold: 0.25 }).observe(v);
+  })();
 </script>
 <script src="assets/site.js"></script>
 </body>
