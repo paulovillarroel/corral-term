@@ -4,7 +4,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
-- Ark's key and Mirador's token come only from the system's random source (`/dev/urandom`); if it can't be read, they don't start, with a message saying why. Before, a fallback used the clock, fine for file names but guessable for a key.
+- Ark's key and a new Mirador token come only from the system's random source (`/dev/urandom`); if it can't be read, Ark doesn't start, and Mirador doesn't when it has to make a token, with a message saying why. Before, a fallback used the clock, fine for file names but guessable for a key. Mirador keeps the token it already has in `mirador.json`; delete that file for a new one.
 - Python's plot server compares its token in constant time (`secrets.compare_digest`), and a token that isn't ASCII gets a 401 too.
 - The workflows' actions are pinned to a commit, with the version in a comment, since a tag can be moved and the release workflow's output is what gets attested.
 
