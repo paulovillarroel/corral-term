@@ -191,7 +191,10 @@ fn short_socket_dir() -> Option<PathBuf> {
     let me = std::fs::metadata("/proc/self").ok()?.uid();
     let parents = [std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))];
     parents.into_iter().flatten().filter(|p| p.is_absolute()).find_map(|parent| {
-        let safe = parent.ancestors().all(|a| std::fs::metadata(a).is_ok_and(|m| {
+        // Its real path: through any link, the folders that matter are the real ones,
+        // and the new folder is made there.
+        let parent = std::fs::canonicalize(&parent).ok()?;
+        let safe = parent.ancestors().all(|a| std::fs::symlink_metadata(a).is_ok_and(|m| {
             m.is_dir() && (m.uid() == me || m.uid() == 0) && (m.mode() & 0o022 == 0 || m.mode() & 0o1000 != 0)
         }));
         if !safe {
