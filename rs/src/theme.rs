@@ -567,10 +567,13 @@ pub(crate) fn agent_caller() -> bool {
         return false;
     }
     match std::env::var("HERDR_PANE_ID") {
-        // If herdr can't say what is in the pane, refuse: better a key that has to be
-        // pressed again than an agent let through.
+        // If herdr can't say what is in the pane (no answer, or no such pane), refuse:
+        // better a key that has to be pressed again than an agent let through.
         Ok(pane) => match crate::herdr::panes(None) {
-            Ok(list) => list.iter().find(|p| crate::herdr::pane_id(p) == pane).and_then(|p| p.get("agent").str()).is_some(),
+            Ok(list) => match list.iter().find(|p| crate::herdr::pane_id(p) == pane) {
+                Some(p) => p.get("agent").str().is_some(),
+                None => true,
+            },
             Err(_) => true,
         },
         Err(_) => !std::io::stdin().is_terminal(),
