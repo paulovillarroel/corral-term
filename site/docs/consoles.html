@@ -87,7 +87,7 @@
     <p>To use Ark through <code>jupyter-console</code> instead of Corral's console:</p>
     <pre><code><span class="p">$ </span>corral config ark_frontend jupyter
 <span class="p">$ </span>corral config ark_frontend corral</code></pre>
-    <p>The second goes back to Corral's console. Corral writes its own kernel definition for Ark, so your Jupyter setup stays as it is. <code>corral doctor</code> tells you if <code>jupyter-console</code> is missing (<code>uv tool install jupyter-console</code> installs it).</p>
+    <p>The second goes back to Corral's console. Corral writes its own kernel definition for Ark, so your Jupyter setup stays as it is, and Ark talks to jupyter-console over private Unix sockets, as it does to Corral's console. <code>corral doctor</code> tells you if <code>jupyter-console</code> is missing (<code>uv tool install jupyter-console</code> installs it).</p>
 
     <h2>Python in IPython</h2>
     <p>R is the default console. To start with Python instead, choose "Layout: start with Python" in the palette (<code>corral config start python</code>): new layouts open the Python console and a <code>draft.py</code>. In a project with R and Python you don't have to choose up front: the console follows what you run, and you can go back and forth in the same session. Each language keeps its draft in its own tab.</p>
