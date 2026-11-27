@@ -667,6 +667,25 @@ fn a_newer_version_shows_in_the_variables_pane() {
     assert!(!live.run("corral", &["keys", "--json"]).contains("9.9.9"));
 }
 
+/// A month without a look for a newer Corral (the sensitive profile has no daily check):
+/// the variables pane says so, and a look made since puts it away. Nothing asks GitHub.
+#[test]
+#[ignore]
+fn a_month_without_a_look_shows_in_the_variables_pane() {
+    let live = Live::start("remind");
+    live.config(r#"{"agents":"on","update_check":"off"}"#);
+    let state = live.dir.join("state/corral/update-check.json");
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let version = env!("CARGO_PKG_VERSION");
+    std::fs::write(&state, format!(r#"{{"checked":{},"latest":"{version}"}}"#, now - 40 * 86_400)).unwrap();
+    live.wait_screen(&live.vars, &["No update check in 40 days: ctrl+b space → Update"]);
+    let palette = live.run("corral", &["keys", "--json"]);
+    assert!(palette.contains("Update: look for a newer version (40 days since the last look)"), "{palette}");
+    // A look since (the daily check, or `corral update --check`): the row is the hints again.
+    std::fs::write(&state, format!(r#"{{"checked":{now},"latest":"{version}"}}"#)).unwrap();
+    wait_for(Duration::from_secs(20), "the reminder to go", || !live.screen(&live.vars).contains("No update check"));
+}
+
 /// `corral context` tells an agent, in one call and without starting anything, which
 /// consoles run, whether SQL works in each, and the rules as they apply to each session.
 #[test]
