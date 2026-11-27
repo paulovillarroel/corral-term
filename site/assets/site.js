@@ -230,12 +230,14 @@ function init() {
   });
 
   // The phone note's link opens the share sheet where there is one; elsewhere it stays
-  // an email to send the link on.
+  // an email to send the link on. If the sheet fails (not when the reader closes it),
+  // the email opens instead.
   document.querySelectorAll("a.share").forEach((a) => {
     if (!navigator.share) return;
     a.addEventListener("click", (e) => {
       e.preventDefault();
-      navigator.share({ title: "Corral", text: "Corral: R, Python and SQL in the terminal, with your AI agent. It installs on Linux or Windows (WSL).", url: "https://corral-term.dev/" }).catch(() => {});
+      navigator.share({ title: "Corral", text: "Corral: R, Python and SQL in the terminal, with your AI agent. It installs on Linux or Windows (WSL).", url: "https://corral-term.dev/" })
+        .catch((err) => { if (!err || err.name !== "AbortError") location.href = a.href; });
     }, { signal });
   });
 
