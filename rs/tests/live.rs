@@ -1839,6 +1839,31 @@ fn ordinary_work_stays_on_the_machine() {
     println!("{seen} connections followed, all on the machine");
 }
 
+/// With the sensitive profile, opening the workspace doesn't ask GitHub for a newer Corral,
+/// though the daily check is on and due: the check never runs (it would note when it did),
+/// and under strace nothing leaves the machine.
+#[test]
+#[ignore]
+fn the_sensitive_profile_skips_the_version_check() {
+    if Command::new("strace").arg("-V").output().is_err() {
+        eprintln!("strace isn't installed: skipped");
+        return;
+    }
+    let live = Live::start_traced("offlinecheck", &[("CORRAL_BROWSER", "print")]);
+    live.config(r#"{"agents":"ask","agent_output":"structure","update_check":"on"}"#);
+    let state = live.dir.join("state/corral/update-check.json");
+    let _ = std::fs::remove_file(&state);
+    let log = live.dir.join("strace-layout.log");
+    let out = live.command("strace").args(STRACE).arg(&log).args(["corral", "layout", "--editor", ""])
+        .stdin(Stdio::null()).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    // The check runs in the background, when it runs.
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(!state.exists(), "the version check ran: {}", std::fs::read_to_string(&state).unwrap_or_default());
+    let beyond = beyond_the_machine(&std::fs::read_to_string(&log).unwrap_or_default());
+    assert!(beyond.is_empty(), "connections beyond the machine:\n{}", beyond.join("\n"));
+}
+
 /// The palette says what is in effect, with a real herdr and console: the global profile,
 /// and the console's project by its folder's name, the one in effect there when it is
 /// stricter. Its action acts on that same folder.
