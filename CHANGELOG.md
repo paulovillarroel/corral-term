@@ -8,6 +8,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 - Ark's key and a new Mirador token come only from the system's random source (`/dev/urandom`); if it can't be read, Ark doesn't start, and Mirador doesn't when it has to make a token, with a message saying why. Before, a fallback used the clock, fine for file names but guessable for a key. Mirador keeps the token it already has in `mirador.json`; delete that file for a new one.
 - Python's plot server compares its token in constant time (`secrets.compare_digest`), and a token that isn't ASCII gets a 401 too.
 - The workflows' actions are pinned to a commit, with the version in a comment, since a tag can be moved and the release workflow's output is what gets attested.
+- The docs have a Threat model page, in Harness and security: what Corral protects and from whom, each threat with what stops it and what is left, the channels between Corral's parts and how each is closed, and the supply chain. The harness page no longer says flatly that an agent can't loosen the controls: that holds for Corral's own commands, not for an agent with an unrestricted shell. The Security model says the files Corral keeps aren't encrypted and what the 700 folder does and doesn't keep out, and that the audit log is an operational record, not a tamper-evident one.
 
 ## 0.1.28
 
