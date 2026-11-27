@@ -316,38 +316,64 @@ fn fixed(group: Group, prefix: &str, category: (&str, &str), items: &[(&str, &st
     }).collect()
 }
 
-/// Mark what is in effect among the Security and Agent entries: the global profile (or
-/// a custom mix of the two settings, as an entry of its own), each setting's value,
-/// the agent, and the console's project, named by its folder. Without a console the
-/// project entries go: their action would have no folder to act on.
+/// Mark what is in effect among the Security and Agent entries. The console in view
+/// can run by stricter rules than the global settings (its project's profile, its own
+/// sensitive mark): then what it runs by is "● active" and the global value "● global";
+/// when they agree, the profile is "● active" and each setting "●". A mix that is no
+/// profile shows as an entry of its own. The project entries name the console's folder,
+/// and go without a console here: their action would have no folder to act on.
 fn mark_in_effect(list: &mut Vec<Entry>) {
-    let cfg_agent = env::config().get("agent").str().map(|a| a.split_whitespace().next().unwrap_or("").to_string());
-    let agent = cfg_agent.or_else(|| env::first_agent(|cmd| env::which(cmd).is_some()).map(String::from)).unwrap_or_else(|| "none".into());
+    // The agent the layout opens: CORRAL_AGENT (empty for a shell), the setting, else
+    // the first one installed.
+    let chosen = std::env::var("CORRAL_AGENT").ok().or_else(|| env::config().get("agent").str().map(String::from));
+    let agent = match chosen {
+        Some(a) if a.trim().is_empty() || a == "none" => "none".to_string(),
+        Some(a) => a.split_whitespace().next().unwrap_or("").to_string(),
+        None => env::first_agent(|cmd| env::which(cmd).is_some()).unwrap_or("none").to_string(),
+    };
     mark(list, &crate::profile::in_effect(), crate::audit::keep_days(), &agent);
 }
 
 /// mark_in_effect, given what is in effect: the profile and project, the audit log's
 /// days (None: forever) and the agent's command.
 fn mark(list: &mut Vec<Entry>, now: &crate::profile::InEffect, audit: Option<i64>, agent: &str) {
+    let (global, console) = (now.global, now.console);
+    let same = global == console;
     let active = tr("● active", "● activo");
-    // When the console's project tightens the rules, the global profile isn't what runs there.
-    let tightens = now.project.as_ref().is_some_and(|p| p.tightens);
-    let global = if tightens { tr("● global", "● global") } else { active };
-    let mut keep = Vec::with_capacity(list.len());
+    let global_mark = tr("● global", "● global");
+    // The mark for an entry whose value is `v` among the global one and the console's.
+    let pick = |v: &str, g: &str, c: &str, agree: &'static str| -> &'static str {
+        match (v == g, v == c) {
+            (true, true) => agree,
+            (false, true) => active,
+            (true, false) => global_mark,
+            _ => "",
+        }
+    };
+    let custom = |mix: crate::profile::Mix, current: &'static str| Entry {
+        group: Group::Security, keys: Vec::new(),
+        desc: trf!("Profile: custom ({})", "Perfil: a medida ({})", crate::profile::mix_in_words(mix.access, mix.output)),
+        id: "profile-custom".into(), run: None, current,
+    };
+    let mut keep = Vec::with_capacity(list.len() + 2);
     for mut e in list.drain(..) {
         let Some(id) = e.id.strip_prefix("herdr:").map(String::from) else {
             keep.push(e);
             continue;
         };
-        match id.as_str() {
-            "profile-open" if now.profile == "custom" => {
-                keep.push(Entry {
-                    group: Group::Security, keys: Vec::new(),
-                    desc: trf!("Profile: custom ({})", "Perfil: a medida ({})", crate::profile::mix_in_words(now.access, now.output)),
-                    id: "profile-custom".into(), run: None, current: global,
-                });
+        if id == "profile-open" {
+            if global.profile == "custom" {
+                keep.push(custom(global, if same { active } else { global_mark }));
             }
-            "profile-open" | "profile-standard" | "profile-sensitive" if id.ends_with(now.profile) => e.current = global,
+            if console.profile == "custom" && !same {
+                keep.push(custom(console, active));
+            }
+        }
+        match id.as_str() {
+            "profile-open" | "profile-standard" | "profile-sensitive" => {
+                let name = &id["profile-".len()..];
+                e.current = pick(name, global.profile, console.profile, active);
+            }
             "profile-project-sensitive" | "profile-project-clear" => {
                 let Some(project) = &now.project else { continue };
                 // The folder's name: a whole path would push the rest out of a narrow palette.
@@ -356,24 +382,34 @@ fn mark(list: &mut Vec<Entry>, now: &crate::profile::InEffect, audit: Option<i64
                 if id.ends_with("sensitive") {
                     e.desc = trf!("Project {folder}: sensitive in every session", "Proyecto {folder}: sensible en cada sesión");
                     if project.applies.as_deref() == Some("sensitive") {
-                        e.current = if project.tightens { active } else { "●" };
+                        e.current = "●";
                     }
                 } else {
-                    // Only a profile set for this very folder can be removed from here.
+                    // Only a profile set for this very folder can be removed from here; what
+                    // then applies there is the global profile, or a folder's above it.
                     if project.own.is_none() {
                         continue;
                     }
-                    e.desc = match now.profile {
-                        "custom" => trf!("Project {folder}: remove its profile (the global one applies)", "Proyecto {folder}: quitar su perfil (rige el global)"),
+                    let rest = project.without_own;
+                    e.desc = match rest.profile {
+                        "custom" => trf!("Project {folder}: remove its profile (then: {})", "Proyecto {folder}: quitar su perfil (queda: {})",
+                                         crate::profile::mix_in_words(rest.access, rest.output)),
                         p => trf!("Project {folder}: remove its profile (back to {})", "Proyecto {folder}: quitar su perfil (vuelve al {})", crate::profile::shown(p)),
                     };
                 }
             }
-            _ if id.strip_prefix("agents-") == Some(now.access)
-                || id.strip_prefix("output-") == Some(now.output)
-                || id.strip_prefix("audit-").and_then(|d| d.parse::<i64>().ok()).is_some_and(|d| Some(d) == audit)
-                || id.strip_prefix("agent-") == Some(agent) => e.current = "●",
-            _ => {}
+            _ => {
+                e.current = if let Some(a) = id.strip_prefix("agents-") {
+                    pick(a, global.access, console.access, "●")
+                } else if let Some(o) = id.strip_prefix("output-") {
+                    pick(o, global.output, console.output, "●")
+                } else if id.strip_prefix("audit-").and_then(|d| d.parse::<i64>().ok()).is_some_and(|d| Some(d) == audit)
+                    || id.strip_prefix("agent-") == Some(agent) {
+                    "●"
+                } else {
+                    ""
+                };
+            }
         }
         keep.push(e);
     }
@@ -757,7 +793,13 @@ fn to_json(all: &[Entry]) -> Value {
         ("description", e.desc.as_str().into()),
         ("id", e.id.as_str().into()),
         ("runnable", e.run.is_some().into()),
-        ("in_effect", (!e.current.is_empty()).into()),
+        // "active": the console in view runs by it; "global": the global value, while the
+        // console runs by a stricter one.
+        ("in_effect", match e.current {
+            "" => false.into(),
+            c if c == tr("● global", "● global") => "global".into(),
+            _ => "active".into(),
+        }),
         ("changeable", changeable(&e.id).into()),
     ])).collect())
 }
@@ -1103,9 +1145,17 @@ pub fn run(args: &[String], popup: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::{InEffect, Project};
+    use crate::profile::{InEffect, Mix, Project};
 
-    /// The Security and Agent entries as the palette lists them, marked for `now`.
+    fn mix(access: &'static str, output: &'static str, profile: &'static str) -> Mix {
+        Mix { access, output, profile }
+    }
+    const OPEN: Mix = Mix { access: "on", output: "full", profile: "open" };
+    const STANDARD: Mix = Mix { access: "ask", output: "full", profile: "standard" };
+    const SENSITIVE: Mix = Mix { access: "ask", output: "structure", profile: "sensitive" };
+
+    /// The Security and Agent entries as the palette lists them, marked for `now`:
+    /// (id, mark, description).
     fn marked(now: &InEffect, audit: Option<i64>, agent: &str) -> Vec<(String, &'static str, String)> {
         let mut list: Vec<Entry> = ACTIONS.iter().filter(|a| matches!(a.1, Group::Security | Group::Agent)).map(|a| Entry {
             group: a.1, keys: Vec::new(), desc: a.2.into(), id: format!("herdr:{}", a.0), run: Some((a.0.into(), Vec::new())), current: "",
@@ -1114,55 +1164,73 @@ mod tests {
         list.into_iter().map(|e| (e.id.trim_start_matches("herdr:").to_string(), e.current, e.desc)).collect()
     }
 
-    fn on<'a>(list: &'a [(String, &'static str, String)]) -> Vec<&'a str> {
-        list.iter().filter(|(_, c, _)| !c.is_empty()).map(|(id, _, _)| id.as_str()).collect()
+    /// The marked entries: (id, mark).
+    fn on(list: &[(String, &'static str, String)]) -> Vec<(String, &'static str)> {
+        list.iter().filter(|(_, c, _)| !c.is_empty()).map(|(id, c, _)| (id.clone(), *c)).collect()
+    }
+
+    fn pairs(items: &[(&str, &'static str)]) -> Vec<(String, &'static str)> {
+        items.iter().map(|(id, c)| (id.to_string(), *c)).collect()
+    }
+
+    fn project(own: Option<&str>, applies: Option<&str>, without_own: Mix) -> Option<Project> {
+        Some(Project { dir: PathBuf::from("/data/clinic"), own: own.map(String::from), applies: applies.map(String::from), without_own })
     }
 
     #[test]
     fn the_palette_marks_what_is_in_effect() {
-        let standard = InEffect { access: "ask", output: "full", profile: "standard", project: None };
+        let standard = InEffect { global: STANDARD, console: STANDARD, project: None };
         let list = marked(&standard, Some(90), "claude");
-        assert_eq!(on(&list), ["profile-standard", "agents-ask", "output-full", "audit-90", "agent-claude"]);
-        // Without a console, no project entries: their action would have no folder.
+        assert_eq!(on(&list), pairs(&[("profile-standard", "● active"), ("agents-ask", "●"), ("output-full", "●"), ("audit-90", "●"), ("agent-claude", "●")]));
+        // Without a console here, no project entries: their action would have no folder.
         assert!(!list.iter().any(|(id, _, _)| id.starts_with("profile-project")), "{list:?}");
-        // Kept forever: no audit entry is in effect.
-        assert!(!on(&marked(&standard, None, "none")).iter().any(|id| id.starts_with("audit-")));
-        assert!(on(&marked(&standard, None, "none")).contains(&"agent-none"));
+        // Kept forever: no audit entry is in effect; a shell in the agent's pane.
+        let list = marked(&standard, None, "none");
+        assert!(!on(&list).iter().any(|(id, _)| id.starts_with("audit-")));
+        assert!(on(&list).contains(&("agent-none".into(), "●")));
     }
 
     #[test]
     fn a_mix_that_is_no_profile_shows_as_custom() {
-        let mix = InEffect { access: "ask", output: "review", profile: "custom", project: None };
-        let list = marked(&mix, Some(30), "codex");
-        assert_eq!(on(&list), ["profile-custom", "agents-ask", "output-review", "audit-30", "agent-codex"]);
-        let first = &list[0];
-        assert_eq!(first.0, "profile-custom");
-        assert!(first.2.contains("you review results"), "{first:?}");
+        let review = mix("ask", "review", "custom");
+        let list = marked(&InEffect { global: review, console: review, project: None }, Some(30), "codex");
+        assert_eq!(on(&list), pairs(&[("profile-custom", "● active"), ("agents-ask", "●"), ("output-review", "●"), ("audit-30", "●"), ("agent-codex", "●")]));
+        assert!(list[0].2.contains("you review results"), "{:?}", list[0]);
         assert_eq!(list[1].0, "profile-open");
     }
 
     #[test]
+    fn the_console_can_run_by_stricter_rules() {
+        // Open globally, sensitive in the console (its project's profile, or its own mark):
+        // what it runs by is active, and the global values say they are the global ones.
+        let list = marked(&InEffect { global: OPEN, console: SENSITIVE, project: project(Some("sensitive"), Some("sensitive"), OPEN) }, Some(90), "claude");
+        assert_eq!(on(&list), pairs(&[("profile-open", "● global"), ("profile-sensitive", "● active"), ("profile-project-sensitive", "●"),
+                                      ("agents-ask", "● active"), ("agents-on", "● global"), ("output-full", "● global"),
+                                      ("output-structure", "● active"), ("audit-90", "●"), ("agent-claude", "●")]));
+        // A standard project under an open global profile: the standard profile is active.
+        let list = marked(&InEffect { global: OPEN, console: STANDARD, project: project(Some("standard"), Some("standard"), OPEN) }, Some(90), "claude");
+        let profiles: Vec<_> = on(&list).into_iter().filter(|(id, _)| id.starts_with("profile-")).collect();
+        assert_eq!(profiles, pairs(&[("profile-open", "● global"), ("profile-standard", "● active")]));
+        // Two mixes that are no profile: both shown, the console's active.
+        let list = marked(&InEffect { global: mix("on", "review", "custom"), console: mix("ask", "review", "custom"), project: None }, Some(90), "claude");
+        assert_eq!(on(&list)[..2], pairs(&[("profile-custom", "● global"), ("profile-custom", "● active")]));
+    }
+
+    #[test]
     fn the_project_is_named_by_its_folder() {
-        let project = |own: Option<&str>, tightens| Some(Project {
-            dir: PathBuf::from("/data/clinic"), own: own.map(String::from), applies: Some("sensitive".into()), tightens,
-        });
         let find = |list: &[(String, &'static str, String)], id: &str| list.iter().find(|e| e.0 == id).cloned();
-        // Its own profile, stricter than the global one: the console runs by it, so it is
-        // the one active, the global profile says so, and removing it says what comes back.
-        let own = InEffect { access: "ask", output: "full", profile: "standard", project: project(Some("sensitive"), true) };
+        // Its own profile: removing it says what comes back, the global profile here.
+        let own = InEffect { global: STANDARD, console: SENSITIVE, project: project(Some("sensitive"), Some("sensitive"), STANDARD) };
         let list = marked(&own, Some(90), "claude");
-        let sensitive = find(&list, "profile-project-sensitive").unwrap();
-        assert_eq!((sensitive.1, sensitive.2.as_str()), ("● active", "Project clinic: sensitive in every session"));
-        assert_eq!(find(&list, "profile-standard").unwrap().1, "● global");
+        assert_eq!(find(&list, "profile-project-sensitive").unwrap().2, "Project clinic: sensitive in every session");
         assert_eq!(find(&list, "profile-project-clear").unwrap().2, "Project clinic: remove its profile (back to standard)");
-        // With a sensitive global profile it changes nothing: marked, the global one active.
-        let same = InEffect { access: "ask", output: "structure", profile: "sensitive", project: project(Some("sensitive"), false) };
-        let list = marked(&same, Some(90), "claude");
-        assert_eq!((find(&list, "profile-project-sensitive").unwrap().1, find(&list, "profile-sensitive").unwrap().1), ("●", "● active"));
-        // Sensitive from a folder above: marked, but there is nothing to remove from here.
-        let above = InEffect { access: "ask", output: "full", profile: "standard", project: project(None, true) };
-        let list = marked(&above, Some(90), "claude");
-        assert!(on(&list).contains(&"profile-project-sensitive"));
+        // A folder above is sensitive: removing this one's own leaves that one, not the global.
+        let above = InEffect { project: project(Some("standard"), Some("sensitive"), SENSITIVE), ..own };
+        assert_eq!(find(&marked(&above, Some(90), "claude"), "profile-project-clear").unwrap().2, "Project clinic: remove its profile (back to sensitive)");
+        // Sensitive only from a folder above: marked, and nothing to remove from here.
+        let inherited = InEffect { global: STANDARD, console: SENSITIVE, project: project(None, Some("sensitive"), SENSITIVE) };
+        let list = marked(&inherited, Some(90), "claude");
+        assert_eq!(find(&list, "profile-project-sensitive").unwrap().1, "●");
         assert!(find(&list, "profile-project-clear").is_none(), "{list:?}");
     }
 
