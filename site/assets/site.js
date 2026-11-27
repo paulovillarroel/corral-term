@@ -35,6 +35,127 @@ const NAV = [
   ]],
 ];
 
+// ---------------------------------------------------------------- docs search
+
+// The docs pages, read once (the first time the search box is used) and cut into
+// sections: no index to keep in step with the pages, and nothing loaded until then.
+// It stays across the in-place page swaps below.
+let docIndex = null;
+const slug = (t) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const escapeHtml = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+function loadDocIndex() {
+  if (docIndex) return docIndex;
+  const base = new URL(location.pathname.includes("/docs/") ? "./" : "docs/", location.href);
+  docIndex = Promise.all(NAV.flatMap(([, pages]) => pages).map(async ([href, title]) => {
+    try {
+      const res = await fetch(new URL(href, base));
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      const main = doc.querySelector(".content");
+      if (!main) return [];
+      const out = [];
+      let cur = { href, title, section: title, id: "", text: "" };
+      for (const el of main.children) {
+        if (el.tagName === "H2" || el.tagName === "H3") {
+          out.push(cur);
+          cur = { href, title, section: el.textContent.trim(), id: el.id || slug(el.textContent), text: "" };
+        } else if (el.tagName !== "H1" && !el.classList.contains("pager")) {
+          // Table cells and list items run together in textContent: a space between them.
+          el.querySelectorAll("td, th, li, dt, dd, p, pre, br").forEach((n) => n.append(" "));
+          cur.text += " " + el.textContent;
+        }
+      }
+      out.push(cur);
+      return out.map((e) => ({ ...e, text: e.text.replace(/\s+/g, " ").trim(), low: (e.title + " " + e.section + " " + e.text).toLowerCase() }));
+    } catch (e) {
+      return [];
+    }
+  })).then((all) => all.flat());
+  return docIndex;
+}
+
+// Sections holding every word, best first: in the section's title, then the page's, then the text.
+function searchDocs(index, query) {
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return [];
+  return index
+    .filter((e) => words.every((w) => e.low.includes(w)))
+    .map((e) => {
+      const sec = e.section.toLowerCase(), page = e.title.toLowerCase(), text = e.text.toLowerCase();
+      const score = words.reduce((s, w) => s + (sec.includes(w) ? 6 : 0) + (page.includes(w) ? 3 : 0) + Math.min(3, text.split(w).length - 1), 0);
+      return { e, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(({ e }) => e);
+}
+
+function snippet(text, words) {
+  const low = text.toLowerCase();
+  const at = Math.max(0, words.map((w) => low.indexOf(w)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0);
+  let start = Math.max(0, at - 50);
+  if (start) start = text.indexOf(" ", start) + 1 || start; // from a whole word
+  let cut = (start ? "…" : "") + text.slice(start, start + 150) + (start + 150 < text.length ? "…" : "");
+  cut = escapeHtml(cut);
+  for (const w of words) cut = cut.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`);
+  return cut;
+}
+
+function setupDocSearch(box, signal) {
+  const input = box.querySelector("input");
+  const hits = box.querySelector(".doc-hits");
+  let active = -1, timer = 0;
+  const links = () => [...hits.querySelectorAll("a")];
+  const mark = (i) => {
+    const all = links();
+    active = all.length ? (i + all.length) % all.length : -1;
+    all.forEach((a, k) => a.classList.toggle("on", k === active));
+    if (active >= 0) all[active].scrollIntoView({ block: "nearest" });
+  };
+  const close = () => { hits.hidden = true; active = -1; };
+  // The menu scrolls, and would cut off a panel inside it: the results float, fixed,
+  // under the box, as wide as the screen allows.
+  const place = () => {
+    const r = input.getBoundingClientRect();
+    hits.style.left = r.left + "px";
+    hits.style.top = r.bottom + 4 + "px";
+    hits.style.width = Math.min(480, innerWidth - r.left - 16) + "px";
+  };
+  addEventListener("resize", () => { if (!hits.hidden) place(); }, { signal });
+  box.closest(".side")?.addEventListener("scroll", close, { signal });
+  const run = async () => {
+    const q = input.value.trim();
+    if (q.length < 2) return close();
+    const index = await loadDocIndex();
+    if (input.value.trim() !== q) return; // typed on meanwhile
+    const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    const found = searchDocs(index, q);
+    hits.innerHTML = found.length
+      ? found.map((e) => `<li><a href="${e.href}${e.id ? "#" + e.id : ""}"><b>${escapeHtml(e.title)}${e.section !== e.title ? " › " + escapeHtml(e.section) : ""}</b><span>${snippet(e.text, words)}</span></a></li>`).join("")
+      : `<li class="none">Nothing found for “${escapeHtml(q)}”.</li>`;
+    hits.hidden = false;
+    place();
+    mark(0);
+  };
+  input.addEventListener("focus", () => { loadDocIndex(); if (input.value.trim().length >= 2) run(); }, { signal });
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 60); }, { signal });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); mark(active + (e.key === "ArrowDown" ? 1 : -1)); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); links()[active].click(); close(); }
+    else if (e.key === "Escape") { close(); input.blur(); }
+  }, { signal });
+  hits.addEventListener("click", (e) => { if (e.target.closest("a")) close(); }, { signal });
+  document.addEventListener("click", (e) => { if (!box.contains(e.target)) close(); }, { signal });
+  // "/" anywhere but in a field: to the search box (the menu opens first on a phone).
+  addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) return;
+    e.preventDefault();
+    const toggle = document.querySelector(".menu-toggle");
+    if (toggle && getComputedStyle(toggle).display !== "none" && !document.querySelector(".side.open")) toggle.click();
+    input.focus();
+  }, { signal });
+}
+
 function store(key, value) {
   try {
     if (value === undefined) return localStorage.getItem(key);
@@ -125,7 +246,8 @@ function init() {
     const here = location.pathname.split("/").pop() || "index.html";
     const flat = [];
     const head = '<div class="side-head"><b>Documentation</b><button type="button" class="side-close">Close</button></div>';
-    side.innerHTML = head + NAV.map(([group, pages]) => {
+    const search = '<div class="doc-search" role="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false"><kbd>/</kbd><ol class="doc-hits" hidden></ol></div>';
+    side.innerHTML = head + search + NAV.map(([group, pages]) => {
       const items = pages.map(([href, title]) => {
         flat.push([href, title]);
         const current = href === here ? ' aria-current="page"' : "";
@@ -133,6 +255,8 @@ function init() {
       }).join("");
       return `<h4>${group}</h4><ul>${items}</ul>`;
     }).join("");
+
+    setupDocSearch(side.querySelector(".doc-search"), signal);
 
     const i = flat.findIndex(([href]) => href === here);
     const pager = document.querySelector(".pager");
