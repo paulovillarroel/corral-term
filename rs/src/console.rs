@@ -107,7 +107,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 // jupyter_client's names meet Ark's are known before it starts.
                 // Never TCP: if there is nowhere private for the sockets, it doesn't start.
                 crate::ark::remove_stale_sockets(&folder);
-                let base = crate::ark::socket_base(&conn).ok_or_else(crate::ark::no_private_sockets)?;
+                let base = crate::ark::socket_base(&conn)?;
                 crate::ark::link_for_jupyter(&base)?;
                 c.arg("--ConnectionFileMixin.transport=ipc").arg(format!("--ConnectionFileMixin.ip={}", base.display()));
                 for (port, n) in [("shell_port", 1), ("iopub_port", 2), ("stdin_port", 3), ("control_port", 4), ("hb_port", 5)] {
