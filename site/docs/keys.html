@@ -59,7 +59,25 @@
     <h2>How ctrl+b shortcuts work</h2>
     <p>The shortcuts that work in any pane go through herdr, so they start with its prefix, <kbd>ctrl+b</kbd>: press it, let go, then press the next key. They only do something when you use them. If you changed herdr's prefix, Corral's shortcuts use yours.</p>
 
-    <h2>The palette</h2>
+        <figure class="arch" tabindex="0" aria-label="Diagram: Where a key goes">
+      <svg viewBox="0 0 760 220" role="img" aria-labelledby="keyway-t keyway-d">
+        <title id="keyway-t">Where a key goes</title>
+        <desc id="keyway-d">Every key goes to herdr first. ctrl+b and then a key is herdr's: it looks it up in its own configuration (~/.config/herdr/config.toml) and runs the corral command Corral put there, which you can change. Any other key goes to the pane in focus: the script editor (Fresh, whose keys Corral sets in its configuration and you can change), the console, the variables pane or a viewer, whose keys are fixed.</desc>
+        <defs><marker id="keyway-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="ui"><rect x="10" y="79" width="150" height="62" rx="6"/><text class="t" x="85" y="110" text-anchor="middle" dominant-baseline="central">Your keyboard</text></g>
+        <line class="arr" x1="162" y1="110" x2="198" y2="110" marker-end="url(#keyway-arrow)"/>
+        <g class="core"><rect x="200" y="79" width="150" height="62" rx="6"/><text class="t" x="275" y="99" text-anchor="middle" dominant-baseline="central">herdr</text><text class="s" x="275" y="121" text-anchor="middle" dominant-baseline="central">every key first</text></g>
+        <line class="arr" x1="352" y1="98" x2="398" y2="56" marker-end="url(#keyway-arrow)"/>
+        <line class="arr" x1="352" y1="122" x2="398" y2="164" marker-end="url(#keyway-arrow)"/>
+        <text class="s" x="372" y="66" text-anchor="end" dominant-baseline="central">ctrl+b + key</text>
+        <text class="s" x="372" y="160" text-anchor="end" dominant-baseline="central">any other key</text>
+        <g class="core"><rect x="400" y="24" width="170" height="62" rx="6"/><text class="t" x="485" y="44" text-anchor="middle" dominant-baseline="central">herdr's keys</text><text class="s" x="485" y="66" text-anchor="middle" dominant-baseline="central">config.toml · changeable</text></g>
+        <line class="arr" x1="572" y1="55" x2="588" y2="55" marker-end="url(#keyway-arrow)"/>
+        <g class="eng"><rect x="590" y="24" width="160" height="62" rx="6"/><text class="t" x="670" y="44" text-anchor="middle" dominant-baseline="central">A corral command</text><text class="s" x="670" y="66" text-anchor="middle" dominant-baseline="central">corral.&lt;id&gt;</text></g>
+        <g class="eng"><rect x="400" y="134" width="350" height="62" rx="6"/><text class="t" x="575" y="154" text-anchor="middle" dominant-baseline="central">The pane in focus</text><text class="s" x="575" y="176" text-anchor="middle" dominant-baseline="central">editor (changeable) · console · viewers</text></g>
+      </svg>
+    </figure>
+<h2>The palette</h2>
     <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Agents:</code>, <code>Theme:</code>…), so typing a category lists just that. Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
     <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 20 of 106 entries, the Agents group, each starting with Agents:">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>

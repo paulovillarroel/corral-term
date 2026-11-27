@@ -57,7 +57,7 @@
     <p class="intro">Corral is a thin layer of Rust between herdr and the engines that do the heavy lifting. This page shows the pieces, what runs where, and how code, tables and plots travel between them.</p>
 
     <h2>The layers</h2>
-    <figure class="arch">
+    <figure class="arch" tabindex="0" aria-label="Diagram: Corral's layers">
       <svg viewBox="0 0 680 400" role="img" aria-labelledby="arch1-t arch1-d">
         <title id="arch1-t">Corral's layers</title>
         <desc id="arch1-d">At the top, herdr holds four panes: the agent, the script, the console and the variables. In the middle, the corral binary talks to herdr through its socket. At the bottom, the engines corral drives: Ark, IPython, DuckDB and Mirador.</desc>
@@ -112,7 +112,7 @@
     </table>
 
     <h2>How things travel</h2>
-    <figure class="arch">
+    <figure class="arch" tabindex="0" aria-label="Diagram: How code, tables and plots travel">
       <svg viewBox="0 0 680 350" role="img" aria-labelledby="arch2-t arch2-d">
         <title id="arch2-t">How code, tables and plots travel</title>
         <desc id="arch2-d">Code: Ctrl+R runs corral send and an agent corral eval; both type into the console through herdr, then the variables pane reads vars.json. Tables: View(df), then a Parquet file, then the table viewer, then DuckDB returns only what is visible. Plots: plot(), then httpgd, then Mirador's server, then the browser in about 80 ms.</desc>

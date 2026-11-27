@@ -125,7 +125,33 @@
 
     <h2>Install with one line</h2>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | sh</code></pre>
-    <p>The installer speaks English. To read it in Spanish, set <code>CORRAL_LANG=es</code>; an update already speaks the language you chose with <code>corral config language</code>.</p>
+        <figure class="arch" tabindex="0" aria-label="Diagram: What the install line does">
+      <svg viewBox="0 0 760 250" role="img" aria-labelledby="installer-t installer-d">
+        <title id="installer-t">What the install line does</title>
+        <desc id="installer-d">install.sh checks the system, downloads Corral's package and its SHA-256, and checks both, with the build provenance attestation when the GitHub CLI is there and logged in; any failure stops it and says why. Then corral install prints the checklist and offers what is missing (herdr, jsonlite, uv), downloads Fresh, DuckDB, Air and Ark against SHA-256s in its code, sets up herdr's keys, the R profile line, the editor and the skill after backing up each file, and sends one anonymous ping unless telemetry is off.</desc>
+        <defs><marker id="installer-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="ui"><rect x="10" y="30" width="170" height="62" rx="6"/><text class="t" x="95" y="50" text-anchor="middle" dominant-baseline="central">install.sh</text><text class="s" x="95" y="72" text-anchor="middle" dominant-baseline="central">Linux, curl, tar</text></g>
+        <line class="arr" x1="182" y1="61" x2="198" y2="61" marker-end="url(#installer-arrow)"/>
+        <g class="core"><rect x="200" y="30" width="170" height="62" rx="6"/><text class="t" x="285" y="50" text-anchor="middle" dominant-baseline="central">Download</text><text class="s" x="285" y="72" text-anchor="middle" dominant-baseline="central">Corral + its SHA-256</text></g>
+        <line class="arr" x1="372" y1="61" x2="388" y2="61" marker-end="url(#installer-arrow)"/>
+        <g class="core"><rect x="390" y="30" width="170" height="62" rx="6"/><text class="t" x="475" y="50" text-anchor="middle" dominant-baseline="central">Check it</text><text class="s" x="475" y="72" text-anchor="middle" dominant-baseline="central">SHA-256 · attestation</text></g>
+        <line class="arr" x1="562" y1="61" x2="578" y2="61" marker-end="url(#installer-arrow)"/>
+        <g class="core"><rect x="580" y="30" width="170" height="62" rx="6"/><text class="t" x="665" y="50" text-anchor="middle" dominant-baseline="central">corral install</text><text class="s" x="665" y="72" text-anchor="middle" dominant-baseline="central">the checklist</text></g>
+        <line class="no" x1="475" y1="94" x2="475" y2="114"/>
+        <line class="no" x1="465" y1="114" x2="485" y2="114"/>
+        <text class="no-t" x="475" y="128" text-anchor="middle" dominant-baseline="central">fails: it stops, says why</text>
+        <line class="arr" x1="665" y1="94" x2="665" y2="148" marker-end="url(#installer-arrow)"/>
+        <g class="core"><rect x="580" y="150" width="170" height="62" rx="6"/><text class="t" x="665" y="170" text-anchor="middle" dominant-baseline="central">What's missing</text><text class="s" x="665" y="192" text-anchor="middle" dominant-baseline="central">herdr, jsonlite, uv</text></g>
+        <line class="arr" x1="578" y1="181" x2="562" y2="181" marker-end="url(#installer-arrow)"/>
+        <g class="core"><rect x="390" y="150" width="170" height="62" rx="6"/><text class="t" x="475" y="170" text-anchor="middle" dominant-baseline="central">Tools</text><text class="s" x="475" y="192" text-anchor="middle" dominant-baseline="central">SHA-256s in the code</text></g>
+        <line class="arr" x1="388" y1="181" x2="372" y2="181" marker-end="url(#installer-arrow)"/>
+        <g class="eng"><rect x="200" y="150" width="170" height="62" rx="6"/><text class="t" x="285" y="170" text-anchor="middle" dominant-baseline="central">Sets you up</text><text class="s" x="285" y="192" text-anchor="middle" dominant-baseline="central">keys, R, editor, skill</text></g>
+        <line class="arr" x1="198" y1="181" x2="182" y2="181" marker-end="url(#installer-arrow)"/>
+        <g class="out"><rect x="10" y="150" width="170" height="62" rx="6"/><text class="t" x="95" y="170" text-anchor="middle" dominant-baseline="central">One ping</text><text class="s" x="95" y="192" text-anchor="middle" dominant-baseline="central">unless telemetry is off</text></g>
+        <text class="s" x="380" y="234" text-anchor="middle" dominant-baseline="central">each file it changes is backed up first; it never uses sudo</text>
+      </svg>
+    </figure>
+<p>The installer speaks English. To read it in Spanish, set <code>CORRAL_LANG=es</code>; an update already speaks the language you chose with <code>corral config language</code>.</p>
     <pre><code><span class="p">$ </span>curl -LsSf https://corral-term.dev/install.sh | CORRAL_LANG=es sh</code></pre>
     <p>First it prints a checklist of everything above: what you have (<code>✓</code>), what is missing (<code>✗</code>), what it will download (<code>↓</code>) and what is optional (<code>!</code>). Under each missing item it shows the command that fixes it. If anything required is missing, it changes nothing and stops: fix those and run the same line again. This is what it looks like when everything is there:</p>
     <pre><code>Downloading Corral 0.2.0...

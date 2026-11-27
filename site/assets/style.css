@@ -494,6 +494,14 @@ kbd {
 /* The diagram over the console example, in the section's right column. */
 .security-visuals { display: grid; gap: 28px; min-width: 0; }
 .security-arch { margin: 0; }
+.content .docs-arch { margin: 26px 0 30px; }
+/* On a phone the docs' diagrams keep a legible size and scroll sideways; they take
+   focus, so the arrow keys scroll them too. */
+.content figure.arch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .content figure.arch { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .content figure.arch svg { min-width: 640px; }
+}
 .security-arch svg { max-width: 860px; margin: 0 auto; }
 .security-arch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 700px) {

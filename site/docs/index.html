@@ -89,7 +89,7 @@
 
     <h2>How it is built</h2>
     <p>Corral is one small program, <code>corral</code>, written in Rust with no dependencies. It talks to the pieces that do the heavy lifting, most of them written in Rust as well:</p>
-    <figure class="arch">
+    <figure class="arch" tabindex="0" aria-label="Diagram: What Corral is made of">
       <svg viewBox="0 0 680 450" role="img" aria-labelledby="arch0-t arch0-d">
         <title id="arch0-t">What Corral is made of</title>
         <desc id="arch0-d">herdr, the terminal workspace, holds the agent, the editor and the console. It talks to Corral, one Rust program, through a JSON socket. Corral runs the harness, the tables and the plots, and drives R through Ark, Python through IPython, and DuckDB for tables and SQL. Fresh is the editor and Mirador the view in the browser.</desc>

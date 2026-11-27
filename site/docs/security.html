@@ -101,7 +101,27 @@
   <span style="color:#ffffff;font-weight:700;">Enter</span><span style="color:#a0a0a0;"> run it   </span><span style="color:#ffffff;font-weight:700;">n</span><span style="color:#a0a0a0;"> refuse</span></pre>
     </figure>
 
-    <h3>Restricted output</h3>
+        <figure class="arch" tabindex="0" aria-label="Diagram: What reaches the agent in each output mode">
+      <svg viewBox="0 0 760 270" role="img" aria-labelledby="modes-t modes-d">
+        <title id="modes-t">What reaches the agent in each output mode</title>
+        <desc id="modes-d">What your console printed goes back to the agent in one of three ways. full: everything printed, up to 20,000 characters, and new plots as PNG. review: a popup shows you exactly that first; Enter shares it, n keeps it to you and the agent gets only the structure. structure: whether it worked, an error's first line, how many warnings and lines, and the shape of the objects. Whatever the agent reads goes to its model provider.</desc>
+        <defs><marker id="modes-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="eng"><rect x="10" y="98" width="170" height="62" rx="6"/><text class="t" x="95" y="118" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="95" y="140" text-anchor="middle" dominant-baseline="central">what the code printed</text></g>
+        <g class="core"><rect x="230" y="16" width="300" height="62" rx="6"/><text class="t" x="380" y="36" text-anchor="middle" dominant-baseline="central">full</text><text class="s" x="380" y="58" text-anchor="middle" dominant-baseline="central">everything printed, plots as PNG</text></g>
+        <g class="core"><rect x="230" y="98" width="300" height="62" rx="6"/><text class="t" x="380" y="118" text-anchor="middle" dominant-baseline="central">review</text><text class="s" x="380" y="140" text-anchor="middle" dominant-baseline="central">you see it first: share it or not</text></g>
+        <g class="core"><rect x="230" y="180" width="300" height="62" rx="6"/><text class="t" x="380" y="200" text-anchor="middle" dominant-baseline="central">structure</text><text class="s" x="380" y="222" text-anchor="middle" dominant-baseline="central">worked? · error line · shapes</text></g>
+        <line class="arr" x1="182" y1="120" x2="228" y2="47" marker-end="url(#modes-arrow)"/>
+        <line class="arr" x1="182" y1="129" x2="228" y2="129" marker-end="url(#modes-arrow)"/>
+        <line class="arr" x1="182" y1="138" x2="228" y2="211" marker-end="url(#modes-arrow)"/>
+        <line class="arr" x1="532" y1="47" x2="578" y2="96" marker-end="url(#modes-arrow)"/>
+        <line class="arr" x1="532" y1="129" x2="578" y2="120" marker-end="url(#modes-arrow)"/>
+        <line class="arr" x1="532" y1="211" x2="578" y2="144" marker-end="url(#modes-arrow)"/>
+        <g class="ui"><rect x="580" y="90" width="170" height="62" rx="6"/><text class="t" x="665" y="110" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="665" y="132" text-anchor="middle" dominant-baseline="central">reads what comes back</text></g>
+        <line class="arr" x1="665" y1="154" x2="665" y2="182" marker-end="url(#modes-arrow)"/>
+        <g class="out"><rect x="580" y="184" width="170" height="62" rx="6"/><text class="t" x="665" y="204" text-anchor="middle" dominant-baseline="central">Model provider</text><text class="s" x="665" y="226" text-anchor="middle" dominant-baseline="central">gets what it reads</text></g>
+      </svg>
+    </figure>
+<h3>Restricted output</h3>
     <pre><code><span class="p">$ </span>corral config agent_output structure</code></pre>
     <p>The code still runs on your real data and you see its output in your console, but the agent only gets back whether it worked, the first line of an error (up to 200 characters), how many warnings there were, how many lines it printed, and the shape of the session's objects (up to 40): names, classes, the dimensions of tables, the signatures of functions. No printed values, no previews, no plots. For example:</p>
     <pre><code>[corral] restricted output: the agent doesn't see values (5 lines printed in the user's console)
