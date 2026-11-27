@@ -358,7 +358,9 @@ class PlotServer:
             def do_GET(self) -> None:
                 url = urlparse(self.path)
                 query = parse_qs(url.query)
-                if query.get("token", [""])[0] != server.token and self.headers.get("X-HTTPGD-TOKEN") != server.token:
+                given = (query.get("token", [""])[0], self.headers.get("X-HTTPGD-TOKEN") or "")
+                # In constant time, so how long a refusal takes says nothing about the token.
+                if not any(secrets.compare_digest(g.encode(), server.token.encode()) for g in given):
                     return self._send(401, b"token", "text/plain")
                 path = url.path.rstrip("/")
                 if path == "/state":
