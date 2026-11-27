@@ -1,0 +1,95 @@
+//! Every connection Corral makes beyond the machine is in the security page's list
+//! (site/docs/security.html, its rows with id="net-…"), and every row there is still in
+//! the code. The code marks each place that can open a connection with `net: ID` on its
+//! line or the three before it: `net: local` for 127.0.0.1 and Unix sockets, `net: text`
+//! where a message only names a command. A new one fails this test until it is marked
+//! and listed, so the list stays the whole story.
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+fn repo() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+}
+
+/// The files that make up Corral, with what in each can open a connection.
+fn sources() -> Vec<(PathBuf, &'static [&'static str])> {
+    const RUST: &[&str] = &["Command::new(\"curl\")", "which(\"curl\")", "Command::new(\"uv\")", "Command::new(\"uvx\")",
+                            "Command::new(\"gh\")", "Command::new(\"wget\")", "TcpStream::connect", "UdpSocket", "TcpListener::bind",
+                            "pak::pak", "install.packages(", "setup::download(", "github_digest("];
+    const SHELL: &[&str] = &["curl -f", "wget ", "gh attestation"];
+    const R: &[&str] = &["download.file(", "install.packages(", "pak::", "url(\"http", "socketConnection(", "curl::", "httr"];
+    const PYTHON: &[&str] = &["urllib.request", "urlopen(", "requests.", "http.client", "socket.socket(", "create_connection(", "pip install"];
+    const PAGE: &[&str] = &["http://", "https://", "new WebSocket(", "navigator.sendBeacon("];
+    const POWERSHELL: &[&str] = &["Invoke-WebRequest", "Invoke-RestMethod", "WebClient", "http://", "https://"];
+    let mut out = Vec::new();
+    let mut add = |dir: &str, ext: &str, kinds: &'static [&'static str]| {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(repo().join(dir)).unwrap().flatten().map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == ext)).collect();
+        files.sort();
+        out.extend(files.into_iter().map(|f| (f, kinds)));
+    };
+    add("rs/src", "rs", RUST);
+    add("r", "R", R);
+    add("py", "py", PYTHON);
+    add("mirador", "html", PAGE);
+    add("lib", "ps1", POWERSHELL);
+    out.push((repo().join("install.sh"), SHELL));
+    out
+}
+
+/// Each place that can open a connection: (file:line, the line, its mark).
+fn marked_places() -> Vec<(String, String, Option<String>)> {
+    let mut found = Vec::new();
+    for (file, kinds) in sources() {
+        let text = std::fs::read_to_string(&file).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            // Rust's tests come last in each file; they don't run in Corral.
+            if line.trim_start().starts_with("#[cfg(test)]") {
+                break;
+            }
+            if !kinds.iter().any(|k| line.contains(k)) {
+                continue;
+            }
+            let mark = lines[i.saturating_sub(3)..=i].iter().rev().find_map(|l| {
+                let at = l.find("net: ")?;
+                Some(l[at + 5..].split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')).next().unwrap_or("").to_string())
+            });
+            let shown = file.strip_prefix(repo()).unwrap().display().to_string();
+            found.push((format!("{shown}:{}", i + 1), line.trim().to_string(), mark));
+        }
+    }
+    found
+}
+
+/// The ids of the rows in the security page's list of connections.
+fn listed() -> BTreeSet<String> {
+    let page = std::fs::read_to_string(repo().join("site/docs/security.html")).unwrap();
+    page.split("id=\"net-").skip(1).filter_map(|rest| rest.split('"').next().map(String::from)).collect()
+}
+
+#[test]
+fn every_connection_is_marked_and_listed() {
+    let places = marked_places();
+    let unmarked: Vec<String> = places.iter().filter(|(_, _, m)| m.is_none()).map(|(at, l, _)| format!("{at}: {l}")).collect();
+    assert!(unmarked.is_empty(), "not marked with `net: ID` (an id from the security page's list, local or text):\n{}", unmarked.join("\n"));
+    let listed = listed();
+    assert!(!listed.is_empty(), "the security page has no list of connections");
+    let used: BTreeSet<String> = places.iter().filter_map(|(_, _, m)| m.clone()).filter(|m| m != "local" && m != "text").collect();
+    let unlisted: Vec<&String> = used.difference(&listed).collect();
+    assert!(unlisted.is_empty(), "marked in the code but not in the security page's list: {unlisted:?}");
+    let gone: Vec<&String> = listed.difference(&used).collect();
+    assert!(gone.is_empty(), "in the security page's list but nowhere in the code: {gone:?}");
+}
+
+/// The test sees what it looks for: a line that opens a connection, unmarked, is caught.
+#[test]
+fn an_unmarked_connection_is_caught() {
+    let kinds: &[&str] = &["Command::new(\"curl\")"];
+    let line = "    let out = Command::new(\"curl\").arg(url).output();";
+    assert!(kinds.iter().any(|k| line.contains(k)));
+    let text = "fn f() {\n    // fetch it\n    let out = Command::new(\"curl\").arg(url).output();\n}";
+    let lines: Vec<&str> = text.lines().collect();
+    let mark = lines[0..=2].iter().rev().find_map(|l| l.find("net: "));
+    assert!(mark.is_none());
+}
