@@ -252,10 +252,11 @@ impl Viewer {
         let count = trf!("{n_vars} object{plural}", "{n_vars} objeto{plural}");
         // The security profile first, so it is never the part clipped; in the accent
         // colour when it is sensitive.
-        let profile = crate::profile::shown(self.profile);
+        // Named as what it is: "open" alone reads like a state of something else.
+        let profile = trf!("profile: {}", "perfil: {}", crate::profile::shown(self.profile));
         let pcolor = if self.profile == "sensitive" { &c.accent } else { &c.muted };
         f += &format!("\x1b[1;2H{}▸▸{RESET} {}{BOLD}Variables{RESET}  {pcolor}{profile}{RESET}{} · {}{RESET}", c.accent, c.text, c.dim,
-                      clip(&where_, cols.saturating_sub(width(&count) + width(profile) + 22)));
+                      clip(&where_, cols.saturating_sub(width(&count) + width(&profile) + 22)));
         f += &format!("\x1b[1;{}H{}{count}{RESET}", cols.saturating_sub(width(&count)).max(1), c.muted);
 
         // Tab bar
