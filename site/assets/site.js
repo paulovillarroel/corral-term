@@ -18,6 +18,10 @@ const NAV = [
     ["data.html", "Variables and tables"],
     ["sql.html", "SQL"],
     ["plots.html", "Plots and Mirador"],
+  ]],
+  ["Harness and security", [
+    ["harness.html", "The harness"],
+    ["profiles.html", "Security profiles"],
     ["agents.html", "Working with agents"],
     ["security.html", "Security model"],
   ]],

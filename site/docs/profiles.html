@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- Paint the page's own background from the first frame (no white flash between pages);
+     the saved theme applies before the stylesheets load. -->
+<style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<title>Security profiles · Corral docs</title>
+<meta name="description" content="Open, standard or sensitive: the harness's settings in one step, for all your work or one project folder, the stricter winning; what a project's profile follows, and teams.">
+<link rel="canonical" href="https://corral-term.dev/docs/profiles.html">
+<!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Corral">
+<meta property="og:title" content="Security profiles · Corral docs">
+<meta property="og:description" content="Open, standard or sensitive: the harness's settings in one step, for all your work or one project folder, the stricter winning; what a project's profile follows, and teams.">
+<meta property="og:url" content="https://corral-term.dev/docs/profiles.html">
+<meta property="og:image" content="https://corral-term.dev/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Corral, an agentic Data Science IDE that opens in milliseconds: R, Python and SQL in your terminal, next to your agent">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- Vercel Web Analytics: page views, no cookies. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Speed Insights: real visitors' load times. -->
+<script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs · 0.1.27</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>Security profiles</h1>
+    <p class="intro">Three names for the harness's settings, so you set them in one step, for all your work or for one project folder. The stricter one wins: a project can make things stricter than your global profile, never looser.</p>
+
+    <table>
+    <thead><tr><th>Profile</th><th>Agents</th><th>What they get back</th><th>For</th></tr></thead>
+    <tbody>
+    <tr><td><code>open</code></td><td>run code without asking</td><td>everything printed</td><td>public or synthetic data</td></tr>
+    <tr><td><code>standard</code></td><td>ask before each request</td><td>everything printed</td><td>the default</td></tr>
+    <tr><td><code>sensitive</code></td><td>ask before each request</td><td>only the structure; every session is sensitive</td><td>personal or clinical data</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="set">Set one</h2>
+    <pre><code><span class="p">$ </span>corral profile sensitive
+<span class="p">$ </span>corral profile sensitive --project
+<span class="p">$ </span>corral profile sensitive --project /data/clinical-study
+<span class="p">$ </span>corral profile --project --clear</code></pre>
+    <p>Without <code>--project</code>, the profile is for all your work: it sets <code>agents</code> and <code>agent_output</code>. With <code>--project</code>, it is for one project folder (the folder you give, else the one the console in view started in) and every session that starts or runs in it or below it, without anyone remembering to call <code>corral_sensitive()</code>. <code>--clear</code> removes a project's own, and the global one applies there again.</p>
+    <p>In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>): "Agents: open profile", "standard profile", "sensitive profile", "this project is sensitive" and "this project follows the global profile".</p>
+
+    <h2 id="see">See which one applies</h2>
+    <pre><code><span class="p">$ </span>corral profile
+<span class="p">$ </span>corral profile --json</code></pre>
+    <p><code>corral profile</code> shows the global profile, this project's, and the rules that result here; <code>--json</code> gives the same to scripts (<code>global</code>, <code>project</code> with its folder and profile, the resulting <code>profile</code>, <code>access</code>, <code>output</code> and <code>sensitive</code>, and every project with a profile). The variables pane's header names the profile in effect, <code>profile: open</code> say, in the accent colour when it is sensitive, and <code>corral context</code> gives it to the agent.</p>
+
+    <h2 id="stricter-wins">The stricter wins</h2>
+    <p>Corral works out each request's rules from your global profile, the project's and the session's own mark (<code>corral_sensitive()</code>), and takes the strictest of each part: who approves (<code>off</code> before <code>ask</code> before <code>on</code>) and what comes back (<code>structure</code> before <code>review</code> before <code>full</code>). Nested projects with different profiles get the strictest of them. A session that started in a sensitive project stays sensitive if it moves to another folder. Working this out takes about 2 µs per request.</p>
+    <p>Making things stricter never asks. A looser profile, or removing a project's, from an agent's pane waits for your approval in a popup, as <code>corral config</code> does.</p>
+
+    <h2 id="follows">What a project's profile follows</h2>
+    <p>Sessions, by the folder they work in: the one they started in, and the one they are in now, which Corral reads from the process itself (<code>/proc/PID/cwd</code>), so a <code>setwd()</code> or <code>os.chdir()</code> counts at once. A request that moves into a sensitive project gets that project's output for its own result, with a note saying so, and the next request already asks; approval can't be asked after the fact, so what that one request ran, it ran.</p>
+    <p>It doesn't follow files: code that reads a project's files by absolute path from a session in another folder isn't covered, and approved code can do anything your user can (read any file, use the network). For data no agent may reach, make <code>sensitive</code> your global profile on that machine, and deny the agent's own tools those folders (<a href="security.html#for-sensitive-data">for sensitive data</a>).</p>
+
+    <h2 id="where">Where it is kept, and teams</h2>
+    <p>A project's profile lives in Corral's settings (<code>projects</code> in <code>~/.config/corral/config.json</code>), not in the repository. That is by design: a repository you clone can't loosen your rules. It also means each person sets it in their own Corral, so in a team, make <code>corral profile sensitive --project</code> part of setting up a machine for that project.</p>
+
+    <div class="pager"></div>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R, Python and SQL, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- Paint the page's own background from the first frame (no white flash between pages);
+     the saved theme applies before the stylesheets load. -->
+<style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
+<script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<title>The harness · Corral docs</title>
+<meta name="description" content="The harness between your agent and your live R or Python session: the life of a request, who decides what (profiles, approval, output), what the agent knows, and what it doesn't do.">
+<link rel="canonical" href="https://corral-term.dev/docs/harness.html">
+<!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Corral">
+<meta property="og:title" content="The harness · Corral docs">
+<meta property="og:description" content="The harness between your agent and your live R or Python session: the life of a request, who decides what (profiles, approval, output), what the agent knows, and what it doesn't do.">
+<meta property="og:url" content="https://corral-term.dev/docs/harness.html">
+<meta property="og:image" content="https://corral-term.dev/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Corral, an agentic Data Science IDE that opens in milliseconds: R, Python and SQL in your terminal, next to your agent">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- Vercel Web Analytics: page views, no cookies. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Speed Insights: real visitors' load times. -->
+<script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="logo" href="../">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
+    corral <span class="tag">docs · 0.1.27</span>
+  </a>
+  <nav class="nav">
+    <button class="menu-toggle" type="button">Menu</button>
+    <a class="hide-sm" href="./" aria-current="page">Docs</a>
+    <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
+    <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
+    <a class="btn" href="install.html">Install</a>
+  </nav>
+</header>
+
+<div class="docs">
+  <aside class="side" aria-label="Documentation"><noscript><a href="./">All pages</a></noscript></aside>
+
+  <main class="content">
+    <h1>The harness</h1>
+    <p class="intro">The harness is what stands between your agent and your live R or Python session: a few commands the agent calls, a skill that teaches it how, and rules that Corral enforces around every call, in its own code, whatever the model was told. This page is the map; each part links to its details.</p>
+
+    <h2 id="a-request">The life of a request</h2>
+    <ol>
+      <li><strong>The agent asks.</strong> To look, <code>corral vars --json</code> and <code>corral context --json</code>, which run nothing. To run code, <code>corral eval</code>.</li>
+      <li><strong>Corral works out the rules for that session:</strong> your global profile, the project's, and the session's own mark, the stricter winning. It reads the folder the session is in from the process itself, so a <code>setwd()</code> counts at once. About 2 µs.</li>
+      <li><strong>You approve it, if the rules say so.</strong> With <code>ask</code>, a popup shows the exact code, which agent asks and what it will see back: <kbd>Enter</kbd> runs it, <kbd>n</kbd> refuses it, and with no answer in 5 minutes nothing runs. With <code>off</code>, nothing runs at all.</li>
+      <li><strong>It runs where you see it.</strong> The code is typed into the console you are looking at, after a <code># corral eval</code> line, one request at a time; several agents queue.</li>
+      <li><strong>The agent gets what the rules allow:</strong> everything printed, your review of it first, or only whether it worked and the shape of the objects. If the code moved the session into a stricter project, that request already gets the stricter rule.</li>
+      <li><strong>It is recorded</strong> in the audit log on your machine: when, which agent, the code, and whether it ran.</li>
+    </ol>
+
+    <h2 id="who-decides">Who decides what</h2>
+    <p>You do. Every control is in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, type <code>agents</code>), and none of them can be loosened by an agent without your yes in a popup.</p>
+    <table>
+    <thead><tr><th>Control</th><th>What it decides</th><th>Details</th></tr></thead>
+    <tbody>
+    <tr><td><code>corral profile open|standard|sensitive</code></td><td>Both of the next two in one step, for all your work or for one project folder; the stricter wins</td><td><a href="profiles.html">Security profiles</a></td></tr>
+    <tr><td><code>agents</code>: <code>ask</code>, <code>on</code>, <code>off</code></td><td>Whether each request waits for your approval, runs at once, or doesn't run</td><td><a href="security.html#access-levels">Access levels</a></td></tr>
+    <tr><td><code>agent_output</code>: <code>full</code>, <code>review</code>, <code>structure</code></td><td>What comes back: everything, what you choose to share, or only the shape of results</td><td><a href="security.html#restricted-output">Restricted output</a>, <a href="security.html#review-mode">Review mode</a></td></tr>
+    <tr><td><code>corral_sensitive()</code></td><td>One session stricter than the rest, until that console ends</td><td><a href="security.html#sensitive-sessions">Sensitive sessions</a></td></tr>
+    <tr><td><code>audit_days</code></td><td>How long the audit log keeps each request (90 days by default)</td><td><a href="security.html#audit-log">Audit log</a></td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="what-the-agent-knows">What the agent knows</h2>
+    <p><code>corral context --json</code> tells it, in one call, which consoles run, whether SQL works there, and the rules as they apply to each session, so it plans around them (related code in one request when each one asks, shapes instead of values with restricted output) instead of learning them by being refused. It can read the rules; it can't change them. The palette's "Agents: what your agent sees" shows you the same, in words (<a href="agents.html#context">details</a>).</p>
+
+    <h2 id="always">What always holds</h2>
+    <ul>
+      <li><strong>In plain sight.</strong> Nothing runs in a hidden process; characters that would hide part of the code are written out, in the console and in the popup.</li>
+      <li><strong>One at a time.</strong> Requests to a console queue; several agents never interleave.</li>
+      <li><strong>Bounded.</strong> The agent stops waiting after a time limit (the code keeps running in your console), and the output is clipped before it reaches the agent.</li>
+      <li><strong>Recorded.</strong> Every request, and every change of the rules an agent asks for, in the local audit log: <code>corral audit</code>.</li>
+      <li><strong>Any agent.</strong> Claude Code, Codex, Gemini CLI, opencode or another: the harness is shell commands and a skill in the open Agent Skills format.</li>
+    </ul>
+
+    <h2 id="limits">What it doesn't do</h2>
+    <ul>
+      <li><strong>It is not a sandbox.</strong> Approved code can do whatever your user can: read any file, use the network. An agent with an unrestricted shell can also act outside the harness; its own permissions close that gap.</li>
+      <li><strong>What the agent reads goes to its model provider.</strong> Restricted output keeps values out of replies; for data that must not leave your organization, choose where the model runs.</li>
+      <li><strong>Profiles follow folders, not files.</strong> A project's profile applies to sessions working in that folder; code reading its files by absolute path from elsewhere isn't covered.</li>
+    </ul>
+    <p>The <a href="security.html">Security model</a> explains each of these and has a <a href="security.html#for-sensitive-data">setup for sensitive data</a>.</p>
+
+    <div class="pager"></div>
+  </main>
+
+  <aside class="toc" aria-label="On this page"></aside>
+</div>
+
+<footer class="foot">
+  <span>Corral · R, Python and SQL, R first</span>
+  <span><a href="../">Home</a><a href="install.html">Install</a><a href="https://github.com/paulovillarroel/corral-term">GitHub</a></span>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>
