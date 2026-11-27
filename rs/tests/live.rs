@@ -934,6 +934,42 @@ fn ark_listens_only_in_corrals_folder() {
     let (code, out) = live.eval(&["cat(6 * 7)"]);
     assert!(code == 0 && out.contains("42"), "{out}");
 }
+#[test]
+#[ignore]
+fn checkpoints_off_leaves_no_copy_on_disk() {
+    // Turning checkpoints off deletes the copies of consoles that have ended at once, and
+    // each running console's own at its next command, in R and in Python. Turned on
+    // again, the next copy is a whole one, not only what changed since.
+    let live = Live::start("ckoff");
+    assert_eq!(live.eval(&["kept_r <- 1:10; other_r <- letters"]).0, 0);
+    live.wait_checkpoint("r", &["kept_r", "other_r"]);
+    let (code, text) = live.eval(&["--lang", "python", "--timeout", "180", "kept_py = list(range(10))"]);
+    assert_eq!(code, 0, "{text}");
+    live.wait_checkpoint("python", &["kept_py"]);
+    let (r_dir, _) = live.checkpoint("r");
+    let (py_dir, _) = live.checkpoint("python");
+    // Copies left by two consoles that crashed: pids nobody has.
+    let root = live.dir.join("state/corral/checkpoints");
+    for name in ["r-w9-p9-999999999", "py-w9-p9-999999998"] {
+        std::fs::create_dir_all(root.join(name)).unwrap();
+        std::fs::write(root.join(name).join("index.json"), "{}").unwrap();
+    }
+    let out = live.corral(&["config", "checkpoints", "off"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(!root.join("r-w9-p9-999999999").exists() && !root.join("py-w9-p9-999999998").exists(),
+            "the copies of consoles that ended go at once");
+    assert!(r_dir.is_dir() && py_dir.is_dir(), "a running console's copy waits for its next command");
+    assert_eq!(live.eval(&["invisible(1)"]).0, 0);
+    assert_eq!(live.eval(&["--lang", "python", "1"]).0, 0);
+    wait_for(Duration::from_secs(10), "each console's own copy gone", || !r_dir.exists() && !py_dir.exists());
+    // On again: every object, the ones from before included.
+    let out = live.corral(&["config", "checkpoints", "on"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(live.eval(&["new_r <- 2"]).0, 0);
+    live.wait_checkpoint("r", &["kept_r", "other_r", "new_r"]);
+    assert_eq!(live.eval(&["--lang", "python", "new_py = 3"]).0, 0);
+    live.wait_checkpoint("python", &["kept_py", "new_py"]);
+}
 
 /// Resident memory of a process, in MB.
 fn rss_mb(pid: i64) -> f64 {
