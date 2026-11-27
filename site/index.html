@@ -180,7 +180,7 @@
         <p>Data science runs on records about people: patients, clients, students. Corral treats protecting them as part of the work. It decides how much of each result reaches your agent's model, keeps your sessions closed to everyone else on the machine, deletes its copies of your data when you ask, and writes down where its protection ends.</p>
         <ul class="points">
           <li><b>Values stay out</b><span>in a sensitive project the agent learns whether the code worked and the shape of your objects, not their values, and each request waits for you to read its code, since an error's first line could still carry one; your plots stay with you</span></li>
-          <li><b>Closed to others</b><span>on a shared server, other users can't read your sessions: R talks to Corral over sockets in a folder only you can open (with Corral's own console, the default), and every local server asks for a token</span></li>
+          <li><b>Closed to others</b><span>on a shared server, other users can't read your sessions: R talks to Corral over sockets in a folder only you can open, and every local server asks for a token</span></li>
           <li><b>Copies deleted</b><span>turn checkpoints off and the copies of your objects are deleted, not just no longer made: at once for consoles that have ended, at its next command for one still open</span></li>
           <li><b>Verified install</b><span>everything the installer downloads is checked by SHA-256 before it is used, Corral's package also by its build provenance; no sudo; Corral itself has no third-party Rust dependencies</span></li>
           <li><b>Honest limits</b><span>a threat model that says what Corral protects, from whom, and what stays with your agent's permissions, its model provider and your machine</span></li>
@@ -191,7 +191,7 @@
         <figure class="arch security-arch" tabindex="0" aria-label="Diagram: how Corral keeps your data where it belongs">
           <svg viewBox="0 0 760 466" role="img" aria-labelledby="sec-arch-t sec-arch-d">
             <title id="sec-arch-t">How Corral keeps your data where it belongs</title>
-            <desc id="sec-arch-d">Your agent asks Corral, the harness, to run code with corral eval; Corral applies your approval, profile and output mode, and types the code in your console, inside Corral's folder, which only you can open. There, R on Ark and Python talk to the console over private, signed sockets, and the copies of your objects are kept, deleted when you say. The agent gets back the results or only their shape, and only what the agent reads goes to its model provider, outside your machine. Another user on the machine can't open Corral's folder, and a web page gets no token from Corral's local servers. The exception: with the Jupyter console frontend, or a folder path too long for a socket, Ark falls back to TCP on 127.0.0.1, where another user can read its output, since signing authenticates messages and doesn't hide them.</desc>
+            <desc id="sec-arch-d">Your agent asks Corral, the harness, to run code with corral eval; Corral applies your approval, profile and output mode, and types the code in your console, inside Corral's folder, which only you can open. There, R on Ark and Python talk to the console over private, signed sockets, and the copies of your objects are kept, deleted when you say. The agent gets back the results or only their shape, and only what the agent reads goes to its model provider, outside your machine. Another user on the machine can't open Corral's folder, and a web page gets no token from Corral's local servers.</desc>
             <defs><marker id="sec-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
             <g class="out"><rect x="40" y="12" width="200" height="56" rx="6"/><text class="t" x="140" y="32" text-anchor="middle" dominant-baseline="central">Model provider</text><text class="s" x="140" y="52" text-anchor="middle" dominant-baseline="central">outside your machine</text></g>
             <rect class="frame" x="16" y="94" width="728" height="330" rx="10"/>
@@ -210,7 +210,7 @@
             <text class="s" x="600" y="214" dominant-baseline="central">typed in view</text>
             <g class="eng"><rect x="490" y="272" width="200" height="64" rx="6"/><text class="t" x="590" y="294" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="590" y="316" text-anchor="middle" dominant-baseline="central">where you see it run</text></g>
             <line class="arr" x1="454" y1="304" x2="486" y2="304" marker-start="url(#sec-arrow)" marker-end="url(#sec-arrow)"/>
-            <g class="eng"><rect x="260" y="272" width="190" height="64" rx="6"/><text class="t" x="355" y="294" text-anchor="middle" dominant-baseline="central">R on Ark · Python</text><text class="s" x="355" y="316" text-anchor="middle" dominant-baseline="central">private, signed sockets*</text></g>
+            <g class="eng"><rect x="260" y="272" width="190" height="64" rx="6"/><text class="t" x="355" y="294" text-anchor="middle" dominant-baseline="central">R on Ark · Python</text><text class="s" x="355" y="316" text-anchor="middle" dominant-baseline="central">private, signed sockets</text></g>
             <line class="arr" x1="258" y1="304" x2="240" y2="304" marker-end="url(#sec-arrow)"/>
             <g class="eng"><rect x="56" y="272" width="182" height="64" rx="6"/><text class="t" x="147" y="294" text-anchor="middle" dominant-baseline="central">Copies of your objects</text><text class="s" x="147" y="316" text-anchor="middle" dominant-baseline="central">deleted when you say</text></g>
             <line class="no" x1="147" y1="392" x2="147" y2="362"/><line class="no" x1="137" y1="362" x2="157" y2="362"/>
@@ -224,7 +224,6 @@
               <line class="no" x1="400" y1="448" x2="420" y2="448"/><text class="s" x="428" y="448" dominant-baseline="central">kept out</text>
             </g>
           </svg>
-          <figcaption>* With Corral's own console, the default. With the Jupyter console frontend, or a folder path too long for a socket, Ark falls back to TCP on 127.0.0.1, where another user can read its output: signing authenticates messages, it doesn't hide them (<a href="docs/threats.html#channels">threat model</a>).</figcaption>
         </figure>
         <figure class="tui-shot security-shot" role="img" aria-label="The same request in a sensitive project: your console shows the counts by region; the agent gets back only that it ran, how many lines were printed and the shape of the objects">
           <div class="tui-bar"><span>your console</span><span>sensitive project</span></div>

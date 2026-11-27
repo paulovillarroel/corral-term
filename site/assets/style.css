@@ -495,13 +495,11 @@ kbd {
 .security-visuals { display: grid; gap: 28px; min-width: 0; }
 .security-arch { margin: 0; }
 .security-arch svg { max-width: 860px; margin: 0 auto; }
-.security-arch figcaption { max-width: 860px; margin: 6px auto 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .security-arch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 700px) {
   /* Legible on a phone: it keeps its size and scrolls sideways. */
   .security-arch { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .security-arch svg { min-width: 680px; }
-  .security-arch figcaption { position: sticky; left: 0; max-width: calc(100vw - 66px); }
 }
 
 /* FAQ: plain disclosure rows, the answer opens under its question. */
