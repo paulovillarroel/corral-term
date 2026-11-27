@@ -71,7 +71,7 @@
 <span class="p">$ </span>corral profile sensitive --project /data/clinical-study
 <span class="p">$ </span>corral profile --project --clear</code></pre>
     <p>Without <code>--project</code>, the profile is for all your work: it sets <code>agents</code> and <code>agent_output</code>. With <code>--project</code>, it is for one project folder (the folder you give, else the one the console in view started in) and every session that starts or runs in it or below it, without anyone remembering to call <code>corral_sensitive()</code>. <code>--clear</code> removes a project's own, and the global one applies there again.</p>
-    <p>In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>): "Agents: open profile", "standard profile", "sensitive profile", "this project is sensitive" and "this project follows the global profile".</p>
+    <p>In the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>), the Security group starts with the three profiles and marks the one in effect, "● active". Below them comes the project of the console in view, by its folder's name: "Project clinic: sensitive in every session" and, when that folder has a profile of its own, "Project clinic: remove its profile". When the project's profile is stricter, the console runs by it: the project's entry is the one marked active, and the global profile says "● global". Then each of the two settings on its own ("Requests: …", "Results: …"), with the value in effect marked; a mix that is none of the three profiles shows as "Profile: custom (…)". Without a console open, the project entries don't show, since there is no folder for them to act on.</p>
 
     <h2 id="see">See which one applies</h2>
     <pre><code><span class="p">$ </span>corral profile
