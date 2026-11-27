@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.2.0
+
+A security release. Corral is for data work, often on records about people, and the last versions are about keeping that data where it belongs: Ark talks to Corral over private sockets, keys come only from the system's random source, a threat model says what is protected and what isn't, and now turning checkpoints off leaves no copy of your objects behind.
 
 - Turning checkpoints off now leaves no copy of your objects behind. `corral config checkpoints off` (or the palette's "Console: don't keep checkpoints…") deletes at once the checkpoints of consoles that have ended, closed or crashed, and names any it couldn't delete; each running R or Python deletes its own at its next command. Before, a running console kept its copy until it closed, and the startup cleanup of old copies ran only with checkpoints on, so a crash's copy could stay on disk indefinitely. Turned on again, the next copy is a whole one, plots and figures included. A copy being written when they are turned off doesn't leave its folder behind. A live test turns them off with two consoles running and two crashed copies, and fails without the change.
 - An R plot whose copy httpgd didn't answer (R just started, or busy) is copied on the next try, instead of waiting for another plot to be drawn.
