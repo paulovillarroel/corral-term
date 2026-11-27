@@ -2,12 +2,14 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.28
 
 A request that moves into a sensitive project gets its rules at once.
 
 - A project's profile is now judged by where the session really is, read from the process (`/proc/PID/cwd`), not only from what R and Python note after each command. Before, an agent's request that did `setwd()` into a sensitive project and read a file there got the values back under the old rules, and so could the next request if it came straight away, before R had noted the new folder. Now that request's own result comes back as the project allows (only its structure, with a note saying so) and the session stays sensitive; the next request asks. It also counts for a request that runs past its timeout, or whose console ends: `corral eval` looks at the folder while it waits. Reported in an outside review; a live test reproduces it (in R, and in Python through a symlink and past the timeout) and fails without the change.
 - The security docs say what a project's profile follows (sessions by their folder, not files: code reading a project's file by absolute path from elsewhere isn't covered) and that in a team each person sets it in their own Corral.
+- The variables pane names the profile as one: `profile: open` (`perfil: abierto`) instead of the bare word, which read like the state of something else.
+- The docs have a search box (at the top of the menu, `/` to reach it) and a section of their own, Harness and security: The harness (new: the life of a request, who decides what), Security profiles (new), Working with agents and Security model.
 
 ## 0.1.27
 
