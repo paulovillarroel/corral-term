@@ -37,3 +37,10 @@ fn the_readme_plugin_install_page_and_changelog_name_this_version() {
     assert!(install.contains(&format!("Corral {VERSION}: what it needs")), "install.html --check output");
     assert!(read("CHANGELOG.md").contains(&format!("\n## {VERSION}\n")), "CHANGELOG.md section");
 }
+
+#[test]
+fn the_landing_names_this_version_and_links_its_release_notes() {
+    let landing = read("site/index.html");
+    assert!(landing.contains(&format!(r#"href="https://github.com/paulovillarroel/corral-term/releases/tag/v{VERSION}""#)), "landing's version link");
+    assert!(landing.contains(&format!(">v{VERSION}</a>")), "landing's version text");
+}
