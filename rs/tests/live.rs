@@ -153,6 +153,30 @@ impl Live {
         std::fs::write(self.dir.join(format!("{name}.go")), "").unwrap();
     }
 
+    /// Whether `n` requests are in a console's queue within 20 s. Each `corral eval`
+    /// opens the queue's lock file (eval/.lock) before it waits for its turn and keeps it
+    /// open until it ends, so the processes that have it open are the ones running or
+    /// waiting. False rather than a panic, so a held request can be let go first.
+    fn wait_queue(&self, n: usize) -> bool {
+        let in_queue = || {
+            let Ok(procs) = std::fs::read_dir("/proc") else { return 0 };
+            procs.flatten()
+                .filter(|p| p.file_name().to_str().is_some_and(|s| s.bytes().all(|b| b.is_ascii_digit())))
+                .filter(|p| std::fs::read_dir(p.path().join("fd")).into_iter().flatten().flatten()
+                    .filter_map(|fd| std::fs::read_link(fd.path()).ok())
+                    .any(|f| f.starts_with(&self.dir) && f.ends_with("eval/.lock")))
+                .count()
+        };
+        let end = Instant::now() + Duration::from_secs(20);
+        while in_queue() < n {
+            if Instant::now() > end {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        true
+    }
+
     /// The process and pane of the live session in `lang` (R's is Ark), from
     /// its meta.json; None while there is none.
     fn session(&self, lang: &str) -> Option<(i64, String)> {
@@ -361,23 +385,28 @@ fn wait_for(limit: Duration, what: &str, mut ready: impl FnMut() -> bool) {
     }
 }
 
-/// Two agents asking at once take turns: the second waits while the first runs,
-/// and each gets only its own output, whole.
+/// Two agents asking at once take turns: the second waits in the console's queue
+/// while the first runs, and each gets only its own output, whole.
 #[test]
 #[ignore]
 fn two_agents_take_turns() {
     let live = Live::start("turns");
     let a_code = format!(r#"cat("A1\n"); {}; cat("A2\n")"#, live.hold("a"));
-    let (a, b, waited) = std::thread::scope(|s| {
+    let (a, b, queued, waited) = std::thread::scope(|s| {
         let a = s.spawn(|| live.eval(&[&a_code]));
         live.wait_held("a");
         let b = s.spawn(|| live.eval(&[r#"cat("B1\n"); cat("B2\n")"#]));
-        // B alone takes a few milliseconds: a second later it must still be waiting for A.
-        std::thread::sleep(Duration::from_secs(1));
+        // B in the queue behind A, and a second later still there (B alone takes a few
+        // milliseconds): it waited for its turn, not just started late.
+        let queued = live.wait_queue(2);
+        if queued {
+            std::thread::sleep(Duration::from_secs(1));
+        }
         let waited = !b.is_finished();
         live.release("a");
-        (a.join().unwrap(), b.join().unwrap(), waited)
+        (a.join().unwrap(), b.join().unwrap(), queued, waited)
     });
+    assert!(queued, "B never got in the console's queue: {}", b.1);
     assert!(waited, "B didn't wait for A: {}", b.1);
     assert_eq!(a.0, 0, "{}", a.1);
     assert_eq!(b.0, 0, "{}", b.1);
