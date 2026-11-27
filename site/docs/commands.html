@@ -134,7 +134,7 @@
 
     <h3>corral send</h3>
     <pre><code><span class="p">$ </span>corral send 'summary(mtcars)'</code></pre>
-    <p>Sends code to the console in view, bringing it into view (and starting it) if needed; this is what <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd> and <kbd>ctrl+b</kbd> <kbd>enter</kbd> run. Without code in the arguments, it reads stdin or herdr's selection.</p>
+    <p>Sends code to the console in view, bringing it into view (and starting it) if needed; this is what <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd> and <kbd>ctrl+b</kbd> <kbd>enter</kbd> run. Without code in the arguments, it reads stdin or herdr's selection. It is for your keys, the palette and your terminal: from a pane herdr sees an agent in, or a shell outside herdr without a terminal, it refuses (exit code 3) and records the attempt in the audit log, since an agent runs code with <code>corral eval</code>, which applies your rules.</p>
     <table>
     <thead><tr><th>Option</th><th>What it does</th></tr></thead>
     <tbody>
