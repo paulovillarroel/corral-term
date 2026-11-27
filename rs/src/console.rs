@@ -89,6 +89,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 let jupyter = kernelspec(&cfg)?;
                 // The connection file goes where corral.R announces it, so
                 // `corral _lsp r` can reach Ark's language server.
+                // Private before Ark's sockets go in it: this process becomes
+                // jupyter-console, so `corral`'s own check at the end never runs.
+                env::make_private(&env::state_dir());
                 let folder = env::state_dir().join("ark");
                 let _ = std::fs::create_dir_all(&folder);
                 env::remove_old(&folder, "json", 2 * 86400);
@@ -99,6 +102,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     .arg("--ZMQTerminalInteractiveShell.banner=")
                     .env("CORRAL_ARK_CONNECTION", &conn)
                     .env("JUPYTER_PATH", &jupyter);
+                // Unix sockets here too, as with Corral's own console: on TCP any user on
+                // the machine could read Ark's output. Fixed ports, so the links that let
+                // jupyter_client's names meet Ark's are known before it starts.
+                if let Some(base) = crate::ark::socket_base(&conn).filter(|b| crate::ark::link_for_jupyter(b).is_ok()) {
+                    c.arg("--ConnectionFileMixin.transport=ipc").arg(format!("--ConnectionFileMixin.ip={}", base.display()));
+                    for (port, n) in [("shell_port", 1), ("iopub_port", 2), ("stdin_port", 3), ("control_port", 4), ("hb_port", 5)] {
+                        c.arg(format!("--ConnectionFileMixin.{port}={n}"));
+                    }
+                }
                 c
             }
             _ => {
