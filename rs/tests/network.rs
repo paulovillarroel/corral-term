@@ -93,3 +93,30 @@ fn an_unmarked_connection_is_caught() {
     let mark = lines[0..=2].iter().rev().find_map(|l| l.find("net: "));
     assert!(mark.is_none());
 }
+
+/// The sensitive profile keeps herdr from asking herdr.dev: `corral profile sensitive`
+/// turns its two checks off in herdr's config, and another profile puts that config back
+/// as it was, a setting of yours included.
+#[test]
+fn the_sensitive_profile_turns_herdrs_checks_off() {
+    let home = std::env::temp_dir().join(format!("corral-test-sensitive-herdr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    let herdr = home.join("config/herdr/config.toml");
+    std::fs::create_dir_all(herdr.parent().unwrap()).unwrap();
+    let mine = "[keys]\nprefix = \"ctrl+b\"\n\n[update]\nversion_check = true\n";
+    std::fs::write(&herdr, mine).unwrap();
+    let corral = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_corral")).args(args).env_clear()
+            .env("HOME", &home).env("XDG_CONFIG_HOME", home.join("config")).env("XDG_STATE_HOME", home.join("state"))
+            .env("PATH", "/usr/bin:/bin").env("CORRAL_LANG", "en").env("CORRAL_NO_TELEMETRY", "1")
+            // As the palette runs it: loosening the profile doesn't wait for an approval.
+            .env("HERDR_PLUGIN_ID", "corral").output().unwrap();
+        assert!(out.status.success(), "corral {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    };
+    corral(&["profile", "sensitive"]);
+    let off = std::fs::read_to_string(&herdr).unwrap();
+    assert!(off.contains("version_check = false") && off.contains("manifest_check = false") && off.contains("[keys]"), "{off}");
+    corral(&["profile", "standard"]);
+    assert_eq!(std::fs::read_to_string(&herdr).unwrap(), mine);
+    let _ = std::fs::remove_dir_all(&home);
+}
