@@ -506,10 +506,24 @@ local({
     length(stems)
   }
 
+  # Checkpoints turned off while this R runs: its copy goes at the next command (once
+  # a copy being written has finished), not when it closes; turned on again, the next
+  # copy is a whole one.
+  drop_own_checkpoint <- function() {
+    if (!dir.exists(checkpoint_dir)) return(invisible())
+    if (!is.null(ck$job)) {
+      if (is.null(parallel::mccollect(ck$job, wait = FALSE))) return(invisible())
+      ck$job <- NULL
+    }
+    unlink(checkpoint_dir, recursive = TRUE)
+    ck$sigs <- NULL
+    invisible()
+  }
+
   # After each command: start a copy when something changed (or a minute went
   # by), unless the last one is still writing; then it waits for the next command.
   checkpoint <- function(sigs) {
-    if (!checkpoints_on()) return(invisible())
+    if (!checkpoints_on()) return(drop_own_checkpoint())
     if (!is.null(ck$job)) {
       if (is.null(parallel::mccollect(ck$job, wait = FALSE))) return(invisible())
       ck$job <- NULL
@@ -535,7 +549,16 @@ local({
   # At startup: the newest checkpoint of an R in this project that ended
   # without being closed comes back, packages first.
   restore_checkpoint <- function() {
-    if (!checkpoints_on() || !dir.exists(checkpoint_root)) return(invisible())
+    if (!dir.exists(checkpoint_root)) return(invisible())
+    if (!checkpoints_on()) {
+      # Off: nothing comes back, and no copy stays once its console has ended, closed
+      # or not, R's or Python's. Each folder is named after its console's pid.
+      for (d in list.dirs(checkpoint_root, recursive = FALSE)) {
+        pid <- suppressWarnings(as.integer(sub("^.*-([0-9]+)$", "\\1", basename(d))))
+        if (file.exists(file.path(d, "closed")) || is.na(pid) || !pid_alive(pid)) unlink(d, recursive = TRUE)
+      }
+      return(invisible())
+    }
     best <- NULL
     for (d in list.dirs(checkpoint_root, recursive = FALSE)) {
       if (file.exists(file.path(d, "closed"))) {

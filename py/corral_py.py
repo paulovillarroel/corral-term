@@ -507,19 +507,36 @@ class Checkpoints:
         # A figure added, drawn over or removed since the last copy: the next one writes them.
         self.plots_dirty = (self.dir / "kept").is_dir()
 
-    def after(self, sigs: dict, names: list, modules: dict) -> None:
-        """After each cell: start a copy when something changed (or a minute went by),
-        unless the last one is still writing; then it waits for the next cell."""
-        if setting("checkpoints") == "off":
-            return
+    def collected(self) -> bool:
+        """No copy is being written: the last one, if any, has finished."""
         if self.child is not None:
             try:
                 done, _ = os.waitpid(self.child, os.WNOHANG)
             except ChildProcessError:
                 done = self.child
             if done == 0:
-                return
+                return False
             self.child = None
+        return True
+
+    def drop(self) -> None:
+        """Checkpoints turned off while this Python runs: its copy goes at the next cell
+        (once a copy being written has finished), not when it closes; turned on again,
+        the next copy is a whole one, figures included."""
+        if not self.dir.is_dir() or not self.collected():
+            return
+        shutil.rmtree(self.dir, ignore_errors=True)
+        self.sigs = None
+        self.plots_dirty = True
+
+    def after(self, sigs: dict, names: list, modules: dict) -> None:
+        """After each cell: start a copy when something changed (or a minute went by),
+        unless the last one is still writing; then it waits for the next cell."""
+        if setting("checkpoints") == "off":
+            self.drop()
+            return
+        if not self.collected():
+            return
         now = time.time()
         full = now - self.full_at > _checkpoint_every()
         old = self.sigs or {}
@@ -658,7 +675,15 @@ class Checkpoints:
         """At startup: the newest checkpoint of a Python in this project that ended
         without being closed comes back, modules first. True when that session was
         marked sensitive: the new one must be too."""
-        if setting("checkpoints") == "off" or not CHECKPOINTS.is_dir():
+        if not CHECKPOINTS.is_dir():
+            return False
+        if setting("checkpoints") == "off":
+            # Off: nothing comes back, and no copy stays once its console has ended,
+            # closed or not, Python's or R's. Each folder is named after its console's pid.
+            for d in CHECKPOINTS.iterdir():
+                m = re.search(r"-(\d+)$", d.name)
+                if (d / "closed").exists() or not (m and pid_alive(m.group(1))):
+                    shutil.rmtree(d, ignore_errors=True)
             return False
         best = None
         for d in CHECKPOINTS.iterdir():
