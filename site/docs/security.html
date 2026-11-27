@@ -88,7 +88,11 @@
     </tbody>
     </table>
     <p>Everything else stays on your machine: Mirador and httpgd listen only on 127.0.0.1, Ark talks to Corral over Unix sockets in a private folder, and the table viewer's DuckDB reads files on your disk. What isn't Corral's goes on as it would without it: code that runs in your console (yours, or an agent's you let through), packages you install, DuckDB extensions your SQL asks for (a URL in <code>read_parquet</code>), and the agent with its model provider.</p>
-    <p>A test keeps this list whole: each place in Corral's code that can open a connection is marked with the row it belongs to, and the test fails when one isn't marked or listed here, or when a row here is no longer in the code.</p>
+    <p>herdr, the terminal Corral runs on, makes two connections of its own, both to herdr.dev and in the background: whether there is a newer herdr, and updates to how it recognizes agents in panes. Neither carries anything of yours. To turn them off, add this to <code>~/.config/herdr/config.toml</code>; herdr then recognizes agents with the rules it came with:</p>
+    <pre><code>[update]
+version_check = false
+manifest_check = false</code></pre>
+    <p>Two tests keep this list whole. One reads the code: each place in Corral that can open a connection is marked with the row it belongs to, and the test fails when one isn't marked or listed here, or when a row here is no longer in the code. The other watches Corral run: with strace following every process (herdr and what it starts, the R console, Ark, the variables pane, httpgd, Mirador, DuckDB) through a console, <code>corral eval</code>, a plot, the table viewer, SQL and the variables, it fails on any connection beyond 127.0.0.1 and local sockets, including a name looked up through DNS. It first makes a connection on purpose and fails if it doesn't see it. In its last run it followed several hundred connections, all of them on the machine.</p>
 
     <h2>What Corral enforces</h2>
     <p>These controls live in Corral's code, not in the agent's instructions: they apply whatever the model decides.</p>
