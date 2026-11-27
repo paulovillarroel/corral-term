@@ -293,7 +293,18 @@ pub fn notify(title: &str, body: &str) {
     }
 }
 
-/// A few random hex characters for file names.
+/// Random bytes for a secret (Ark's key, Mirador's token), as hex, from the system's
+/// random source and nothing else: without it, no key rather than a guessable one.
+pub fn secret_hex(bytes: usize) -> Result<String, String> {
+    use std::io::Read;
+    let mut buf = vec![0u8; bytes];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf))
+        .map_err(|e| trf!("couldn't read /dev/urandom for a key: {e}", "no pude leer /dev/urandom para una clave: {e}"))?;
+    Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Random hex for names (files, ids), which only need to differ: from the system's
+/// random source, or the clock if that can't be read.
 pub fn random_hex(bytes: usize) -> String {
     use std::io::Read;
     let mut buf = vec![0u8; bytes];
@@ -526,6 +537,14 @@ pub fn sh_split(s: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secrets_come_from_the_random_source() {
+        let (a, b) = (secret_hex(16).unwrap(), secret_hex(16).unwrap());
+        assert_eq!(a.len(), 32);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn the_first_agent_installed() {

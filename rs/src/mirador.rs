@@ -995,7 +995,10 @@ pub fn serve() -> Result<(), String> {
     let state_dir = env::state_dir();
     let _ = std::fs::create_dir_all(&state_dir);
     let info_file = state_dir.join("mirador.json");
-    let token = env::read_json(&info_file).get("token").str().map(String::from).unwrap_or_else(|| env::random_hex(12));
+    let token = match env::read_json(&info_file).get("token").str() {
+        Some(t) => t.to_string(),
+        None => env::secret_hex(12)?,
+    };
     let wanted: u16 = std::env::var("CORRAL_MIRADOR_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7317);
     let listener = TcpListener::bind(("127.0.0.1", wanted)).or_else(|_| TcpListener::bind(("127.0.0.1", 0)))
         .map_err(|e| trf!("Mirador couldn't open a port: {e}", "Mirador no pudo abrir un puerto: {e}"))?;
