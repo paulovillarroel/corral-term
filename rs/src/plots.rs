@@ -127,9 +127,17 @@ pub fn ensure_mirador() -> Result<Value, String> {
     if mirador_alive(&info, false) {
         return Ok(info);
     }
+    let _ = std::fs::create_dir_all(env::state_dir());
+    // One start at a time. Callers that come at once (the first plots of R and Python, the
+    // palette) would each start a server, and mirador.json would name only one of them:
+    // the others would run where `corral mirador --stop` can't reach them.
+    let _start = start_lock();
+    let info = mirador_info();
+    if mirador_alive(&info, false) {
+        return Ok(info); // another caller started it while this one waited
+    }
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let log = env::state_dir().join("mirador.log");
-    let _ = std::fs::create_dir_all(env::state_dir());
     env::trim_log(&log);
     env::spawn_detached(Command::new(me).arg("_mirador").current_dir(env::repo()), Some(&log))
         .map_err(|e| trf!("couldn't start Mirador: {e}", "no pude iniciar Mirador: {e}"))?;
@@ -143,6 +151,24 @@ pub fn ensure_mirador() -> Result<Value, String> {
         }
     }
     Err(trf!("Mirador didn't start; see {}", "Mirador no arrancó; revisa {}", log.display()))
+}
+
+/// The lock that keeps Mirador's starts one at a time, held until it is dropped (or this
+/// process ends). It waits for another start a little longer than one can take; past
+/// that, or without the file, it goes ahead.
+fn start_lock() -> Option<std::fs::File> {
+    use std::os::fd::AsRawFd;
+    let lock = std::fs::File::create(env::state_dir().join("mirador.lock")).ok()?;
+    let end = Instant::now() + Duration::from_secs(8);
+    // SAFETY: flock on a file this function returns open; released when it closes. Rust
+    // opens it close-on-exec, so the server started meanwhile doesn't keep it.
+    while unsafe { crate::eval::flock(lock.as_raw_fd(), crate::eval::LOCK_EX | crate::eval::LOCK_NB) } != 0 {
+        if Instant::now() >= end {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Some(lock)
 }
 
 pub fn open_mirador_window(info: &Value) {
