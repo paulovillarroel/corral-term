@@ -143,12 +143,72 @@ pub(crate) fn folder_rules(folder: &Path) -> Rules {
 
 /// The folder `corral profile --project` means: the one given, else the folder the
 /// console in view started in, else the current one.
+/// The folder the console in view started in, as its session wrote it. None without a console.
+fn console_folder() -> Option<PathBuf> {
+    let s = crate::console::pick_session()?;
+    Some(PathBuf::from(s.get("started_in").str().or(s.get("cwd").str())?))
+}
+
+/// The project of the console in view, for the palette: its folder, if it is still there.
+pub(crate) fn console_project() -> Option<PathBuf> {
+    std::fs::canonicalize(console_folder()?).ok().filter(|d| d.is_dir())
+}
+
+/// What is in effect, for the palette: the global settings and the profile they make
+/// (`custom` for another mix), and the console's project, if there is a console.
+pub(crate) struct InEffect {
+    pub access: &'static str,
+    pub output: &'static str,
+    pub profile: &'static str,
+    pub project: Option<Project>,
+}
+
+/// The console's project: its folder, the profile set for that very folder, the one that
+/// applies there (which may come from a folder above), and whether that one tightens the
+/// global profile, so the console runs by the project's rules.
+pub(crate) struct Project {
+    pub dir: PathBuf,
+    pub own: Option<String>,
+    pub applies: Option<String>,
+    pub tightens: bool,
+}
+
+pub(crate) fn in_effect() -> InEffect {
+    let cfg = env::config();
+    let (access, output) = crate::eval::policy(crate::eval::access_from(cfg.get("agents").str()), cfg.get("agent_output").str(), false);
+    let project = console_project().map(|dir| {
+        let own = cfg.get("projects").get(&dir.display().to_string()).str().map(String::from);
+        let applies = project_for(&cfg, std::slice::from_ref(&dir)).map(|(_, name)| name);
+        let here = combine(&cfg, std::slice::from_ref(&dir), false);
+        let tightens = (here.access, here.output, here.sensitive) != (access, output, false);
+        Project { dir, own, applies, tightens }
+    });
+    InEffect { access, output, profile: name_of(access, output, false), project }
+}
+
+/// A mix of settings in words, for a custom profile: "ask, you review results".
+pub(crate) fn mix_in_words(access: &str, output: &str) -> String {
+    let a = match access {
+        "on" => tr("run without asking", "ejecutan sin preguntar"),
+        "off" => tr("can't run code", "no ejecutan código"),
+        _ => tr("ask", "preguntan"),
+    };
+    let o = match output {
+        "review" => tr("you review results", "revisas los resultados"),
+        "structure" => tr("results without values", "resultados sin valores"),
+        _ => tr("full results", "resultados completos"),
+    };
+    format!("{a}, {o}")
+}
+
 fn project_folder(given: Option<&String>) -> Result<PathBuf, String> {
     let dir = match given {
         Some(d) => PathBuf::from(d),
-        None => crate::console::pick_session()
-            .and_then(|s| s.get("started_in").str().or(s.get("cwd").str()).map(PathBuf::from))
-            .unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?),
+        // A console's folder that is gone is an error below, not a reason to act on another.
+        None => match console_folder() {
+            Some(d) => d,
+            None => std::env::current_dir().map_err(|e| e.to_string())?,
+        },
     };
     let dir = std::fs::canonicalize(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     if !dir.is_dir() {
@@ -248,7 +308,7 @@ fn set_project(folder: &Path, name: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn short(folder: &Path) -> String {
+pub(crate) fn short(folder: &Path) -> String {
     folder.display().to_string().replace(&env::home().to_string_lossy().to_string(), "~")
 }
 

@@ -489,9 +489,9 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
         Some(cmd) => out.push(check("optional", State::Ok, agent, &trf!("{}, your choice (corral config agent)", "{}, el que elegiste (corral config agent)", env::agent_name(cmd)), &[])),
         None if found.is_empty() => out.push(check("optional", State::Warn, agent,
             tr("none found (Claude Code, Codex, Gemini CLI, opencode): the agent pane will be a shell", "no encontré ninguno (Claude Code, Codex, Gemini CLI, opencode): el panel del agente será una shell"),
-            &[tr("Install one; Corral opens the first it finds, and the palette (Agents: use…) chooses another.", "Instala uno; Corral abre el primero que encuentre, y la paleta (Agentes: usar…) elige otro.")])),
+            &[tr("Install one; Corral opens the first it finds, and the palette (Agent: …) chooses another.", "Instala uno; Corral abre el primero que encuentre, y la paleta (Agente: …) elige otro.")])),
         None => {
-            let more = if found.len() > 1 { trf!("; also {}: the palette chooses (Agents: use…)", "; también {}: la paleta elige (Agentes: usar…)", found[1..].join(", ")) } else { String::new() };
+            let more = if found.len() > 1 { trf!("; also {}: the palette chooses (Agent: …)", "; también {}: la paleta elige (Agente: …)", found[1..].join(", ")) } else { String::new() };
             out.push(check("optional", State::Ok, agent, &trf!("{} in the agent pane{more}", "{} en el panel del agente{more}", found[0]), &[]));
         }
     }
@@ -1217,11 +1217,11 @@ fn ask_agent(before: &Value, done: &mut Value) {
             let mut cfg = env::config();
             cfg.set("agent", (*cmd).into());
             theme::write_config(&cfg);
-            step(&trf!("the agent pane opens {name} (the palette changes it: Agents: use…)",
-                       "el panel del agente abre {name} (la paleta lo cambia: Agentes: usar…)"), State::Ok);
+            step(&trf!("the agent pane opens {name} (the palette changes it: Agent: …)",
+                       "el panel del agente abre {name} (la paleta lo cambia: Agente: …)"), State::Ok);
         }
-        None => step(&trf!("the agent pane opens the first agent installed, {} now (the palette changes it: Agents: use…)",
-                           "el panel del agente abre el primer agente instalado, {} ahora (la paleta lo cambia: Agentes: usar…)", found[0].1), State::Ok),
+        None => step(&trf!("the agent pane opens the first agent installed, {} now (the palette changes it: Agent: …)",
+                           "el panel del agente abre el primer agente instalado, {} ahora (la paleta lo cambia: Agente: …)", found[0].1), State::Ok),
     }
 }
 

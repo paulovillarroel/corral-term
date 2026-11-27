@@ -24,8 +24,9 @@ extern "C" {
 const RESET: &str = "\x1b[0m";
 
 /// The palette's groups, in display order: the parts of the IDE, from the layout
-/// to the plots, then what you set (agents, appearance) and help. Each entry
-/// starts with a category ("Agents: …", "Editor: …"), so typing it filters.
+/// to the plots, then what you set (security, the agent, appearance) and help. Each
+/// entry starts with a category ("Results: …", "Editor: …"), so typing it filters;
+/// so does the group's name.
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 enum Group {
     Layout,
@@ -34,7 +35,8 @@ enum Group {
     Vars,
     Table,
     Plots,
-    Agents,
+    Security,
+    Agent,
     Settings,
     Help,
 }
@@ -48,7 +50,8 @@ impl Group {
             Group::Vars => tr("Variables pane", "Panel de variables"),
             Group::Table => tr("Tables (View)", "Tablas (View)"),
             Group::Plots => tr("Plots and Mirador", "Gráficos y Mirador"),
-            Group::Agents => tr("Agents", "Agentes"),
+            Group::Security => tr("Security", "Seguridad"),
+            Group::Agent => tr("Agent", "Agente"),
             Group::Settings => tr("Appearance and language", "Apariencia e idioma"),
             Group::Help => tr("Help", "Ayuda"),
         }
@@ -70,6 +73,8 @@ pub struct Entry {
     id: String,
     /// Arguments for `corral` (a plugin action: Enter runs it).
     run: Option<(String, Vec<String>)>,
+    /// What is in effect is marked: "●", or "● active" on the profile.
+    current: &'static str,
 }
 
 // --------------------------------------------------------------------------- sources
@@ -203,26 +208,28 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("plot-size-800", Group::Plots, "Plots: Mirador draws them at 800 × 500", "Gráficos: Mirador los dibuja de 800 × 500"),
     ("plot-size-1000", Group::Plots, "Plots: Mirador draws them at 1000 × 650", "Gráficos: Mirador los dibuja de 1000 × 650"),
     ("plot-size-1200", Group::Plots, "Plots: Mirador draws them at 1200 × 800", "Gráficos: Mirador los dibuja de 1200 × 800"),
-    ("agent-claude", Group::Agents, "Agents: use Claude Code in the agent pane", "Agentes: usar Claude Code en el panel del agente"),
-    ("agent-codex", Group::Agents, "Agents: use Codex in the agent pane", "Agentes: usar Codex en el panel del agente"),
-    ("agent-gemini", Group::Agents, "Agents: use Gemini CLI in the agent pane", "Agentes: usar Gemini CLI en el panel del agente"),
-    ("agent-opencode", Group::Agents, "Agents: use opencode in the agent pane", "Agentes: usar opencode en el panel del agente"),
-    ("agent-none", Group::Agents, "Agents: none, a shell in the agent pane", "Agentes: ninguno, una shell en el panel del agente"),
-    ("agents-ask", Group::Agents, "Agents: ask before each request", "Agentes: preguntan antes de cada petición"),
-    ("agents-on", Group::Agents, "Agents: run code without asking", "Agentes: ejecutan código sin preguntar"),
-    ("agents-off", Group::Agents, "Agents: can't run code", "Agentes: no pueden ejecutar código"),
-    ("output-full", Group::Agents, "Agents: see full results", "Agentes: ven los resultados completos"),
-    ("output-review", Group::Agents, "Agents: you review results before they see them", "Agentes: revisas los resultados antes de que los vean"),
-    ("output-structure", Group::Agents, "Agents: see only the structure of results", "Agentes: ven solo la estructura de los resultados"),
-    ("context", Group::Agents, "Agents: what your agent sees (consoles, SQL, its rules)", "Agentes: lo que ve tu agente (consolas, SQL, sus reglas)"),
-    ("profile-open", Group::Agents, "Agents: open profile (run without asking, full results)", "Agentes: perfil abierto (ejecutan sin preguntar, resultados completos)"),
-    ("profile-standard", Group::Agents, "Agents: standard profile (ask before each request, full results)", "Agentes: perfil estándar (preguntan antes de cada petición, resultados completos)"),
-    ("profile-sensitive", Group::Agents, "Agents: sensitive profile (ask, results without values)", "Agentes: perfil sensible (preguntan, resultados sin valores)"),
-    ("profile-project-sensitive", Group::Agents, "Agents: this project is sensitive, in every session", "Agentes: este proyecto es sensible, en cada sesión"),
-    ("profile-project-clear", Group::Agents, "Agents: this project follows the global profile", "Agentes: este proyecto sigue el perfil global"),
-    ("audit-30", Group::Agents, "Agents: keep the audit log 30 days", "Agentes: guardar el registro de auditoría 30 días"),
-    ("audit-90", Group::Agents, "Agents: keep the audit log 90 days (Corral's)", "Agentes: guardar el registro de auditoría 90 días (el de Corral)"),
-    ("audit-365", Group::Agents, "Agents: keep the audit log a year", "Agentes: guardar el registro de auditoría un año"),
+    // Security: the profiles first (each one a mix of the two settings below them), the
+    // console's project, then each setting on its own. The palette marks what is in effect.
+    ("profile-open", Group::Security, "Open profile: run without asking, full results", "Perfil abierto: ejecutan sin preguntar, resultados completos"),
+    ("profile-standard", Group::Security, "Standard profile: ask before each request, full results", "Perfil estándar: preguntan antes de cada petición, resultados completos"),
+    ("profile-sensitive", Group::Security, "Sensitive profile: ask, results without values", "Perfil sensible: preguntan, resultados sin valores"),
+    ("profile-project-sensitive", Group::Security, "Project: sensitive in every session", "Proyecto: sensible en cada sesión"),
+    ("profile-project-clear", Group::Security, "Project: remove its profile", "Proyecto: quitar su perfil"),
+    ("agents-ask", Group::Security, "Requests: ask before each one", "Peticiones: preguntar antes de cada una"),
+    ("agents-on", Group::Security, "Requests: run without asking", "Peticiones: ejecutar sin preguntar"),
+    ("agents-off", Group::Security, "Requests: blocked, agents can't run code", "Peticiones: bloqueadas, los agentes no ejecutan código"),
+    ("output-full", Group::Security, "Results: full", "Resultados: completos"),
+    ("output-review", Group::Security, "Results: you review them first", "Resultados: los revisas tú primero"),
+    ("output-structure", Group::Security, "Results: only the structure, without values", "Resultados: solo la estructura, sin valores"),
+    ("audit-30", Group::Security, "Audit: keep the log 30 days", "Auditoría: guardar el registro 30 días"),
+    ("audit-90", Group::Security, "Audit: keep the log 90 days (the default)", "Auditoría: guardar el registro 90 días (lo predeterminado)"),
+    ("audit-365", Group::Security, "Audit: keep the log a year", "Auditoría: guardar el registro un año"),
+    ("context", Group::Security, "What your agent sees (consoles, SQL, its rules)", "Lo que ve tu agente (consolas, SQL, sus reglas)"),
+    ("agent-claude", Group::Agent, "Agent: Claude Code in its pane", "Agente: Claude Code en su panel"),
+    ("agent-codex", Group::Agent, "Agent: Codex in its pane", "Agente: Codex en su panel"),
+    ("agent-gemini", Group::Agent, "Agent: Gemini CLI in its pane", "Agente: Gemini CLI en su panel"),
+    ("agent-opencode", Group::Agent, "Agent: opencode in its pane", "Agente: opencode en su panel"),
+    ("agent-none", Group::Agent, "Agent: none, a shell in its pane", "Agente: ninguno, una shell en su panel"),
     ("theme-dark-2026", Group::Settings, "Theme: Dark 2026 (VS Code's and Positron's)", "Tema: Dark 2026 (el de VS Code y Positron)"),
     ("theme-herdr", Group::Settings, "Theme: back to herdr's", "Tema: volver al de herdr"),
     ("language-en", Group::Settings, "Language: English", "Language: English"),
@@ -305,7 +312,72 @@ fn fixed(group: Group, prefix: &str, category: (&str, &str), items: &[(&str, &st
         desc: categorized(tr(category.0, category.1), tr(en, es_text)),
         id: format!("{prefix}:{}", i + 1),
         run: None,
+        current: "",
     }).collect()
+}
+
+/// Mark what is in effect among the Security and Agent entries: the global profile (or
+/// a custom mix of the two settings, as an entry of its own), each setting's value,
+/// the agent, and the console's project, named by its folder. Without a console the
+/// project entries go: their action would have no folder to act on.
+fn mark_in_effect(list: &mut Vec<Entry>) {
+    let cfg_agent = env::config().get("agent").str().map(|a| a.split_whitespace().next().unwrap_or("").to_string());
+    let agent = cfg_agent.or_else(|| env::first_agent(|cmd| env::which(cmd).is_some()).map(String::from)).unwrap_or_else(|| "none".into());
+    mark(list, &crate::profile::in_effect(), crate::audit::keep_days(), &agent);
+}
+
+/// mark_in_effect, given what is in effect: the profile and project, the audit log's
+/// days (None: forever) and the agent's command.
+fn mark(list: &mut Vec<Entry>, now: &crate::profile::InEffect, audit: Option<i64>, agent: &str) {
+    let active = tr("● active", "● activo");
+    // When the console's project tightens the rules, the global profile isn't what runs there.
+    let tightens = now.project.as_ref().is_some_and(|p| p.tightens);
+    let global = if tightens { tr("● global", "● global") } else { active };
+    let mut keep = Vec::with_capacity(list.len());
+    for mut e in list.drain(..) {
+        let Some(id) = e.id.strip_prefix("herdr:").map(String::from) else {
+            keep.push(e);
+            continue;
+        };
+        match id.as_str() {
+            "profile-open" if now.profile == "custom" => {
+                keep.push(Entry {
+                    group: Group::Security, keys: Vec::new(),
+                    desc: trf!("Profile: custom ({})", "Perfil: a medida ({})", crate::profile::mix_in_words(now.access, now.output)),
+                    id: "profile-custom".into(), run: None, current: global,
+                });
+            }
+            "profile-open" | "profile-standard" | "profile-sensitive" if id.ends_with(now.profile) => e.current = global,
+            "profile-project-sensitive" | "profile-project-clear" => {
+                let Some(project) = &now.project else { continue };
+                // The folder's name: a whole path would push the rest out of a narrow palette.
+                let dir = &project.dir;
+                let folder = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| crate::profile::short(dir));
+                if id.ends_with("sensitive") {
+                    e.desc = trf!("Project {folder}: sensitive in every session", "Proyecto {folder}: sensible en cada sesión");
+                    if project.applies.as_deref() == Some("sensitive") {
+                        e.current = if project.tightens { active } else { "●" };
+                    }
+                } else {
+                    // Only a profile set for this very folder can be removed from here.
+                    if project.own.is_none() {
+                        continue;
+                    }
+                    e.desc = match now.profile {
+                        "custom" => trf!("Project {folder}: remove its profile (the global one applies)", "Proyecto {folder}: quitar su perfil (rige el global)"),
+                        p => trf!("Project {folder}: remove its profile (back to {})", "Proyecto {folder}: quitar su perfil (vuelve al {})", crate::profile::shown(p)),
+                    };
+                }
+            }
+            _ if id.strip_prefix("agents-") == Some(now.access)
+                || id.strip_prefix("output-") == Some(now.output)
+                || id.strip_prefix("audit-").and_then(|d| d.parse::<i64>().ok()).is_some_and(|d| Some(d) == audit)
+                || id.strip_prefix("agent-") == Some(agent) => e.current = "●",
+            _ => {}
+        }
+        keep.push(e);
+    }
+    *list = keep;
 }
 
 /// Every shortcut, in display order.
@@ -318,13 +390,13 @@ pub fn entries() -> Vec<Entry> {
         let keys = binds.iter().filter(|b| b.kind == "plugin_action" && b.command == command)
             .map(|b| herdr_key(&prefix, &b.key)).collect();
         let (group, desc, order) = action_label(&id, &title);
-        (order, Entry { group, keys, desc, id: format!("herdr:{id}"), run: Some((id, args)) })
+        (order, Entry { group, keys, desc, id: format!("herdr:{id}"), run: Some((id, args)), current: "" })
     }).collect();
     actions.sort_by_key(|(order, _)| *order);
     list.extend(actions.into_iter().map(|(_, e)| e));
     list.push(Entry { group: Group::Help, keys: vec![format!("{prefix} ?")],
                       desc: tr("Help: all of herdr's shortcuts (panes, tabs, workspaces)", "Ayuda: todos los atajos de herdr (paneles, pestañas, espacios)").into(),
-                      id: "herdr:help".into(), run: None });
+                      id: "herdr:help".into(), run: None, current: "" });
 
     let fresh = env::read_json(&fresh_config_path());
     let mut editor_actions: Vec<(String, Vec<String>)> = Vec::new();
@@ -336,7 +408,7 @@ pub fn entries() -> Vec<Entry> {
         }
     }
     for (action, keys) in editor_actions {
-        list.push(Entry { group: Group::Editor, keys, desc: categorized("Editor", &editor_desc(&action)), id: format!("editor:{action}"), run: None });
+        list.push(Entry { group: Group::Editor, keys, desc: categorized("Editor", &editor_desc(&action)), id: format!("editor:{action}"), run: None, current: "" });
     }
     list.extend(fixed(Group::Editor, "editor-fixed", ("Editor", "Editor"), &[
         ("Command palette (all its actions)", "Paleta de comandos (todas sus acciones)", &["ctrl+p"]),
@@ -394,6 +466,7 @@ pub fn entries() -> Vec<Entry> {
         ("Show the whole row", "Ver la fila completa", &["enter"]),
         ("Summary of each column", "Resumen de cada columna", &["i"]),
     ]));
+    mark_in_effect(&mut list);
     // In display order: by group, and within one as listed here.
     list.sort_by(|a, b| a.group.partial_cmp(&b.group).unwrap_or(std::cmp::Ordering::Equal));
     list
@@ -493,7 +566,10 @@ fn draw(c: &Colors, cols: usize, height: usize, q: &str, shown: &[&Entry], total
                 let on = *i == sel;
                 let (bg, mark) = if on { (c.sel_bg.as_str(), format!("{}▸{RESET}{}", c.accent, c.sel_bg)) } else { ("", " ".to_string()) };
                 let runnable = if e.run.is_some() && on { format!(" {}↵", c.dim) } else { String::new() };
-                f += &format!("\x1b[{y};1H{bg}\x1b[2K {mark} {}{}{runnable}", c.text, clip(&e.desc, desc_w));
+                // What is in effect, after the text and never cut by it.
+                let current_w = if e.current.is_empty() { 0 } else { width(e.current) + 2 };
+                let current = if e.current.is_empty() { String::new() } else { format!("  {}{}{}", c.accent, e.current, c.text) };
+                f += &format!("\x1b[{y};1H{bg}\x1b[2K {mark} {}{}{current}{runnable}", c.text, clip(&e.desc, desc_w.saturating_sub(current_w)));
                 f += &format!("\x1b[{y};{}H{bg}{}{}{RESET}", cols.saturating_sub(key_w + 1), c.accent, clip(&keys, key_w));
             }
         }
@@ -669,7 +745,8 @@ fn print_list(all: &[Entry]) {
             group = Some(e.group);
         }
         let keys = if e.keys.is_empty() { tr("(no shortcut)", "(sin atajo)").to_string() } else { e.keys.join(", ") };
-        println!("  {:<26} {}  [{}]", keys, e.desc, e.id);
+        let current = if e.current.is_empty() { String::new() } else { format!("  {}", e.current) };
+        println!("  {:<26} {}{current}  [{}]", keys, e.desc, e.id);
     }
 }
 
@@ -680,6 +757,7 @@ fn to_json(all: &[Entry]) -> Value {
         ("description", e.desc.as_str().into()),
         ("id", e.id.as_str().into()),
         ("runnable", e.run.is_some().into()),
+        ("in_effect", (!e.current.is_empty()).into()),
         ("changeable", changeable(&e.id).into()),
     ])).collect())
 }
@@ -1025,6 +1103,68 @@ pub fn run(args: &[String], popup: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::profile::{InEffect, Project};
+
+    /// The Security and Agent entries as the palette lists them, marked for `now`.
+    fn marked(now: &InEffect, audit: Option<i64>, agent: &str) -> Vec<(String, &'static str, String)> {
+        let mut list: Vec<Entry> = ACTIONS.iter().filter(|a| matches!(a.1, Group::Security | Group::Agent)).map(|a| Entry {
+            group: a.1, keys: Vec::new(), desc: a.2.into(), id: format!("herdr:{}", a.0), run: Some((a.0.into(), Vec::new())), current: "",
+        }).collect();
+        mark(&mut list, now, audit, agent);
+        list.into_iter().map(|e| (e.id.trim_start_matches("herdr:").to_string(), e.current, e.desc)).collect()
+    }
+
+    fn on<'a>(list: &'a [(String, &'static str, String)]) -> Vec<&'a str> {
+        list.iter().filter(|(_, c, _)| !c.is_empty()).map(|(id, _, _)| id.as_str()).collect()
+    }
+
+    #[test]
+    fn the_palette_marks_what_is_in_effect() {
+        let standard = InEffect { access: "ask", output: "full", profile: "standard", project: None };
+        let list = marked(&standard, Some(90), "claude");
+        assert_eq!(on(&list), ["profile-standard", "agents-ask", "output-full", "audit-90", "agent-claude"]);
+        // Without a console, no project entries: their action would have no folder.
+        assert!(!list.iter().any(|(id, _, _)| id.starts_with("profile-project")), "{list:?}");
+        // Kept forever: no audit entry is in effect.
+        assert!(!on(&marked(&standard, None, "none")).iter().any(|id| id.starts_with("audit-")));
+        assert!(on(&marked(&standard, None, "none")).contains(&"agent-none"));
+    }
+
+    #[test]
+    fn a_mix_that_is_no_profile_shows_as_custom() {
+        let mix = InEffect { access: "ask", output: "review", profile: "custom", project: None };
+        let list = marked(&mix, Some(30), "codex");
+        assert_eq!(on(&list), ["profile-custom", "agents-ask", "output-review", "audit-30", "agent-codex"]);
+        let first = &list[0];
+        assert_eq!(first.0, "profile-custom");
+        assert!(first.2.contains("you review results"), "{first:?}");
+        assert_eq!(list[1].0, "profile-open");
+    }
+
+    #[test]
+    fn the_project_is_named_by_its_folder() {
+        let project = |own: Option<&str>, tightens| Some(Project {
+            dir: PathBuf::from("/data/clinic"), own: own.map(String::from), applies: Some("sensitive".into()), tightens,
+        });
+        let find = |list: &[(String, &'static str, String)], id: &str| list.iter().find(|e| e.0 == id).cloned();
+        // Its own profile, stricter than the global one: the console runs by it, so it is
+        // the one active, the global profile says so, and removing it says what comes back.
+        let own = InEffect { access: "ask", output: "full", profile: "standard", project: project(Some("sensitive"), true) };
+        let list = marked(&own, Some(90), "claude");
+        let sensitive = find(&list, "profile-project-sensitive").unwrap();
+        assert_eq!((sensitive.1, sensitive.2.as_str()), ("● active", "Project clinic: sensitive in every session"));
+        assert_eq!(find(&list, "profile-standard").unwrap().1, "● global");
+        assert_eq!(find(&list, "profile-project-clear").unwrap().2, "Project clinic: remove its profile (back to standard)");
+        // With a sensitive global profile it changes nothing: marked, the global one active.
+        let same = InEffect { access: "ask", output: "structure", profile: "sensitive", project: project(Some("sensitive"), false) };
+        let list = marked(&same, Some(90), "claude");
+        assert_eq!((find(&list, "profile-project-sensitive").unwrap().1, find(&list, "profile-sensitive").unwrap().1), ("●", "● active"));
+        // Sensitive from a folder above: marked, but there is nothing to remove from here.
+        let above = InEffect { access: "ask", output: "full", profile: "standard", project: project(None, true) };
+        let list = marked(&above, Some(90), "claude");
+        assert!(on(&list).contains(&"profile-project-sensitive"));
+        assert!(find(&list, "profile-project-clear").is_none(), "{list:?}");
+    }
 
     #[test]
     fn the_key_you_press() {

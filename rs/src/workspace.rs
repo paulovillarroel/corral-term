@@ -235,8 +235,8 @@ pub fn layout(args: &[String]) -> Result<(), String> {
         .or_else(|| env::first_agent(|cmd| env::which(cmd).is_some()).map(String::from))
         .unwrap_or_else(|| {
             env::notify(tr("No agent found", "No encontré un agente"),
-                        tr("Corral looks for Claude Code, Codex, Gemini CLI and opencode; the agent pane is a shell. Choose one in the palette (Agents: use…) or with corral config agent.",
-                           "Corral busca Claude Code, Codex, Gemini CLI y opencode; el panel del agente es una shell. Elige uno en la paleta (Agentes: usar…) o con corral config agent."));
+                        tr("Corral looks for Claude Code, Codex, Gemini CLI and opencode; the agent pane is a shell. Choose one in the palette (Agent: …) or with corral config agent.",
+                           "Corral busca Claude Code, Codex, Gemini CLI y opencode; el panel del agente es una shell. Elige uno en la paleta (Agente: …) o con corral config agent."));
             String::new()
         });
     let editor_cmd = a.value("--editor").map(String::from).unwrap_or_else(|| std::env::var("CORRAL_EDITOR").unwrap_or_else(|_| "fresh".into()));
