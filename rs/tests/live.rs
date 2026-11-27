@@ -118,6 +118,14 @@ impl Live {
     }
 
     /// `corral eval ARGS`: exit code and output.
+    /// `corral send`, as the editor's keys run it: from a pane that isn't an agent's
+    /// (here the console's own). From an agent, send refuses.
+    fn send(&self, args: &[&str]) -> Output {
+        let mut all = vec!["send"];
+        all.extend_from_slice(args);
+        self.command("corral").env("HERDR_PANE_ID", &self.console).args(&all).stdin(Stdio::null()).output().unwrap()
+    }
+
     fn eval(&self, args: &[&str]) -> (i32, String) {
         let mut all = vec!["eval"];
         all.extend_from_slice(args);
@@ -1439,7 +1447,7 @@ fn plots_checkpoint_cost_report() {
     // As Ctrl+R sends it: `corral eval` would also ask httpgd for each new plot.
     let sent = |code: &str| -> f64 {
         let before = timing.lines().len();
-        let out = live.corral(&["send", "--lang", "r", code]);
+        let out = live.send(&["--lang", "r", code]);
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         wait_for(Duration::from_secs(30), "the command's timing", || timing.lines().len() > before);
         *timing.lines().last().unwrap()
@@ -1473,7 +1481,7 @@ fn plots_checkpoint_cost_report() {
         let pngs = || std::fs::read_dir(dir.join("plots")).unwrap().flatten().filter(|f| f.path().extension().is_some_and(|e| e == "png")).map(|f| f.file_name()).collect::<Vec<_>>();
         let before = pngs();
         let start = Instant::now();
-        let _ = live.corral(&["send", "--lang", "r", &format!("plot(rnorm(1000), main = 'reach {i}')")]);
+        let _ = live.send(&["--lang", "r", &format!("plot(rnorm(1000), main = 'reach {i}')")]);
         wait_for(Duration::from_secs(10), "the new PNG", || pngs().iter().any(|f| !before.contains(f)));
         reach.push(start.elapsed().as_secs_f64() * 1000.0);
         std::thread::sleep(Duration::from_millis(300));
@@ -1570,6 +1578,48 @@ fn an_agent_cannot_loosen_the_harness_by_itself() {
     let audit = std::fs::read_to_string(live.dir.join("state/corral/audit.jsonl")).unwrap();
     assert!(audit.contains(r#""decision":"refused""#) && audit.contains("corral config agents on"), "{audit}");
     assert!(audit.contains(r#""decision":"allowed""#) && audit.contains("corral config agent_output full"), "{audit}");
+}
+
+/// Three ways round the harness, closed: an agent's `corral send` (it would type code
+/// into the console with no approval, no output mode and no audit), `corral config
+/// projects` (it would replace every project's profile, unasked) and, with agents off,
+/// `corral vars --json` (the agent would still read names and previews). The editor's
+/// keys send from a pane that isn't an agent's, and still work.
+#[test]
+#[ignore]
+fn an_agent_cannot_go_around_the_harness() {
+    let live = Live::start("around");
+    let config = live.dir.join("config/corral/config.json");
+    live.config(r#"{"agents":"on","agent_output":"full","update_check":"off","projects":{"/tmp/clinic":"sensitive"}}"#);
+    // An agent: no terminal, and outside any pane herdr sees as a person's.
+    let agent = |args: &[&str]| -> (i32, String) {
+        let out = live.command("corral").args(args).stdin(Stdio::null()).output().unwrap();
+        (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr))
+    };
+    let (code, text) = agent(&["send", "--lang", "r", "--", "leaked <- 42"]);
+    assert_eq!(code, 3, "{text}");
+    assert!(text.contains("corral eval"), "{text}");
+    // From the console's own pane, as the editor's keys do from theirs: it still sends.
+    let out = live.command("corral").env("HERDR_PANE_ID", &live.console).args(["send", "--lang", "r", "--", "sent_by_keys <- 1"])
+        .stdin(Stdio::null()).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    std::thread::sleep(Duration::from_millis(800));
+    let (code, text) = live.eval(&[r#"cat("leaked:", exists("leaked"), "sent:", exists("sent_by_keys"), "\n")"#]);
+    assert!(code == 0 && text.contains("leaked: FALSE sent: TRUE"), "{text}");
+    let audit = std::fs::read_to_string(live.dir.join("state/corral/audit.jsonl")).unwrap();
+    assert!(audit.contains(r#""decision":"refused""#) && audit.contains("corral send from an agent") && audit.contains("leaked <- 42"), "{audit}");
+
+    let (code, text) = agent(&["config", "projects", "x"]);
+    assert_ne!(code, 0, "{text}");
+    assert!(text.contains("corral profile"), "{text}");
+    let settings = std::fs::read_to_string(&config).unwrap().split_whitespace().collect::<String>();
+    assert!(settings.contains(r#""projects":{"/tmp/clinic":"sensitive"}"#), "{settings}");
+
+    let (code, text) = agent(&["config", "agents", "off"]);
+    assert_eq!(code, 0, "{text}");
+    let (code, text) = agent(&["vars", "--json"]);
+    assert_eq!(code, 3, "{text}");
+    assert!(text.contains("agents are off") && !text.contains(r#""vars""#), "{text}");
 }
 
 /// With restricted output, a request past its timeout doesn't tell the agent where
