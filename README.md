@@ -4,7 +4,7 @@
 
 <p align="center"><b>An agentic Data Science IDE that opens in milliseconds.</b><br>
 A terminal-native data science workspace for R, Python and SQL, built for working alongside AI agents:<br>
-you and your agent share one live session, under your control.<br>
+you and your agent share one live session, under your control, with controls made for sensitive data.<br>
 Written in Rust. DuckDB for your data.</p>
 
 <p align="center">
@@ -19,6 +19,7 @@ Written in Rust. DuckDB for your data.</p>
 - **Big tables at once.** `View()` saves the table as Parquet and asks DuckDB only for what's on screen: ten million rows take about a second to save with nanoparquet, then about 15 ms a screen.
 - **SQL in your session.** In a `.sql` file, <kbd>Ctrl</kbd>+<kbd>R</kbd> runs a query on DuckDB in the R or Python console: your data frames are its tables, and the result is a data frame you keep working with.
 - **Agents in your session.** Corral is the harness between your agent and your live session: the agent runs code in your console with `corral eval`, guided by an [Agent Skills](https://agentskills.io) skill, within rules you set ([the agent harness](https://corral-term.dev/docs/agents.html#the-agent-harness)).
+- **Built for sensitive data.** In a sensitive project your agent learns whether its code worked and the shape of your objects, never their values. On a shared server, other users can't read your sessions; turning checkpoints off deletes the copies of your objects; every download is checked before it runs ([Security](#security), [threat model](https://corral-term.dev/docs/threats.html)).
 - **Your work survives a crash.** If R or Python crashes, the next console gets back the objects, the packages and the newest 30 plots, and says why R ended and what was running ([what survives what](https://corral-term.dev/docs/consoles.html#survives)).
 - **Light.** R ready in 0.45 s and 155 MB in use (200 MB counting herdr), against 13.3 s and 3.2 GB for Positron ([how it was measured](https://corral-term.dev/docs/performance.html)).
 
@@ -103,7 +104,12 @@ The repository: `rs/` is `corral`; `r/` and `py/` run inside your R and Python s
 
 ## Security
 
-Agents run code in your real session, so the user stays in control, and Corral enforces it in its own code rather than in the agent's instructions: `corral config agents ask|on|off` (`ask`, the default, holds every request until you approve it in a popup), `agent_output review` (you see each result first and decide whether the agent gets it) or `structure` (it sees whether it worked and the shape of objects, not values; keep `ask` on with it, since the agent writes the code), all also in the palette; `corral profile open|standard|sensitive` sets them in one step, for all your work or one project folder (the stricter wins, so a project with clinical data is sensitive in every session); `corral_sensitive()` for one session; `corral context`, which tells the agent the consoles and these rules before it runs anything; and a local audit log (`corral audit`). Corral is not a sandbox, and what an agent reads goes to its model provider: the [Security model](https://corral-term.dev/docs/security.html) explains the limits and a setup for sensitive data.
+Data science runs on records about people, and agents run code in your real session. Corral keeps you in control and enforces it in its own code, whatever the agent was told:
+
+- **What the agent may do.** `corral config agents ask|on|off`: `ask`, the default, holds every request until you approve it in a popup that shows the exact code and which agent asks. `agent_output review` shows you each result before the agent gets it; `structure` gives it only whether the code worked and the shape of the objects, not values (keep `ask` on with it, since the agent writes the code). `corral profile open|standard|sensitive` sets both in one step, for all your work or one project folder, and the stricter wins, so a project with clinical data is sensitive in every session; `corral_sensitive()` marks one session. `corral context` tells the agent the consoles and these rules before it runs anything, and `corral audit` keeps a local record of every request. All of it is in the palette too.
+- **Your data on the machine.** Your sessions are closed to other users on a shared server: R talks to Corral over Unix sockets in Corral's own folder, which only you can open, every local server (Mirador, the plot servers) asks for a token, and keys come only from the system's random source. Turning checkpoints off (`corral config checkpoints off`) deletes the copies of your objects: at once for consoles that have ended, at its next command for one still open. Corral doesn't encrypt its files; for a lost or stolen machine, use the system's disk encryption.
+- **The install.** Every download is checked by SHA-256 before anything uses it, and Corral's package also by its build provenance attestation (with the GitHub CLI); the installer never uses sudo. Corral itself has no dependencies beyond Rust's standard library, and the release workflow's actions are pinned to a commit.
+- **Where it ends.** Corral is not a sandbox: approved code can do whatever your user can, an agent with an unrestricted shell can act outside it, and what an agent reads goes to its model provider. The [Security model](https://corral-term.dev/docs/security.html) explains each control and has a setup for sensitive data; the [Threat model](https://corral-term.dev/docs/threats.html) sets them against each threat and says what is left to you.
 
 ## Problems and ideas
 
