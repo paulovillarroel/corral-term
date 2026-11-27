@@ -232,6 +232,13 @@ footer.foot a:hover { color: var(--fg); }
 .hero-grid .install { display: flex; width: 100%; }
 .hero-grid .install code { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; }
 .os-note { margin: 12px 0 0; max-width: 560px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+/* Phones and tablets can't run that line: they get a way to send the link on, to open
+   it later on a computer (the share sheet, or an email where there is none). */
+.phone-note { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .phone-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 14px 0 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+  .phone-note .share { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--accent); color: var(--accent); font: 500 13px/1.2 var(--sans); text-decoration: none; }
+}
 /* Where Corral runs: a solid tag with a green dot for each supported system, a
    dashed one with a hollow amber dot for what is still in development. */
 .platforms { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
