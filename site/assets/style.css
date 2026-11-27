@@ -491,7 +491,9 @@ kbd {
 .arch .vault { fill: color-mix(in srgb, var(--accent) 5%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 5 4; }
 .arch .no { stroke: var(--warn); stroke-width: 1.5; fill: none; }
 .arch .no-t { fill: var(--warn); font: 12px var(--sans); }
-.security-arch { margin: 56px 0 0; }
+/* The diagram over the console example, in the section's right column. */
+.security-visuals { display: grid; gap: 28px; min-width: 0; }
+.security-arch { margin: 0; }
 .security-arch svg { max-width: 860px; margin: 0 auto; }
 .security-arch figcaption { max-width: 860px; margin: 6px auto 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .security-arch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
