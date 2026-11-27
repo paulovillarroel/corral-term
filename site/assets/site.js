@@ -230,14 +230,17 @@ function init() {
   });
 
   // The phone note's link opens the share sheet where there is one; elsewhere it stays
-  // an email to send the link on. If the sheet fails (not when the reader closes it),
-  // the email opens instead.
+  // an email to send the link on. If the sheet ends without sharing (closed, failed, or
+  // with nowhere to send it: browsers report these alike), the link becomes the email,
+  // for the reader to tap if they want it.
   document.querySelectorAll("a.share").forEach((a) => {
     if (!navigator.share) return;
+    let email = false;
     a.addEventListener("click", (e) => {
+      if (email) return; // the email link, as without a share sheet
       e.preventDefault();
       navigator.share({ title: "Corral", text: "Corral: R, Python and SQL in the terminal, with your AI agent. It installs on Linux or Windows (WSL).", url: "https://corral-term.dev/" })
-        .catch((err) => { if (!err || err.name !== "AbortError") location.href = a.href; });
+        .catch(() => { email = true; a.textContent = "Email yourself the link"; });
     }, { signal });
   });
 
