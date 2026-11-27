@@ -319,13 +319,18 @@ pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
     let mut last = String::new();
     while env::pid_alive(pid) {
         let rev = std::fs::read_to_string(sdir.join("plots-rev")).unwrap_or_default();
-        // R writes the checkpoint folder soon after it starts; until then, look again.
-        if rev != last && checkpoint.is_dir() {
-            last = rev;
-            if env::config().get("checkpoints").str() != Some("off") {
-                if let Some(dir) = plots_dir(&checkpoint) {
-                    write_plots(sid, &dir);
-                }
+        // Copied: this revision was written and the checkpoint still has its plots. One
+        // deleted (checkpoints turned off) and written again has none, so the session's
+        // plots go in whole, even if no plot changed meanwhile. R writes the checkpoint
+        // folder soon after it starts; until then, look again.
+        let copied = rev == last && checkpoint.join("plots").is_dir();
+        if !rev.is_empty() && !copied && checkpoint.is_dir() {
+            // Done once copied, or when there is nothing to copy (checkpoints off). If
+            // httpgd gave no list (R just started, or it is busy), the next pass tries
+            // again instead of waiting for another plot.
+            let off = env::config().get("checkpoints").str() == Some("off");
+            if off || plots_dir(&checkpoint).is_some_and(|dir| write_plots(sid, &dir)) {
+                last = rev;
             }
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -343,10 +348,11 @@ fn too_heavy(svg_bytes: usize) -> bool {
 }
 
 /// One pass of `_keep-plots`: the files in `dir` follow the session's newest 30 plots.
-fn write_plots(sid: &str, dir: &Path) {
+/// False when httpgd gave no list (not up yet, or busy), so the pass is tried again.
+fn write_plots(sid: &str, dir: &Path) -> bool {
     let list = plots_json(sid, "plots");
     // No answer: httpgd is gone or busy, and the files stay as they are.
-    let Value::Arr(plots) = list.get("plots") else { return };
+    let Value::Arr(plots) = list.get("plots") else { return false };
     let ids: Vec<String> = plots.iter().filter_map(|p| match p.get("id") {
         Value::Str(s) => Some(s.clone()),
         Value::Num(n) => Some(format!("{}", *n as i64)),
@@ -396,6 +402,7 @@ fn write_plots(sid: &str, dir: &Path) {
         }
     }
     let _ = std::fs::write(&skipped_file, skipped.join("\n"));
+    true
 }
 
 // --------------------------------------------------------------------------- DuckDB
