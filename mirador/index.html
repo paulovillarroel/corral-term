@@ -550,6 +550,33 @@ function plotUrl(id, w, h, extra = "") {
 }
 
 let stageSize = [0, 0];
+
+// A new window Corral is about to place (fit=0.5x0.85 in its address: fractions of the
+// screen's work area, as lib/front.ps1 places it). Until it is placed, plots are drawn at
+// the size the stage will have then (the stage now, plus what the window will grow or
+// shrink), so placing it doesn't draw them again: an R plot with many labels (ggrepel)
+// takes about half a second each time. Placed within a few pixels of that, the drawing
+// stays; not placed within a few seconds, plots fit the window as always.
+const FIT = (location.hash.slice(1).split(":").find((p) => p.startsWith("fit=")) || "").slice(4).split("x").map(Number);
+let placing = FIT.length === 2 && FIT.every((v) => v > 0 && v <= 1) ? { until: Date.now() + 4000 } : null;
+let drawnFor = null; // the stage size the plot on screen was drawn for
+let kept = null;     // { at: the stage's size when a drawing was kept, size: the one it was drawn for }
+const near = (a, b) => Math.abs(a[0] - b[0]) <= 16 && Math.abs(a[1] - b[1]) <= 16;
+function drawBox(stage) {
+  const now = [stage.clientWidth, stage.clientHeight];
+  if (!now[0] || !now[1]) return now; // not laid out yet (another tab): nothing to go by
+  if (placing) {
+    const target = [Math.floor(screen.availWidth * FIT[0]), Math.floor(screen.availHeight * FIT[1])];
+    const placed = near([window.outerWidth, window.outerHeight], target);
+    if (!placed && Date.now() < placing.until) return [now[0] + target[0] - window.outerWidth, now[1] + target[1] - window.outerHeight];
+    placing = null;
+    if (placed && drawnFor && near(now, drawnFor)) kept = { at: now, size: drawnFor };
+  }
+  if (kept && kept.at[0] === now[0] && kept.at[1] === now[1]) return kept.size;
+  kept = null;
+  return now;
+}
+if (placing) setTimeout(() => { if (placing && S.tab === "plots") renderPlot(); }, 4100);
 // Screen pixels per CSS pixel: a plot sent as PNG (too heavy as SVG) is drawn at that density.
 const DPR = Math.min(2, Math.max(1, Math.round((window.devicePixelRatio || 1) * 4) / 4));
 // SVG, or PNG when it would be too heavy; a server from before ?wait= (no rev) only knows SVG.
@@ -571,9 +598,14 @@ function renderPlot() {
     return;
   }
   // The size R draws it at: the one chosen, or what fits the window.
+  // The thumbnails first: they take room from the stage, and drawing before they show
+  // would draw the plot again once they do.
+  renderThumbs();
   const fixed = fixedSize();
-  const w = fixed ? fixed[0] : Math.max(240, Math.floor(stage.clientWidth - 32));
-  const h = fixed ? fixed[1] : Math.max(180, Math.floor(stage.clientHeight - 32));
+  const [sw, sh] = fixed ? [0, 0] : drawBox(stage);
+  if (!fixed) drawnFor = [sw, sh];
+  const w = fixed ? fixed[0] : Math.max(240, Math.floor(sw - 32));
+  const h = fixed ? fixed[1] : Math.max(180, Math.floor(sh - 32));
   stageSize = [w, h];
   const src = plotUrl(current, w, h, onScreen());
   let img = stage.querySelector("img");
@@ -590,7 +622,6 @@ function renderPlot() {
   if (img.getAttribute("src") !== src) img.src = src;
   $("#dlsvg").href = plotUrl(current, w, h, "&renderer=svg&download=1");
   $("#dlpng").href = plotUrl(current, w * 2, h * 2, "&renderer=png&zoom=2&download=1");
-  renderThumbs();
 }
 
 function renderThumbs() {

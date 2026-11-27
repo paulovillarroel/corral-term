@@ -131,7 +131,7 @@ pub fn ensure_mirador() -> Result<Value, String> {
     // One start at a time. Callers that come at once (the first plots of R and Python, the
     // palette) would each start a server, and mirador.json would name only one of them:
     // the others would run where `corral mirador --stop` can't reach them.
-    let _start = start_lock();
+    let _start = file_lock("mirador.lock", Duration::from_secs(8));
     let info = mirador_info();
     if mirador_alive(&info, false) {
         return Ok(info); // another caller started it while this one waited
@@ -153,13 +153,14 @@ pub fn ensure_mirador() -> Result<Value, String> {
     Err(trf!("Mirador didn't start; see {}", "Mirador no arrancó; revisa {}", log.display()))
 }
 
-/// The lock that keeps Mirador's starts one at a time, held until it is dropped (or this
-/// process ends). It waits for another start a little longer than one can take; past
-/// that, or without the file, it goes ahead.
-fn start_lock() -> Option<std::fs::File> {
+/// A lock in Corral's folder that keeps something one at a time across processes (Mirador's
+/// start, opening its window), held until it is dropped (or this process ends). It waits
+/// up to `wait`, a little longer than the step can take; past that, or without the file,
+/// it goes ahead.
+fn file_lock(name: &str, wait: Duration) -> Option<std::fs::File> {
     use std::os::fd::AsRawFd;
-    let lock = std::fs::File::create(env::state_dir().join("mirador.lock")).ok()?;
-    let end = Instant::now() + Duration::from_secs(8);
+    let lock = std::fs::File::create(env::state_dir().join(name)).ok()?;
+    let end = Instant::now() + wait;
     // SAFETY: flock on a file this function returns open; released when it closes. Rust
     // opens it close-on-exec, so the server started meanwhile doesn't keep it.
     while unsafe { crate::eval::flock(lock.as_raw_fd(), crate::eval::LOCK_EX | crate::eval::LOCK_NB) } != 0 {
@@ -172,9 +173,39 @@ fn start_lock() -> Option<std::fs::File> {
 }
 
 pub fn open_mirador_window(info: &Value) {
-    open_app_window(info.get("url").str().unwrap_or(""));
+    open_app_window(&with_fit(info.get("url").str().unwrap_or("")));
     let _ = mirador_call(info, "/api/opened", Some(&Value::obj()), Duration::from_secs(3)); // no second window while it loads
     bring_to_front("Mirador", true);
+}
+
+/// Mirador in a new window unless a page already shows it, one caller at a time: R's first
+/// plot and the variables pane can ask at the same moment, and each, seeing no page yet,
+/// would open its own. Under the lock the second sees the first's (`/api/opened` counts
+/// as a page for a few seconds). Whether it opened one; the caller brings it forward.
+pub fn open_window_once(info: &Value, url: &str) -> bool {
+    let _lock = file_lock("mirador-window.lock", Duration::from_secs(5));
+    if mirador_alive(info, true) {
+        return false;
+    }
+    open_app_window(&with_fit(url));
+    let _ = mirador_call(info, "/api/opened", Some(&Value::obj()), Duration::from_secs(3)); // no second window while it loads
+    true
+}
+
+/// `url` with where Corral is about to place its new window (`fit=0.5x0.85`, fractions of
+/// the work area), so the page draws its plot at the size the window will have, once,
+/// instead of at the size it opens with and again when it is placed. Unchanged when
+/// windows aren't placed (corral config mirador_window free).
+fn with_fit(url: &str) -> String {
+    fit_url(url, window_place())
+}
+
+fn fit_url(url: &str, (place, w, h): (&str, f64, f64)) -> String {
+    if place.is_empty() {
+        return url.to_string();
+    }
+    let fit = format!("fit={w}x{h}");
+    if url.contains('#') { format!("{url}:{fit}") } else { format!("{url}#{fit}") }
 }
 
 fn mirador_usage() -> &'static str {
@@ -210,8 +241,10 @@ pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
         println!("{}", info.get("url").str().unwrap_or(""));
         return Ok(());
     }
-    if has("--open") || !mirador_alive(&info, true) {
+    if has("--open") {
         open_mirador_window(&info);
+    } else if open_window_once(&info, info.get("url").str().unwrap_or("")) {
+        bring_to_front("Mirador", true);
     }
     Ok(())
 }
@@ -338,13 +371,9 @@ fn open_plot(dir: &Path, id: &str) -> Result<&'static str, String> {
     }
     let info = ensure_mirador()?;
     mirador_call(&info, "/api/show-plot", Some(&obj(vec![("session", sid(dir).into()), ("id", id.into())])), Duration::from_secs(3))?;
-    let active = mirador_alive(&info, true);
-    if !active {
-        open_app_window(&format!("{}#plot:{}:{id}", info.get("url").str().unwrap_or(""), sid(dir)));
-        let _ = mirador_call(&info, "/api/opened", Some(&Value::obj()), Duration::from_secs(3));
-    }
+    let opened = open_window_once(&info, &format!("{}#plot:{}:{id}", info.get("url").str().unwrap_or(""), sid(dir)));
     // Windows leaves windows opened from the background behind the active one.
-    bring_to_front("Mirador", !active);
+    bring_to_front("Mirador", opened);
     Ok("Mirador")
 }
 
@@ -394,6 +423,16 @@ pub fn show_plot_object(dir: &Path, name: &str) -> String {
     };
     if herdr::run(&pane, &code).is_err() {
         return tr("couldn't send it to the console", "no pude enviar a la consola").into();
+    }
+    // Mirador's window opens while R draws, not after it: a new window takes about as long
+    // as a drawing. The page starts on this session's newest plot and goes to this one
+    // when it is there.
+    if !(image_mode().0 == "kitty" && env::in_herdr()) {
+        if let Ok(info) = ensure_mirador() {
+            if open_window_once(&info, &format!("{}#plot:{}:", info.get("url").str().unwrap_or(""), sid(dir))) {
+                bring_to_front("Mirador", true);
+            }
+        }
     }
     let end = Instant::now() + Duration::from_secs(10);
     while Instant::now() < end {
@@ -608,8 +647,8 @@ pub fn table_to_mirador(path: &str, title: &str, session: Option<&str>) -> Resul
     let body = obj(vec![("path", path.into()), ("title", title.into()),
                         ("session", session.filter(|s| !s.is_empty()).map(Value::from).unwrap_or(Value::Null))]);
     mirador_call(&info, "/api/tables", Some(&body), Duration::from_secs(10))?;
-    if !mirador_alive(&info, true) {
-        open_mirador_window(&info);
+    if open_window_once(&info, info.get("url").str().unwrap_or("")) {
+        bring_to_front("Mirador", true);
     }
     Ok(())
 }
@@ -790,6 +829,17 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A new window's address says where Corral will place it, after the plot it shows.
+    #[test]
+    fn a_new_window_says_where_it_goes() {
+        let base = "http://127.0.0.1:7317/?token=t";
+        assert_eq!(fit_url(&format!("{base}#plot:w1-p2-9:3"), ("right", 0.5, 0.85)), format!("{base}#plot:w1-p2-9:3:fit=0.5x0.85"));
+        assert_eq!(fit_url(&format!("{base}#plot:w1-p2-9:"), ("right", 0.5, 0.85)), format!("{base}#plot:w1-p2-9::fit=0.5x0.85"));
+        assert_eq!(fit_url(base, ("right", 0.42, 0.8)), format!("{base}#fit=0.42x0.8"));
+        // Not placed (mirador_window free): the address as it was.
+        assert_eq!(fit_url(base, ("", 0.5, 0.85)), base);
+    }
 
     fn v(title: &str, path: &str, size: u64) -> ViewFile {
         (title.into(), path.into(), size)
