@@ -237,6 +237,21 @@ impl Live {
             std::thread::sleep(Duration::from_millis(200));
         }
     }
+
+    /// The processes still running with this test's state (XDG_STATE_HOME inside its
+    /// folder), and so started by it: their pids and command lines.
+    fn leftovers(&self) -> Vec<(i64, String)> {
+        use std::os::unix::ffi::OsStrExt;
+        let ours = |pid: i64| std::fs::read(format!("/proc/{pid}/environ")).is_ok_and(|env| {
+            env.split(|b| *b == 0).filter_map(|v| v.strip_prefix(b"XDG_STATE_HOME="))
+                .any(|v| Path::new(std::ffi::OsStr::from_bytes(v)).starts_with(&self.dir))
+        });
+        let Ok(procs) = std::fs::read_dir("/proc") else { return Vec::new() };
+        procs.flatten().filter_map(|e| e.file_name().to_str()?.parse::<i64>().ok())
+            .filter(|&pid| alive(pid) && ours(pid))
+            .map(|pid| (pid, String::from_utf8_lossy(&std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default()).replace('\0', " ").trim().to_string()))
+            .collect()
+    }
 }
 
 impl Drop for Live {
@@ -246,7 +261,23 @@ impl Drop for Live {
         let _ = self.command("herdr").args(["server", "stop"]).output();
         let _ = self.server.kill();
         let _ = self.server.wait();
+        // `--stop` only finds the Mirador that mirador.json names by then. The first plot
+        // starts it from a detached `corral _plot-ready` (Python's in a session of its
+        // own, so it outlives herdr), which can bring it up after that: tests that end
+        // right after their first plot left Miradors running. So whatever still runs with
+        // this test's state goes; nothing else is touched.
+        let end = Instant::now() + Duration::from_secs(10);
+        let mut left = self.leftovers();
+        while !left.is_empty() && Instant::now() < end {
+            let _ = Command::new("kill").arg("-9").args(left.iter().map(|(pid, _)| pid.to_string())).stderr(Stdio::null()).status();
+            std::thread::sleep(Duration::from_millis(100));
+            left = self.leftovers();
+        }
         let _ = std::fs::remove_dir_all(&self.dir);
+        // Not while a failed test unwinds: a second panic would abort the whole run.
+        if !std::thread::panicking() {
+            assert!(left.is_empty(), "these outlived the test: {left:?}");
+        }
     }
 }
 
