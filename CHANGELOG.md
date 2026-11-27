@@ -4,6 +4,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
+- Mirador opens a plot sooner from the variables pane. Enter on a plot object with no Mirador window open used to wait for R to draw it, then launch the browser, then draw the plot two or three times: at the size the window opened with, again once the thumbnails showed, and again once Corral placed the window on the right. Now the window opens while R draws; the page draws the plot at the size the window will have on the right, with the thumbnails already in place, so R draws it once (in Chromium, one request where there were three); and only one window opens, where R's first plot and the variables pane could each open their own. If the window isn't placed within a few seconds, the plot fits it as before. A plot with many `ggrepel` labels takes R about half a second each time it is drawn, measured in an isolated session.
 - Mirador's plot size menu opens again. Clicking it did nothing: a handler that keeps buttons from taking the focus (so Enter and space stay the table's) also caught the menu, which needs that click to open. Now it opens. Opened with the mouse, it gives the keys back to Mirador once you choose a size, or at the next key if you close it without choosing, so ← and → move between plots; reached with the keyboard, its arrows choose a size, as in any menu. Checked with real clicks and keys in Chromium: the menu opens, 800 × 500 redraws the plot at that size, and Window fits it to the window again.
 
 ## 0.2.1
