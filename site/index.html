@@ -152,7 +152,8 @@
           <li><b>In plain sight</b><span>you watch each request run in your console, one at a time</span></li>
           <li><b>Your call</b><span>each request waits for your yes by default, showing the exact code and which agent asks</span></li>
           <li><b>What it reads</b><span>full results, your review first, or only their structure</span></li>
-          <li><b>Sensitive data</b><span><code>corral_sensitive()</code> makes a session ask every time and never return full results</span></li>
+          <li><b>Profiles</b><span>open, standard or sensitive, for all your work or one project: a sensitive project asks every time and never returns values</span></li>
+          <li><b>It knows the rules</b><span><code>corral context</code> tells the agent the consoles and your rules before it runs anything</span></li>
           <li><b>No loosening</b><span>an agent can't give itself more room: that needs your yes too</span></li>
           <li><b>Recorded</b><span>every request, and every change it asks for, in a local audit log</span></li>
           <li><b>Any agent</b><span>Claude Code, Codex, Gemini, opencode: shell commands and an open Agent Skills skill</span></li>
@@ -190,7 +191,7 @@
       <ul class="points">
         <li><b>Window closed</b><span>everything keeps running: R, Python, the agent and Mirador (herdr)</span></li>
         <li><b>LSP drops</b><span>nothing is lost: the editor's language server only talks to R, which keeps its objects; completion comes back when the editor restarts it</span></li>
-        <li><b>R crashes</b><span>a new session about a second later, with your objects and plots back; Python's come back the next time you run it (Corral)</span></li>
+        <li><b>R crashes</b><span>a new session about a second later, with your objects and plots back, and why it ended (out of memory, a package, stopped from outside); Python's come back the next time you run it (Corral)</span></li>
         <li><b>Server stops</b><span>wsl --shutdown or a Windows restart: herdr brings the panes back, and Corral the objects and plots, in the next console of the project</span></li>
       </ul>
       <p>What can't come back: connections to a database or a file, objects over 1 GB (you can raise it), and an R plot too heavy to keep, a scatter of more than about 200,000 points; kept in a variable, it comes back as an object and draws again.</p>
@@ -468,7 +469,7 @@
     </details>
     <details>
       <summary>Can I use it with sensitive data?</summary>
-      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), review each result before the agent sees it (<code>agent_output review</code>) or let it see only the shape of results, without their values (<code>agent_output structure</code>, together with <code>ask</code>, since the agent writes the code), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
+      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), review each result before the agent sees it (<code>agent_output review</code>) or let it see only the shape of results, without their values (<code>agent_output structure</code>, together with <code>ask</code>, since the agent writes the code), set all of that in one step with a profile, for all your work or for one project folder (<code>corral profile sensitive --project</code>: every session there asks and gets no values, and the stricter profile wins), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>
