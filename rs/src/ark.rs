@@ -222,7 +222,7 @@ fn first_line(code: &str) -> String {
 
 fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>, crashed_at: Option<f64>) -> Result<Kernel, String> {
     let ports = free_ports(5)?;
-    let key = env::random_hex(16);
+    let key = env::secret_hex(16)?;
     let conn = obj(vec![
         ("shell_port", (ports[0] as f64).into()),
         ("iopub_port", (ports[1] as f64).into()),
