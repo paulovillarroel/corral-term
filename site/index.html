@@ -179,10 +179,10 @@
         <h2>Built for data you have to protect.</h2>
         <p>Data science runs on records about people: patients, clients, students. Corral treats protecting them as part of the work. It decides how much of each result reaches your agent's model, keeps your sessions closed to everyone else on the machine, deletes its copies of your data when you ask, and writes down where its protection ends.</p>
         <ul class="points">
-          <li><b>Values stay out</b><span>in a sensitive project the agent learns whether the code worked and the shape of your objects, never their values; your plots stay with you</span></li>
+          <li><b>Values stay out</b><span>in a sensitive project the agent learns whether the code worked and the shape of your objects, not their values, and each request waits for you to read its code, since an error's first line could still carry one; your plots stay with you</span></li>
           <li><b>Closed to others</b><span>on a shared server, other users can't read your sessions: R talks to Corral over sockets in a folder only you can open, and every local server asks for a token</span></li>
           <li><b>Copies deleted</b><span>turn checkpoints off and the copies of your objects are deleted, not just no longer made: at once for consoles that have ended, at its next command for one still open</span></li>
-          <li><b>Verified install</b><span>every download checked by SHA-256 and build provenance before it runs; no sudo; Corral itself has no third-party Rust dependencies</span></li>
+          <li><b>Verified install</b><span>everything the installer downloads is checked by SHA-256 before it is used, Corral's package also by its build provenance; no sudo; Corral itself has no third-party Rust dependencies</span></li>
           <li><b>Honest limits</b><span>a threat model that says what Corral protects, from whom, and what stays with your agent's permissions, its model provider and your machine</span></li>
         </ul>
         <p class="more-links"><a href="docs/threats.html">Threat model</a><a href="docs/security.html#for-sensitive-data">Setup for sensitive data</a><a href="docs/security.html">Security model</a></p>
