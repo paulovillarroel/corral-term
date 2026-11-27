@@ -1,4 +1,5 @@
-// Corral's site: theme switch (ink / paper), copy buttons, and for the docs the
+// Corral's site: theme switch (ink / paper), copy buttons, the phone note's share
+// link, and for the docs the
 // sidebar, the "On this page" list and the previous / next links, all built
 // from the one list below so every page stays in step. Links inside the site
 // swap the page in place (see "moving between pages" at the end).
@@ -226,6 +227,16 @@ function init() {
   document.querySelectorAll(".install").forEach((box) => {
     const b = box.querySelector(".copy");
     if (b) addCopy(b, () => box.querySelector("code").textContent.trim());
+  });
+
+  // The phone note's link opens the share sheet where there is one; elsewhere it stays
+  // an email to send the link on.
+  document.querySelectorAll("a.share").forEach((a) => {
+    if (!navigator.share) return;
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      navigator.share({ title: "Corral", text: "Corral: R, Python and SQL in the terminal, with your AI agent. It installs on Linux or Windows (WSL).", url: "https://corral-term.dev/" }).catch(() => {});
+    }, { signal });
   });
 
   document.querySelectorAll(".content pre").forEach((pre) => {
