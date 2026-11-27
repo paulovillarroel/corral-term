@@ -1545,6 +1545,15 @@ pub fn run() -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// A folder a test made, removed when the test ends, passed or failed.
+    struct Gone(PathBuf);
+
+    impl Drop for Gone {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn ark_listens_on_unix_sockets_in_corrals_folder() {
         let (transport, ip, ports) = endpoints(Path::new("/home/ana/.local/state/corral/ark/kernel-1a2b3c4d.json")).unwrap();
@@ -1553,12 +1562,14 @@ mod tests {
         // folder of their own, made 700, named in a note beside the connection file;
         // both go with the connection.
         let state = std::env::temp_dir().join(format!("corral-long-{}", std::process::id())).join("a".repeat(90));
+        let _state = Gone(state.parent().unwrap().to_path_buf());
         std::fs::create_dir_all(&state).unwrap();
         let conn = state.join("kernel-1a2b3c4d.json");
         let (transport, ip, ports) = endpoints(&conn).unwrap();
         assert_eq!((transport, ports), ("ipc", vec![1, 2, 3, 4, 5]));
         assert!(ip.len() + 2 <= SOCKET_PATH_MAX, "{ip}");
         let dir = Path::new(&ip).parent().unwrap().to_path_buf();
+        let _dir = Gone(dir.clone()); // in the runtime folder or /tmp
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
         assert!(dir.file_name().unwrap().to_string_lossy().starts_with("corral-"));
@@ -1574,6 +1585,7 @@ mod tests {
         let conn3 = state.join("kernel-9c0d1e2f.json");
         let (_, ip3, _) = endpoints(&conn3).unwrap();
         let dir3 = Path::new(&ip3).parent().unwrap().to_path_buf();
+        let _dir3 = Gone(dir3.clone());
         std::fs::write(format!("{ip3}:1"), "").unwrap(); // a socket Ark left
         remove_connection(&conn3);
         assert!(!dir3.exists() && !conn3.with_extension("sockets").exists(), "the noted folder goes without its connection file");
@@ -1584,6 +1596,7 @@ mod tests {
         let conn2 = state.join("kernel-5e6f7a8b.json");
         let (_, ip2, _) = endpoints(&conn2).unwrap();
         let dir2 = Path::new(&ip2).parent().unwrap().to_path_buf();
+        let _dir2 = Gone(dir2.clone());
         link_for_jupyter(Path::new(&ip2)).unwrap();
         remove_stale_sockets(&state);
         assert!(dir2.exists() && conn2.with_extension("sockets").exists() && Path::new(&format!("{ip2}-1")).is_symlink(),
@@ -1591,7 +1604,6 @@ mod tests {
         drop(std::os::unix::net::UnixListener::bind(format!("{ip2}:1")).unwrap()); // Ark's, nobody behind it now
         remove_stale(&state, Duration::ZERO); // as a minute later
         assert!(!dir2.exists() && !conn2.with_extension("sockets").exists(), "the note's folder goes once nothing answers");
-        let _ = std::fs::remove_dir_all(state.parent().unwrap());
     }
 
     #[test]
@@ -1601,6 +1613,7 @@ mod tests {
         use std::os::unix::net::UnixListener;
         let dir = std::env::temp_dir().join(format!("corral-ark-links-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
+        let _dir = Gone(dir.clone());
         std::fs::create_dir_all(&dir).unwrap();
         link_for_jupyter(&dir.join("kernel-aaaa")).unwrap(); // its console ended
         drop(UnixListener::bind(dir.join("kernel-aaaa:1")).unwrap());
@@ -1619,7 +1632,6 @@ mod tests {
         assert_eq!(linked("cccc"), 5, "its connection file is there");
         assert_eq!(linked("dddd"), 0, "a console that never got going");
         drop(live);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1627,6 +1639,7 @@ mod tests {
         use std::os::unix::net::UnixListener;
         let dir = std::env::temp_dir().join(format!("corral-ark-sockets-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
+        let _dir = Gone(dir.clone());
         std::fs::create_dir_all(&dir).unwrap();
         let live = UnixListener::bind(dir.join("kernel-aaaa:1")).unwrap(); // a running Ark
         drop(UnixListener::bind(dir.join("kernel-bbbb:1")).unwrap()); // a crashed one, file gone
@@ -1643,7 +1656,6 @@ mod tests {
         remove_connection(&dir.join("kernel-cccc.json"));
         assert!(!left("kernel-cccc.json") && !left("kernel-cccc:1"));
         drop(live);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
