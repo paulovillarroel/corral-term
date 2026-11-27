@@ -68,6 +68,25 @@ pub fn run(args: &[String], _all: &[String]) -> Result<(), String> {
                     tr("Select some code (it is copied on its own) and try again", "Selecciona código (se copia solo) y vuelve a intentar"));
         return Ok(());
     }
+    // Your keys and the palette send code; an agent runs it with `corral eval`, which
+    // applies your rules (approval, what comes back, the audit log). send would go
+    // around them, so from an agent it refuses, and the audit log keeps the attempt.
+    if crate::theme::agent_caller() {
+        let cfg = env::config();
+        crate::audit::record(crate::json::obj(vec![
+            ("decision", "refused".into()),
+            ("lang", lang.as_deref().unwrap_or("auto").into()),
+            ("agent_pane", std::env::var("HERDR_PANE_ID").ok().map(crate::json::Value::from).unwrap_or(crate::json::Value::Null)),
+            ("workspace", env::current_workspace().map(crate::json::Value::from).unwrap_or(crate::json::Value::Null)),
+            ("access", cfg.get("agents").str().unwrap_or("ask").into()),
+            ("output", cfg.get("agent_output").str().unwrap_or("full").into()),
+            ("status", "corral send from an agent".into()),
+            ("code", text.as_str().into()),
+        ]));
+        eprintln!("{}", tr("corral: an agent runs code with corral eval, which applies your rules (approval, what comes back, the audit log); corral send is for your keys and the palette",
+                           "corral: un agente ejecuta código con corral eval, que aplica tus reglas (aprobación, lo que vuelve, el registro de auditoría); corral send es para tus teclas y la paleta"));
+        std::process::exit(3);
+    }
     let text = text.trim_end().to_string();
 
     let ws = env::current_workspace();
