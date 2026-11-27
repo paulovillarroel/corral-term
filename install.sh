@@ -75,6 +75,9 @@ count_stop() {
     case "${CORRAL_NO_TELEMETRY:-0}${DO_NOT_TRACK:-0}" in 00 | 0 | "") ;; *) return 0 ;; esac
     if [ "$check_only" = 1 ] || ! command -v curl >/dev/null 2>&1; then return 0; fi
     if [ -f "$config" ] && grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"' "$config" 2>/dev/null; then return 0; fi
+    # Nor with the sensitive profile: results without values, and agents asking (the default).
+    if [ -f "$config" ] && grep -q '"agent_output"[[:space:]]*:[[:space:]]*"structure"' "$config" 2>/dev/null &&
+        ! grep -Eq '"agents"[[:space:]]*:[[:space:]]*"(on|off)"' "$config" 2>/dev/null; then return 0; fi
     v=${3:-unknown}
     case "$v" in "" | *[!0-9.]*) v=unknown ;; esac
     # net: install-count

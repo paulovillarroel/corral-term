@@ -212,7 +212,7 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     // console's project, then each setting on its own. The palette marks what is in effect.
     ("profile-open", Group::Security, "Open profile: run without asking, full results", "Perfil abierto: ejecutan sin preguntar, resultados completos"),
     ("profile-standard", Group::Security, "Standard profile: ask before each request, full results", "Perfil estándar: preguntan antes de cada petición, resultados completos"),
-    ("profile-sensitive", Group::Security, "Sensitive profile: ask, results without values", "Perfil sensible: preguntan, resultados sin valores"),
+    ("profile-sensitive", Group::Security, "Sensitive profile: ask, results without values, no connections of its own", "Perfil sensible: preguntan, resultados sin valores, sin conexiones propias"),
     ("profile-project-sensitive", Group::Security, "Project: sensitive in every session", "Proyecto: sensible en cada sesión"),
     ("profile-project-clear", Group::Security, "Project: remove its profile", "Proyecto: quitar su perfil"),
     ("agents-ask", Group::Security, "Requests: ask before each one", "Peticiones: preguntar antes de cada una"),

@@ -79,6 +79,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     c.args(["--with", p]);
                 }
                 c.args(["ipython", "--no-banner", "-i"]).arg(env::repo().join("py/startup.py"));
+                // The sensitive profile: only what uv's cache has (corral install fills it).
+                if crate::profile::local_only(Some(&here)) {
+                    c.env("UV_OFFLINE", "1");
+                }
                 c
             }
         }
