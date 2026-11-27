@@ -377,8 +377,11 @@ fn mark(list: &mut Vec<Entry>, now: &crate::profile::InEffect, audit: Option<i64
             "profile-project-sensitive" | "profile-project-clear" => {
                 let Some(project) = &now.project else { continue };
                 // The folder's name: a whole path would push the rest out of a narrow palette.
+                // Shown with its control characters written out, so a folder's name can't
+                // move the cursor or clear the screen when the palette draws it.
                 let dir = &project.dir;
-                let folder = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| crate::profile::short(dir));
+                let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| crate::profile::short(dir));
+                let folder = crate::term::visible(&name, false).0;
                 if id.ends_with("sensitive") {
                     e.desc = trf!("Project {folder}: sensitive in every session", "Proyecto {folder}: sensible en cada sesión");
                     if project.applies.as_deref() == Some("sensitive") {
@@ -1227,6 +1230,10 @@ mod tests {
         // A folder above is sensitive: removing this one's own leaves that one, not the global.
         let above = InEffect { project: project(Some("standard"), Some("sensitive"), SENSITIVE), ..own };
         assert_eq!(find(&marked(&above, Some(90), "claude"), "profile-project-clear").unwrap().2, "Project clinic: remove its profile (back to sensitive)");
+        // A folder's name can't send the terminal its own controls.
+        let odd = InEffect { project: Some(Project { dir: PathBuf::from("/data/x\x1b[2Jy"), own: None, applies: None, without_own: STANDARD }), ..own };
+        let shown = find(&marked(&odd, Some(90), "claude"), "profile-project-sensitive").unwrap().2;
+        assert!(!shown.contains('\x1b') && shown.contains("x") && shown.contains("[2Jy"), "{shown:?}");
         // Sensitive only from a folder above: marked, and nothing to remove from here.
         let inherited = InEffect { global: STANDARD, console: SENSITIVE, project: project(None, Some("sensitive"), SENSITIVE) };
         let list = marked(&inherited, Some(90), "claude");

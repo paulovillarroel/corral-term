@@ -193,7 +193,8 @@ pub(crate) fn in_effect() -> InEffect {
     let session = console_here();
     let console = session.as_ref().map(|s| {
         let r = session_rules(Path::new(s.get("dir").str().unwrap_or("")), s);
-        Mix { access: r.access, output: r.output, profile: r.profile }
+        // Named by what it does: a sensitive mark with agents off still doesn't ask.
+        Mix { access: r.access, output: r.output, profile: name_of(r.access, r.output, false) }
     }).unwrap_or(global);
     let project = session.as_ref()
         .and_then(|s| s.get("started_in").str().or(s.get("cwd").str()).map(PathBuf::from))
@@ -207,7 +208,7 @@ pub(crate) fn in_effect() -> InEffect {
                 rest.set("projects", Value::Obj(p.iter().filter(|(k, _)| *k != key).cloned().collect()));
             }
             let r = combine(&rest, std::slice::from_ref(&dir), false);
-            Project { dir, own, applies, without_own: Mix { access: r.access, output: r.output, profile: r.profile } }
+            Project { dir, own, applies, without_own: Mix { access: r.access, output: r.output, profile: name_of(r.access, r.output, false) } }
         });
     InEffect { global, console, project }
 }
@@ -376,6 +377,17 @@ fn show(json: bool, folder: Option<&String>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The palette names a console's profile by its settings, as name_of does without the
+    /// mark: a sensitive session with agents off doesn't ask, so it isn't the sensitive
+    /// profile, while asking with results without values is.
+    #[test]
+    fn a_profile_is_named_by_what_it_does() {
+        assert_eq!(name_of("off", "structure", false), "custom");
+        assert_eq!(name_of("ask", "structure", false), "sensitive");
+        assert_eq!(name_of("ask", "full", false), "standard");
+        assert_eq!(name_of("on", "full", false), "open");
+    }
 
     fn cfg(json: &str) -> Value {
         crate::json::parse(json).unwrap()
