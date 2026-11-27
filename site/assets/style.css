@@ -99,8 +99,34 @@ code, kbd, pre, .mono, .card, .install, .stats, .meta { font-variant-ligatures: 
 }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); }
 /* The docs, in the accent color, so they stand out in the bar and in the hero's links. */
-.nav a.docs-link, .hero-grid .meta a.docs-link { color: var(--accent); }
-.nav a.docs-link:hover, .hero-grid .meta a.docs-link:hover { color: var(--fg); }
+.nav a.docs-link, .hero-grid .meta a.docs-link { color: var(--accent); position: relative; isolation: isolate; }
+/* On hover (or keyboard focus) a highlight sweeps in behind them from the left, and out
+   to the right when the pointer leaves. A copy of the text in the ink that reads on it
+   rides with it: both are cut by the same two edges, --sweep-l and --sweep-r. Entering,
+   the right edge moves and the left one is already at 0; leaving, the left edge moves,
+   and the right one goes back only once it is done. Without @property, it simply shows. */
+@property --sweep-l { syntax: "<percentage>"; inherits: true; initial-value: 100%; }
+@property --sweep-r { syntax: "<percentage>"; inherits: true; initial-value: 100%; }
+.nav a.docs-link, .hero-grid .meta a.docs-link {
+  --sweep-l: 100%; --sweep-r: 100%;
+  transition: --sweep-l 0.34s cubic-bezier(0.65, 0, 0.35, 1), --sweep-r 0s linear 0.34s;
+}
+.nav a.docs-link:hover, .hero-grid .meta a.docs-link:hover,
+.nav a.docs-link:focus-visible, .hero-grid .meta a.docs-link:focus-visible {
+  --sweep-l: 0%; --sweep-r: 0%; outline: none;
+  color: var(--accent); /* the band and its copy do the change, not the link's own hover */
+  transition: --sweep-l 0s, --sweep-r 0.34s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.nav a.docs-link::before, .hero-grid .meta a.docs-link::before,
+.nav a.docs-link::after, .hero-grid .meta a.docs-link::after {
+  position: absolute; inset: -5px -7px; padding: 5px 7px; clip-path: inset(0 var(--sweep-r) 0 var(--sweep-l));
+  pointer-events: none;
+}
+.nav a.docs-link::before, .hero-grid .meta a.docs-link::before { content: ""; z-index: -1; background: var(--accent); }
+.nav a.docs-link::after, .hero-grid .meta a.docs-link::after { content: attr(data-text); z-index: 1; color: var(--accent-ink); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .nav a.docs-link, .hero-grid .meta a.docs-link, .nav a.docs-link:hover, .hero-grid .meta a.docs-link:hover { transition: none; }
+}
 .theme-switch { display: inline-flex; border: 1px solid var(--line-2); }
 .theme-switch button { padding: 8px 10px; font-size: 11px; color: var(--muted); }
 .theme-switch button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
