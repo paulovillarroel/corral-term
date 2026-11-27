@@ -153,18 +153,23 @@ impl Live {
         std::fs::write(self.dir.join(format!("{name}.go")), "").unwrap();
     }
 
-    /// Whether `n` requests are in a console's queue within 20 s. Each `corral eval`
-    /// opens the queue's lock file (eval/.lock) before it waits for its turn and keeps it
-    /// open until it ends, so the processes that have it open are the ones running or
-    /// waiting. False rather than a panic, so a held request can be let go first.
-    fn wait_queue(&self, n: usize) -> bool {
+    /// Whether `n` requests are in the queue of the console in `lang` within 20 s. Each
+    /// `corral eval` opens its console's lock file (eval/.lock in the session's folder)
+    /// before it waits for its turn and keeps it open until it ends, so the processes that
+    /// have it open are the ones running or waiting. That shows a request got to the queue,
+    /// not that the lock keeps it out: a_request_keeps_its_turn_while_the_user_decides
+    /// checks that. False rather than a panic, so a held request can be let go first.
+    fn wait_queue(&self, lang: &str, n: usize) -> bool {
+        let Some(lock) = self.session_dir(lang).and_then(|d| d.canonicalize().ok()).map(|d| d.join("eval/.lock")) else {
+            return false;
+        };
         let in_queue = || {
             let Ok(procs) = std::fs::read_dir("/proc") else { return 0 };
             procs.flatten()
                 .filter(|p| p.file_name().to_str().is_some_and(|s| s.bytes().all(|b| b.is_ascii_digit())))
                 .filter(|p| std::fs::read_dir(p.path().join("fd")).into_iter().flatten().flatten()
                     .filter_map(|fd| std::fs::read_link(fd.path()).ok())
-                    .any(|f| f.starts_with(&self.dir) && f.ends_with("eval/.lock")))
+                    .any(|f| f == lock))
                 .count()
         };
         let end = Instant::now() + Duration::from_secs(20);
@@ -175,6 +180,17 @@ impl Live {
             std::thread::sleep(Duration::from_millis(50));
         }
         true
+    }
+
+    /// The folder of the live session in `lang`; None while there is none.
+    fn session_dir(&self, lang: &str) -> Option<PathBuf> {
+        let sessions = self.dir.join("state/corral/sessions");
+        std::fs::read_dir(&sessions).ok()?.flatten().map(|d| d.path()).find(|d| {
+            std::fs::read_to_string(d.join("meta.json")).is_ok_and(|m| {
+                field(&m, "lang").unwrap_or_else(|| "r".into()) == lang
+                    && field(&m, "pid").and_then(|p| p.parse::<i64>().ok()).is_some_and(alive)
+            })
+        })
     }
 
     /// The process and pane of the live session in `lang` (R's is Ark), from
@@ -398,7 +414,7 @@ fn two_agents_take_turns() {
         let b = s.spawn(|| live.eval(&[r#"cat("B1\n"); cat("B2\n")"#]));
         // B in the queue behind A, and a second later still there (B alone takes a few
         // milliseconds): it waited for its turn, not just started late.
-        let queued = live.wait_queue(2);
+        let queued = live.wait_queue("r", 2);
         if queued {
             std::thread::sleep(Duration::from_secs(1));
         }
@@ -412,6 +428,48 @@ fn two_agents_take_turns() {
     assert_eq!(b.0, 0, "{}", b.1);
     assert!(a.1.contains("A1\nA2") && !a.1.contains("B1") && !a.1.contains("B2"), "A got: {}", a.1);
     assert!(b.1.contains("B1\nB2") && !b.1.contains("A1") && !b.1.contains("A2"), "B got: {}", b.1);
+}
+
+/// A request keeps its turn while the user decides whether it runs. The console is free
+/// then (R waits at its prompt), so the queue's lock is all that keeps a second agent's
+/// request from getting through, to ask or to run, before the first is done. With busy
+/// R, waiting for the prompt holds the second one too, and a lock that doesn't keep it
+/// out (shared, or its answer not checked) goes unseen.
+#[test]
+#[ignore]
+fn a_request_keeps_its_turn_while_the_user_decides() {
+    let live = Live::start("lock");
+    live.link_plugin();
+    live.config(r#"{"agents":"ask","update_check":"off"}"#);
+    let asked = || -> usize {
+        std::fs::read_dir(live.dir.join("state/corral/sessions")).into_iter().flatten().flatten()
+            .flat_map(|d| std::fs::read_dir(d.path().join("eval")).into_iter().flatten().flatten())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".approve.json"))
+            .count()
+    };
+    let (a, b, queued, asked_early) = std::thread::scope(|s| {
+        let a = s.spawn(|| live.eval(&[r#"cat("A", "ran\n")"#]));
+        let first = live.wait_popup(&[]); // A has its turn, and waits for the user
+        let b = s.spawn(|| live.eval(&[r#"cat("B", "ran\n")"#]));
+        // B in the queue, and a second later it still hasn't asked.
+        let queued = live.wait_queue("r", 2);
+        if queued {
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        let asked_early = asked() > 1;
+        // Both answered whatever happened, so neither waits out its approval.
+        let decision = field(&std::fs::read_to_string(&first).unwrap(), "decision").unwrap();
+        std::fs::write(decision, "run").unwrap();
+        let a = a.join().unwrap();
+        live.answer_popup(&[first], "run");
+        (a, b.join().unwrap(), queued, asked_early)
+    });
+    assert!(queued, "B never got in the console's queue: {}", b.1);
+    assert!(!asked_early, "B asked for approval while A still had its turn");
+    assert_eq!(a.0, 0, "{}", a.1);
+    assert!(a.1.contains("A ran"), "A got: {}", a.1);
+    assert_eq!(b.0, 0, "{}", b.1);
+    assert!(b.1.contains("B ran"), "B got: {}", b.1);
 }
 
 /// Past its timeout the agent stops waiting, but the code keeps running and its
