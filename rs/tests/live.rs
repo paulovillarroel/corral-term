@@ -1599,6 +1599,10 @@ fn an_agent_cannot_go_around_the_harness() {
     let (code, text) = agent(&["send", "--lang", "r", "--", "leaked <- 42"]);
     assert_eq!(code, 3, "{text}");
     assert!(text.contains("corral eval"), "{text}");
+    // A pane herdr doesn't list can't be told apart from an agent's: refused too.
+    let out = live.command("corral").env("HERDR_PANE_ID", "no-such-pane").args(["send", "--lang", "r", "--", "leaked <- 43"])
+        .stdin(Stdio::null()).output().unwrap();
+    assert_eq!(out.status.code(), Some(3), "{}", String::from_utf8_lossy(&out.stderr));
     // From the console's own pane, as the editor's keys do from theirs: it still sends.
     let out = live.command("corral").env("HERDR_PANE_ID", &live.console).args(["send", "--lang", "r", "--", "sent_by_keys <- 1"])
         .stdin(Stdio::null()).output().unwrap();
