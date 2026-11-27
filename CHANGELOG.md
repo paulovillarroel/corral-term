@@ -2,6 +2,10 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Turning checkpoints off now leaves no copy of your objects behind. `corral config checkpoints off` (or the palette's "Console: don't keep checkpoints…") deletes at once the checkpoints of consoles that have ended, closed or crashed, and each running R or Python deletes its own at its next command. Before, a running console kept its copy until it closed, and the startup cleanup of old copies ran only with checkpoints on, so a crash's copy could stay on disk indefinitely. Turned on again, the next copy is a whole one. A live test turns them off with two consoles running and two crashed copies, and fails without the change.
+
 ## 0.1.29
 
 On a shared machine, other users can no longer read your R session: Ark talks to Corral over Unix sockets in its private folder (TCP stays only with the Jupyter console frontend or a folder path too long for a socket). Keys only from the system's random source, and a threat model in the docs.
