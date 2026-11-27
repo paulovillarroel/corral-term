@@ -589,6 +589,38 @@ fn a_sensitive_project_applies_to_its_sessions() {
     assert!(live.run("corral", &["profile", "--json", "--project", proj]).contains(r#""profile":"sensitive""#));
 }
 
+/// A request that moves the session into a sensitive project gets that project's
+/// rules for its own result, not only from the next request on; the next request, sent
+/// at once, already asks. Through a symlink, and past its timeout, too.
+#[test]
+#[ignore]
+fn moving_into_a_sensitive_project_applies_at_once() {
+    let live = Live::start("cdinto");
+    let proj = live.dir.join("proj").canonicalize().unwrap();
+    for d in ["clinic", "registry"] {
+        std::fs::create_dir_all(proj.join(d)).unwrap();
+        std::fs::write(proj.join(d).join("datos.txt"), "paciente-4711\n").unwrap();
+    }
+    std::os::unix::fs::symlink(proj.join("registry"), proj.join("link")).unwrap();
+    live.run("corral", &["profile", "sensitive", "--project", proj.join("clinic").to_str().unwrap()]);
+    // Registered through the symlink: kept as the real folder.
+    live.run("corral", &["profile", "sensitive", "--project", proj.join("link").to_str().unwrap()]);
+    // R, in one request: into the project, read. The global profile is open, so it runs,
+    // but what comes back is what a sensitive project allows.
+    let (code, text) = live.eval(&[r#"setwd("clinic"); cat(readLines("datos.txt"), "\n")"#]);
+    assert_eq!(code, 0, "{text}");
+    assert!(!text.contains("paciente-4711") && text.contains("profile is sensitive"), "{text}");
+    // The next request, at once: it asks, and nobody is here to approve it.
+    let (code, text) = live.eval(&[r#"cat(readLines("datos.txt"), "\n")"#]);
+    assert_eq!(code, 3, "the next request ran without approval: {text}");
+    // Python, through the symlink, past its timeout: the partial output stays out too.
+    assert_eq!(live.eval(&["--lang", "python", "--timeout", "180", "print('ready')"]).0, 0);
+    let (code, text) = live.eval(&["--lang", "python", "--timeout", "3",
+        "import os, time\nos.chdir('link')\nprint(open('datos.txt').read(), flush=True)\ntime.sleep(8)"]);
+    assert_eq!(code, 2, "{text}");
+    assert!(!text.contains("paciente-4711") && text.contains("profile is sensitive"), "{text}");
+}
+
 /// Python: the first request starts the console; objects stay between
 /// requests, and two agents asking at once take turns.
 #[test]
