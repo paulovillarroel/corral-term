@@ -78,34 +78,34 @@
       </svg>
     </figure>
 <h2>The palette</h2>
-    <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Agents:</code>, <code>Theme:</code>…), so typing a category lists just that. Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
-    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing agents: 20 of 106 entries, the Agents group, each starting with Agents:">
+    <p><kbd>ctrl+b</kbd> <kbd>space</kbd>, from any pane, opens Corral's palette: every shortcut and action in one list, grouped by part of the IDE and by what it does. Each entry starts with its category (<code>Layout:</code>, <code>Editor:</code>, <code>Console:</code>, <code>Results:</code>, <code>Agent:</code>, <code>Theme:</code>…), so typing a category lists just that, and so does a group's name (<code>security</code>). Settings show which value is in effect with "●". Type a few letters to narrow it down, and press <kbd>Enter</kbd> to run an action.</p>
+    <figure class="tui-shot" role="img" aria-label="Corral's palette after typing security: 15 of 106 entries, the Security group, with the standard profile, the project folder's sensitive profile, asking before each request, full results and 90 days of audit log marked as in effect">
       <div class="tui-bar"><span>Corral: shortcuts</span><span>ctrl+b space</span></div>
-      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">agents</span><span style="color:#ffc799;">▏</span>                                                                              <span style="color:#5c5c5c;">20 of 106</span>
+      <pre> <span style="color:#ffc799;">⌕</span>  <span style="color:#ffffff;">security</span><span style="color:#ffc799;">▏</span>                                                                           <span style="color:#5c5c5c;">15 of 106</span>
 <span style="color:#5c5c5c;">──────────────────────────────────────────────────────────────────────────────────────────────────</span>
-  <span style="color:#a0a0a0;font-weight:700;">AGENTS</span>
-<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Agents: use Claude Code in the agent pane ↵                                                    </span><span style="color:#ffc799;background:#343434;"></span>
-   <span style="color:#ffffff;">Agents: use Codex in the agent pane</span>                                                            <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: use Gemini CLI in the agent pane</span>                                                       <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: use opencode in the agent pane</span>                                                         <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: none, a shell in the agent pane</span>                                                        <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: ask before each request</span>                                                                <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: run code without asking</span>                                                                <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: can&#x27;t run code</span>                                                                         <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: see full results</span>                                                                       <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: you review results before they see them</span>                                                <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: see only the structure of results</span>                                                      <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: what your agent sees (consoles, SQL, its rules)</span>                                        <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: open profile (run without asking, full results)</span>                                        <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: standard profile (ask before each request, full results)</span>                               <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: sensitive profile (ask, results without values)</span>                                        <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: this project is sensitive, in every session</span>                                            <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: this project follows the global profile</span>                                                <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: keep the audit log 30 days</span>                                                             <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: keep the audit log 90 days (Corral&#x27;s)</span>                                                  <span style="color:#ffc799;"></span>
-   <span style="color:#ffffff;">Agents: keep the audit log a year</span>                                                              <span style="color:#ffc799;"></span>
+  <span style="color:#a0a0a0;font-weight:700;">SECURITY</span>
+<span style="background:#343434;"> </span><span style="color:#ffc799;background:#343434;">▸</span><span style="background:#343434;"> </span><span style="color:#ffffff;background:#343434;">Open profile: run without asking, full results </span><span style="color:#5c5c5c;background:#343434;">↵</span><span style="background:#343434;">                                               </span>
+   <span style="color:#ffffff;">Standard profile: ask before each request, full results  </span><span style="color:#ffc799;">● active</span>
+   <span style="color:#ffffff;">Sensitive profile: ask, results without values</span>
+   <span style="color:#ffffff;">Project clinic: sensitive in every session  </span><span style="color:#ffc799;">●</span>
+   <span style="color:#ffffff;">Project clinic: remove its profile (back to standard)</span>
+   <span style="color:#ffffff;">Requests: ask before each one  </span><span style="color:#ffc799;">●</span>
+   <span style="color:#ffffff;">Requests: run without asking</span>
+   <span style="color:#ffffff;">Requests: blocked, agents can&#x27;t run code</span>
+   <span style="color:#ffffff;">Results: full  </span><span style="color:#ffc799;">●</span>
+   <span style="color:#ffffff;">Results: you review them first</span>
+   <span style="color:#ffffff;">Results: only the structure, without values</span>
+   <span style="color:#ffffff;">Audit: keep the log 30 days</span>
+   <span style="color:#ffffff;">Audit: keep the log 90 days (the default)  </span><span style="color:#ffc799;">●</span>
+   <span style="color:#ffffff;">Audit: keep the log a year</span>
+   <span style="color:#ffffff;">What your agent sees (consoles, SQL, its rules)</span>
 
- <span style="color:#5c5c5c;">↑↓ select · Enter run · Esc close · type to search</span></pre>
+
+
+
+
+
+ <span style="color:#5c5c5c;">↑↓ select · Enter run · Tab change key · Esc close · type to search</span></pre>
     </figure>
 
     <h3>Using it</h3>
@@ -254,31 +254,31 @@
     <h3>Plots inside herdr</h3>
     <p>On terminals that draw images, <kbd>ctrl+b</kbd> <kbd>f</kbd> shows plots inside herdr instead (see <a href="plots.html">Plots and Mirador</a>). That viewer has three keys: <kbd>←</kbd> <kbd>→</kbd> go through the history, <kbd>o</kbd> opens Mirador in the browser, and <kbd>q</kbd> closes it.</p>
 
-    <h2>Agents</h2>
-    <p>These are in the palette, without a key; type <code>agents</code> to list them. What each one means is in the <a href="security.html">Security model</a>.</p>
+    <h2 id="security">Security and the agent</h2>
+    <p>These are in the palette, without a key; type <code>security</code> or <code>agent</code> to list them. The palette marks what is in effect with "●": the profile says "● active", or "● global" when the project of the console in view has a stricter one, which is then the one active (<a href="profiles.html">Profiles</a>). A mix of the two settings that is none of the three profiles shows as "Profile: custom (…)". What each one means is in the <a href="security.html">Security model</a>.</p>
     <table>
     <thead><tr><th>In the palette</th><th>What it sets</th></tr></thead>
     <tbody>
-    <tr><td>Agents: use Claude Code in the agent pane</td><td><code>corral config agent claude</code></td></tr>
-    <tr><td>Agents: use Codex in the agent pane</td><td><code>corral config agent codex</code></td></tr>
-    <tr><td>Agents: use Gemini CLI in the agent pane</td><td><code>corral config agent gemini</code></td></tr>
-    <tr><td>Agents: use opencode in the agent pane</td><td><code>corral config agent opencode</code></td></tr>
-    <tr><td>Agents: none, a shell in the agent pane</td><td><code>corral config agent none</code>. With no agent set, the pane runs the first of the four that is installed</td></tr>
-    <tr><td>Agents: ask before each request</td><td><code>corral config agents ask</code>, the default</td></tr>
-    <tr><td>Agents: run code without asking</td><td><code>corral config agents on</code></td></tr>
-    <tr><td>Agents: can't run code</td><td><code>corral config agents off</code></td></tr>
-    <tr><td>Agents: see full results</td><td><code>corral config agent_output full</code>, the default</td></tr>
-    <tr><td>Agents: you review results before they see them</td><td><code>corral config agent_output review</code></td></tr>
-    <tr><td>Agents: see only the structure of results</td><td><code>corral config agent_output structure</code></td></tr>
-    <tr><td>Agents: what your agent sees (consoles, SQL, its rules)</td><td><code>corral context</code>, in a window</td></tr>
-    <tr><td>Agents: open profile (run without asking, full results)</td><td><code>corral profile open</code></td></tr>
-    <tr><td>Agents: standard profile (ask before each request, full results)</td><td><code>corral profile standard</code></td></tr>
-    <tr><td>Agents: sensitive profile (ask, results without values)</td><td><code>corral profile sensitive</code></td></tr>
-    <tr><td>Agents: this project is sensitive, in every session</td><td><code>corral profile sensitive --project</code></td></tr>
-    <tr><td>Agents: this project follows the global profile</td><td><code>corral profile --project --clear</code></td></tr>
-    <tr><td>Agents: keep the audit log 30 days</td><td><code>corral config audit_days 30</code></td></tr>
-    <tr><td>Agents: keep the audit log 90 days (Corral's)</td><td><code>corral config audit_days 90</code>, the default</td></tr>
-    <tr><td>Agents: keep the audit log a year</td><td><code>corral config audit_days 365</code></td></tr>
+    <tr><td>Open profile: run without asking, full results</td><td><code>corral profile open</code></td></tr>
+    <tr><td>Standard profile: ask before each request, full results</td><td><code>corral profile standard</code>, the default</td></tr>
+    <tr><td>Sensitive profile: ask, results without values</td><td><code>corral profile sensitive</code></td></tr>
+    <tr><td>Project <i>folder</i>: sensitive in every session</td><td><code>corral profile sensitive --project</code>, for the folder the console in view started in; only with a console open</td></tr>
+    <tr><td>Project <i>folder</i>: remove its profile</td><td><code>corral profile --project --clear</code>; only when that folder has a profile of its own</td></tr>
+    <tr><td>Requests: ask before each one</td><td><code>corral config agents ask</code>, the default</td></tr>
+    <tr><td>Requests: run without asking</td><td><code>corral config agents on</code></td></tr>
+    <tr><td>Requests: blocked, agents can't run code</td><td><code>corral config agents off</code></td></tr>
+    <tr><td>Results: full</td><td><code>corral config agent_output full</code>, the default</td></tr>
+    <tr><td>Results: you review them first</td><td><code>corral config agent_output review</code></td></tr>
+    <tr><td>Results: only the structure, without values</td><td><code>corral config agent_output structure</code></td></tr>
+    <tr><td>Audit: keep the log 30 days</td><td><code>corral config audit_days 30</code></td></tr>
+    <tr><td>Audit: keep the log 90 days (the default)</td><td><code>corral config audit_days 90</code></td></tr>
+    <tr><td>Audit: keep the log a year</td><td><code>corral config audit_days 365</code></td></tr>
+    <tr><td>What your agent sees (consoles, SQL, its rules)</td><td><code>corral context</code>, in a window</td></tr>
+    <tr><td>Agent: Claude Code in its pane</td><td><code>corral config agent claude</code></td></tr>
+    <tr><td>Agent: Codex in its pane</td><td><code>corral config agent codex</code></td></tr>
+    <tr><td>Agent: Gemini CLI in its pane</td><td><code>corral config agent gemini</code></td></tr>
+    <tr><td>Agent: opencode in its pane</td><td><code>corral config agent opencode</code></td></tr>
+    <tr><td>Agent: none, a shell in its pane</td><td><code>corral config agent none</code>. With no agent set, the pane runs the first of the four that is installed</td></tr>
     </tbody>
     </table>
 
