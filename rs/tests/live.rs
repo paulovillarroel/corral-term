@@ -126,6 +126,25 @@ impl Live {
         (out.status.code().unwrap_or(-1), text)
     }
 
+    /// R code that keeps the console busy until `release(name)`, and marks when it
+    /// starts, for `wait_held`. Tests hold R this way, not with Sys.sleep(): R counts a
+    /// sleep in wall-clock time, so a clock stepped ahead (WSL steps it a second or two
+    /// every half minute or so) ends it early, and a request meant to outlast another,
+    /// or a timeout, doesn't.
+    fn hold(&self, name: &str) -> String {
+        let gate = self.dir.join(name);
+        format!(r#"invisible(file.create("{0}.held")); while (!file.exists("{0}.go")) Sys.sleep(0.02)"#, gate.display())
+    }
+
+    fn wait_held(&self, name: &str) {
+        let held = self.dir.join(format!("{name}.held"));
+        wait_for(Duration::from_secs(20), "the held request", || held.exists());
+    }
+
+    fn release(&self, name: &str) {
+        std::fs::write(self.dir.join(format!("{name}.go")), "").unwrap();
+    }
+
     /// The process and pane of the live session in `lang` (R's is Ark), from
     /// its meta.json; None while there is none.
     fn session(&self, lang: &str) -> Option<(i64, String)> {
@@ -334,24 +353,28 @@ fn wait_for(limit: Duration, what: &str, mut ready: impl FnMut() -> bool) {
     }
 }
 
-/// Two agents asking at the same time take turns: each gets only its own
-/// output, whole, and the second waits for the first.
+/// Two agents asking at once take turns: the second waits while the first runs,
+/// and each gets only its own output, whole.
 #[test]
 #[ignore]
 fn two_agents_take_turns() {
     let live = Live::start("turns");
-    let started = Instant::now();
-    let (a, b) = std::thread::scope(|s| {
-        let a = s.spawn(|| live.eval(&[r#"cat("A1\n"); Sys.sleep(1.5); cat("A2\n")"#]));
-        std::thread::sleep(Duration::from_millis(100));
-        let b = s.spawn(|| live.eval(&[r#"cat("B1\n"); Sys.sleep(1.5); cat("B2\n")"#]));
-        (a.join().unwrap(), b.join().unwrap())
+    let a_code = format!(r#"cat("A1\n"); {}; cat("A2\n")"#, live.hold("a"));
+    let (a, b, waited) = std::thread::scope(|s| {
+        let a = s.spawn(|| live.eval(&[&a_code]));
+        live.wait_held("a");
+        let b = s.spawn(|| live.eval(&[r#"cat("B1\n"); cat("B2\n")"#]));
+        // B alone takes a few milliseconds: a second later it must still be waiting for A.
+        std::thread::sleep(Duration::from_secs(1));
+        let waited = !b.is_finished();
+        live.release("a");
+        (a.join().unwrap(), b.join().unwrap(), waited)
     });
+    assert!(waited, "B didn't wait for A: {}", b.1);
     assert_eq!(a.0, 0, "{}", a.1);
     assert_eq!(b.0, 0, "{}", b.1);
     assert!(a.1.contains("A1\nA2") && !a.1.contains("B1") && !a.1.contains("B2"), "A got: {}", a.1);
     assert!(b.1.contains("B1\nB2") && !b.1.contains("A1") && !b.1.contains("A2"), "B got: {}", b.1);
-    assert!(started.elapsed() >= Duration::from_millis(2900), "they ran at once: {:?}", started.elapsed());
 }
 
 /// Past its timeout the agent stops waiting, but the code keeps running and its
@@ -360,11 +383,18 @@ fn two_agents_take_turns() {
 #[ignore]
 fn a_timeout_leaves_the_code_running() {
     let live = Live::start("timeout");
-    let (code, text) = live.eval(&["--timeout", "1", r#"Sys.sleep(3); cat("slow done\n")"#]);
+    let slow = format!(r#"{}; cat("slow done\n")"#, live.hold("slow"));
+    let (code, text) = live.eval(&["--timeout", "1", &slow]);
     assert_eq!(code, 2, "{text}");
     assert!(text.contains("still running"), "{text}");
     let file = text.rsplit("will be in ").next().unwrap().trim().to_string();
-    let (code, text) = live.eval(&[r#"cat("next\n")"#]);
+    let (code, text) = std::thread::scope(|s| {
+        s.spawn(|| {
+            std::thread::sleep(Duration::from_secs(1));
+            live.release("slow");
+        });
+        live.eval(&[r#"cat("next\n")"#])
+    });
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("next"), "{text}");
     let kept = std::fs::read_to_string(&file).unwrap_or_default();
@@ -1579,7 +1609,8 @@ fn an_agent_cannot_loosen_the_harness_by_itself() {
 fn restricted_output_never_points_to_the_values() {
     let live = Live::start("restricted");
     live.config(r#"{"agents":"on","agent_output":"structure"}"#);
-    let (code, text) = live.eval(&["--timeout", "1", r#"Sys.sleep(3); cat("secret", 42, "\n")"#]);
+    let secret = format!(r#"{}; cat("secret", 42, "\n")"#, live.hold("slow"));
+    let (code, text) = live.eval(&["--timeout", "1", &secret]);
     assert_eq!(code, 2, "{text}");
     assert!(text.contains("still running"), "{text}");
     assert!(!text.contains(".out") && !text.contains("eval/"), "it pointed to the output: {text}");
@@ -1708,10 +1739,12 @@ fn an_agent_in_a_terminal_still_asks() {
 #[ignore]
 fn requests_that_never_run_are_audited() {
     let live = Live::start("audit");
+    let first_code = format!("{}; cat('first\\n')", live.hold("first"));
     let (first, second) = std::thread::scope(|s| {
-        let first = s.spawn(|| live.eval(&["Sys.sleep(3); cat('first\\n')"]));
-        std::thread::sleep(Duration::from_millis(300));
+        let first = s.spawn(|| live.eval(&[&first_code]));
+        live.wait_held("first");
         let second = live.eval(&["--timeout", "0.5", "--wait-idle", "0.5", "cat('second\\n')"]);
+        live.release("first");
         (first.join().unwrap(), second)
     });
     assert_eq!(first.0, 0, "{}", first.1);
