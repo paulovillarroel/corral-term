@@ -149,41 +149,67 @@ fn console_folder() -> Option<PathBuf> {
     Some(PathBuf::from(s.get("started_in").str().or(s.get("cwd").str())?))
 }
 
-/// The project of the console in view, for the palette: its folder, if it is still there.
-pub(crate) fn console_project() -> Option<PathBuf> {
-    std::fs::canonicalize(console_folder()?).ok().filter(|d| d.is_dir())
+/// The console the palette speaks of: the one in view, and only in this workspace (with
+/// none here, pick_session falls back to another workspace's, which isn't this one).
+fn console_here() -> Option<Value> {
+    let s = crate::console::pick_session()?;
+    match env::current_workspace().filter(|_| env::in_herdr()) {
+        Some(ws) if s.get("workspace_id").str() != Some(ws.as_str()) => None,
+        _ => Some(s),
+    }
 }
 
-/// What is in effect, for the palette: the global settings and the profile they make
-/// (`custom` for another mix), and the console's project, if there is a console.
-pub(crate) struct InEffect {
+/// A mix of the two settings, and the profile it makes (`custom` for another).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) struct Mix {
     pub access: &'static str,
     pub output: &'static str,
     pub profile: &'static str,
+}
+
+/// What is in effect, for the palette: the global settings, the rules the console in
+/// view runs by (its project's profile, its own sensitive mark and the folders it is in
+/// can tighten them), and its project, if there is a console here.
+pub(crate) struct InEffect {
+    pub global: Mix,
+    pub console: Mix,
     pub project: Option<Project>,
 }
 
-/// The console's project: its folder, the profile set for that very folder, the one that
-/// applies there (which may come from a folder above), and whether that one tightens the
-/// global profile, so the console runs by the project's rules.
+/// The console's project: the folder it started in (what `--project` acts on), the
+/// profile set for that very folder, the one that applies there (maybe from a folder
+/// above), and the profile the folder would have without its own.
 pub(crate) struct Project {
     pub dir: PathBuf,
     pub own: Option<String>,
     pub applies: Option<String>,
-    pub tightens: bool,
+    pub without_own: Mix,
 }
 
 pub(crate) fn in_effect() -> InEffect {
     let cfg = env::config();
     let (access, output) = crate::eval::policy(crate::eval::access_from(cfg.get("agents").str()), cfg.get("agent_output").str(), false);
-    let project = console_project().map(|dir| {
-        let own = cfg.get("projects").get(&dir.display().to_string()).str().map(String::from);
-        let applies = project_for(&cfg, std::slice::from_ref(&dir)).map(|(_, name)| name);
-        let here = combine(&cfg, std::slice::from_ref(&dir), false);
-        let tightens = (here.access, here.output, here.sensitive) != (access, output, false);
-        Project { dir, own, applies, tightens }
-    });
-    InEffect { access, output, profile: name_of(access, output, false), project }
+    let global = Mix { access, output, profile: name_of(access, output, false) };
+    let session = console_here();
+    let console = session.as_ref().map(|s| {
+        let r = session_rules(Path::new(s.get("dir").str().unwrap_or("")), s);
+        Mix { access: r.access, output: r.output, profile: r.profile }
+    }).unwrap_or(global);
+    let project = session.as_ref()
+        .and_then(|s| s.get("started_in").str().or(s.get("cwd").str()).map(PathBuf::from))
+        .and_then(|d| std::fs::canonicalize(d).ok()).filter(|d| d.is_dir())
+        .map(|dir| {
+            let key = dir.display().to_string();
+            let own = cfg.get("projects").get(&key).str().map(String::from);
+            let applies = project_for(&cfg, std::slice::from_ref(&dir)).map(|(_, name)| name);
+            let mut rest = cfg.clone();
+            if let Value::Obj(p) = cfg.get("projects") {
+                rest.set("projects", Value::Obj(p.iter().filter(|(k, _)| *k != key).cloned().collect()));
+            }
+            let r = combine(&rest, std::slice::from_ref(&dir), false);
+            Project { dir, own, applies, without_own: Mix { access: r.access, output: r.output, profile: r.profile } }
+        });
+    InEffect { global, console, project }
 }
 
 /// A mix of settings in words, for a custom profile: "ask, you review results".
