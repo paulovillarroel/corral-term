@@ -81,6 +81,7 @@ fn tool(package: &str, program: &str, args: &[&str], project_env: bool) -> ! {
             c
         }
         None => {
+            // net: language-servers: uvx fetches ruff or ty the first time
             let mut c = Command::new("uvx");
             c.args(["--quiet", "--from", package, program]).args(args);
             c
@@ -105,6 +106,7 @@ fn tool_path(package: &str, program: &str) -> Option<PathBuf> {
     if let Some(p) = known.get(package).str().map(PathBuf::from).filter(|p| p.is_file()) {
         return Some(p);
     }
+    // net: language-servers
     let out = Command::new("uvx")
         .args(["--quiet", "--from", package, "python", "-c", "import sys; print(sys.prefix)"])
         .stdin(Stdio::null())
@@ -190,7 +192,7 @@ fn bridge(connection_file: &str) -> Result<(), String> {
         .map_err(|_| crate::i18n::tr("Ark did not start its language server", "Ark no inició su servidor de lenguaje").to_string())?;
 
     // Copy bytes: editor -> Ark on a thread, Ark -> editor here.
-    let lsp = TcpStream::connect(("127.0.0.1", port)).map_err(io_err)?;
+    let lsp = TcpStream::connect(("127.0.0.1", port)).map_err(io_err)?; // net: local
     let mut to_ark = lsp.try_clone().map_err(io_err)?;
     std::thread::spawn(move || {
         let mut stdin = std::io::stdin().lock();

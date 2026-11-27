@@ -1006,6 +1006,7 @@ def _sql_connection():
         try:
             import duckdb
         except ImportError:
+            # net: text
             raise RuntimeError(tr("SQL needs duckdb in this Python: uv add duckdb (or pip install duckdb)",
                                   "SQL necesita duckdb en este Python: uv add duckdb (o pip install duckdb)")) from None
         _sql = duckdb.connect()

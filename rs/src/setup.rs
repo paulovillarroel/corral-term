@@ -24,6 +24,7 @@ pub fn checked(what: &str, data: &[u8], expected: &str) -> Result<(), String> {
 }
 
 /// The SHA-256 GitHub reports for a file of a release (its `digest`), when it has one.
+// net: tools: Ark's SHA-256, for a version Corral doesn't carry one for
 fn github_digest(repo: &str, tag: &str, file: &str) -> Option<String> {
     let body = download(&format!("https://api.github.com/repos/{repo}/releases/tags/{tag}")).ok()?;
     let release = crate::json::parse(&String::from_utf8_lossy(&body)).ok()?;
@@ -33,6 +34,7 @@ fn github_digest(repo: &str, tag: &str, file: &str) -> Option<String> {
 
 /// Download `url` (with curl, which the install line needs anyway).
 pub fn download(url: &str) -> Result<Vec<u8>, String> {
+    // net: tools: what corral install downloads (setup::download)
     let out = Command::new("curl").args(["-fsSL", "--retry", "2", "--connect-timeout", "20", url]).output()
         .map_err(|e| trf!("couldn't run curl: {e}", "no pude ejecutar curl: {e}"))?;
     if !out.status.success() {
@@ -52,6 +54,7 @@ pub fn install_ark(version: &str) -> Result<PathBuf, String> {
     let expected = if version == ARK_VERSION {
         ARK_SHA256.to_string()
     } else {
+        // net: tools
         github_digest("posit-dev/ark", version, &file).ok_or_else(|| trf!(
             "GitHub has no SHA-256 for Ark {version}, so I won't install it; Ark {ARK_VERSION} is the one Corral was tested with",
             "GitHub no tiene un SHA-256 para Ark {version}, así que no lo instalo; Ark {ARK_VERSION} es la que Corral probó"))?
