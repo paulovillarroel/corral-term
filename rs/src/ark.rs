@@ -181,7 +181,11 @@ fn remove_stale_sockets(folder: &Path) {
         if !base.starts_with("kernel-") || !e.file_type().map(|t| t.is_socket()).unwrap_or(false) {
             continue;
         }
-        if !folder.join(format!("{base}.json")).exists() && std::os::unix::net::UnixStream::connect(e.path()).is_err() {
+        // Only a refused connection says no Ark is there: running out of descriptors,
+        // say, says nothing about it.
+        let abandoned = matches!(std::os::unix::net::UnixStream::connect(e.path()),
+                                 Err(err) if err.kind() == std::io::ErrorKind::ConnectionRefused);
+        if !folder.join(format!("{base}.json")).exists() && abandoned {
             let _ = std::fs::remove_file(e.path());
         }
     }
