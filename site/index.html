@@ -9,13 +9,13 @@
 <style>html { background: #17191d; color-scheme: dark; } html[data-theme="paper"] { background: #fbfbfa; color-scheme: light; }</style>
 <script>try { const t = localStorage.getItem("corral-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <title>Corral: the agentic Data Science IDE for R, Python and SQL</title>
-<meta name="description" content="A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session. Open source.">
+<meta name="description" content="A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session, with controls built for sensitive data. Open source.">
 <link rel="canonical" href="https://corral-term.dev/">
 <!-- Link previews (LinkedIn, Slack, X, WhatsApp…): assets/og.png, made from assets/og.html. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Corral">
 <meta property="og:title" content="Corral: the agentic Data Science IDE for R, Python and SQL">
-<meta property="og:description" content="A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session. Open source.">
+<meta property="og:description" content="A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session, with controls built for sensitive data. Open source.">
 <meta property="og:url" content="https://corral-term.dev/">
 <meta property="og:image" content="https://corral-term.dev/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -39,7 +39,7 @@
    "name": "Corral",
    "alternateName": "corral-term",
    "url": "https://corral-term.dev/",
-   "description": "A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session. Open source.",
+   "description": "A terminal-native data science IDE for R, Python and SQL, where you and your AI agent share one live session, with controls built for sensitive data. Open source.",
    "applicationCategory": "DeveloperApplication",
    "applicationSubCategory": "Data science IDE",
    "operatingSystem": "Linux, Windows (WSL)",
@@ -97,7 +97,7 @@
     <div class="hero-text">
       <div class="eyebrow">R, Python and SQL · in your terminal</div>
       <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
-      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R, Python and SQL: blazing fast with massive data, careful with sensitive data, ready for professional work.</p>
+      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R, Python and SQL, blazing fast with massive data, ready for professional work. Built for sensitive data too: you decide what your agent sees of your session, and your sessions stay closed to everyone else on the machine.</p>
       <div class="install">
         <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
         <button class="copy" type="button">Copy</button>
@@ -181,7 +181,7 @@
         <ul class="points">
           <li><b>Values stay out</b><span>in a sensitive project the agent learns whether the code worked and the shape of your objects, never their values; your plots stay with you</span></li>
           <li><b>Closed to others</b><span>on a shared server, other users can't read your sessions: R talks to Corral over sockets in a folder only you can open, and every local server asks for a token</span></li>
-          <li><b>No copies left</b><span>turn checkpoints off and the copies of your objects on disk are deleted, not just no longer made</span></li>
+          <li><b>Copies deleted</b><span>turn checkpoints off and the copies of your objects are deleted, not just no longer made: at once for consoles that have ended, at its next command for one still open</span></li>
           <li><b>Verified install</b><span>every download checked by SHA-256 and build provenance before it runs; no sudo; Corral itself has no third-party Rust dependencies</span></li>
           <li><b>Honest limits</b><span>a threat model that says what Corral protects, from whom, and what stays with your agent's permissions, its model provider and your machine</span></li>
         </ul>
