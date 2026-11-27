@@ -28,6 +28,11 @@ fn access_rank(a: &str) -> u8 {
     match a { "off" => 0, "on" => 2, _ => 1 }
 }
 
+/// The stricter of two output modes.
+pub(crate) fn stricter_output(a: &'static str, b: &'static str) -> &'static str {
+    if output_rank(b) < output_rank(a) { b } else { a }
+}
+
 fn output_rank(o: &str) -> u8 {
     match o { "structure" => 0, "review" => 1, _ => 2 }
 }
@@ -101,11 +106,28 @@ fn combine(cfg: &Value, paths: &[PathBuf], marked: bool) -> Rules {
     Rules { access, output, sensitive, profile: name_of(access, output, sensitive), project }
 }
 
+/// The folder a session's process is in right now, as the kernel has it (/proc/PID/cwd).
+/// A setwd() or os.chdir() shows here at once, before R or Python note it in meta.json
+/// after the command: a request that follows straight away, or the one that moved, is
+/// judged by where the session really is. None where there is no /proc.
+pub(crate) fn live_cwd(meta: &Value) -> Option<PathBuf> {
+    let pid = meta.get("pid").num()? as i64;
+    std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
+}
+
 /// The rules for a session (its folder and meta.json). A session that started or runs in
 /// a `sensitive` project gets the same mark corral_sensitive() leaves, and keeps it: the
 /// rules don't loosen when it moves to another folder, and an agent can't unmark it.
 pub(crate) fn session_rules(dir: &Path, meta: &Value) -> Rules {
-    let paths: Vec<PathBuf> = [meta.get("started_in").str(), meta.get("cwd").str()].into_iter().flatten().map(PathBuf::from).collect();
+    session_rules_seen(dir, meta, None)
+}
+
+/// As session_rules, counting a folder the session was seen in during a request too
+/// (`corral eval` looks while it waits, for a console that ends before it can be read).
+pub(crate) fn session_rules_seen(dir: &Path, meta: &Value, seen: Option<&Path>) -> Rules {
+    let mut paths: Vec<PathBuf> = [meta.get("started_in").str(), meta.get("cwd").str()].into_iter().flatten().map(PathBuf::from).collect();
+    paths.extend(live_cwd(meta));
+    paths.extend(seen.map(Path::to_path_buf));
     let marker = dir.join("sensitive");
     let rules = combine(&env::config(), &paths, marker.exists());
     if rules.sensitive && !marker.exists() && dir.is_dir() {
