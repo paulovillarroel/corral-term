@@ -898,6 +898,42 @@ fn the_editors_language_server_reaches_ark() {
     assert!(answer.starts_with("Content-Length:") && answer.contains(r#""result":{"capabilities""#), "the language server said: {answer}");
 }
 
+#[test]
+#[ignore]
+fn ark_listens_only_in_corrals_folder() {
+    // On TCP, any user on the machine could subscribe to Ark's IOPub on 127.0.0.1 and read
+    // the code and what R prints (the key signs messages, it doesn't hide them). Ark's
+    // channels are Unix sockets in Corral's own folder, which only this user can open.
+    let live = Live::start("ark-sockets");
+    let folder = live.dir.join("state/corral/ark");
+    let conn = std::fs::read_dir(&folder).unwrap().flatten().map(|e| e.path())
+        .find(|p| p.extension().and_then(|x| x.to_str()) == Some("json")).expect("a connection file");
+    let text = std::fs::read_to_string(&conn).unwrap();
+    assert!(text.contains(r#""transport":"ipc""#), "{text}");
+    let base = conn.with_extension("");
+    assert!(text.contains(&format!(r#""ip":"{}""#, base.display())), "{text}");
+    for port in 1..=4 {
+        let socket = format!("{}:{port}", base.display());
+        let kind = std::fs::metadata(&socket).map(|m| std::os::unix::fs::FileTypeExt::is_socket(&m.file_type()));
+        assert_eq!(kind.ok(), Some(true), "{socket} is a socket");
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(live.dir.join("state/corral")).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o700, "Corral's folder is private");
+    // And Ark has no TCP port open.
+    let ark = std::fs::read_dir("/proc").unwrap().flatten()
+        .find(|e| std::fs::read(e.path().join("cmdline")).map(|c| String::from_utf8_lossy(&c).contains(&*conn.to_string_lossy())).unwrap_or(false))
+        .expect("Ark's process").path();
+    let sockets: Vec<String> = std::fs::read_dir(ark.join("fd")).unwrap().flatten()
+        .filter_map(|f| std::fs::read_link(f.path()).ok()).map(|l| l.to_string_lossy().into_owned())
+        .filter_map(|l| l.strip_prefix("socket:[").and_then(|r| r.strip_suffix(']')).map(String::from)).collect();
+    let tcp = ["tcp", "tcp6"].iter().filter_map(|t| std::fs::read_to_string(ark.join("net").join(t)).ok()).collect::<String>();
+    let open: Vec<&str> = tcp.lines().skip(1).filter(|l| sockets.iter().any(|s| l.split_whitespace().nth(9) == Some(s))).collect();
+    assert!(open.is_empty(), "Ark has TCP sockets: {open:?}");
+    // The console still works through them.
+    let (code, out) = live.eval(&["cat(6 * 7)"]);
+    assert!(code == 0 && out.contains("42"), "{out}");
+}
 
 /// Resident memory of a process, in MB.
 fn rss_mb(pid: i64) -> f64 {
