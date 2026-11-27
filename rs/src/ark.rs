@@ -163,21 +163,32 @@ const SOCKET_PATH_MAX: usize = 100;
 /// folder (700), so only this user's processes reach them. When that path is too long
 /// for a socket address, in a new folder of their own with a short path, made 700,
 /// under the runtime folder or /tmp; a note beside the connection file (KERNEL.sockets)
-/// names it, so it goes even when no Corral process sees the console end. None only if
-/// no such folder can be made: then Ark doesn't start (never on TCP, where any user on
-/// the machine could read its output).
-pub(crate) fn socket_base(conn_path: &Path) -> Option<PathBuf> {
+/// names it, so it goes even when no Corral process sees the console end. An error only
+/// if no such folder can be made, or its note can't be written: then Ark doesn't start
+/// (never on TCP, where any user on the machine could read its output).
+pub(crate) fn socket_base(conn_path: &Path) -> Result<PathBuf, String> {
+    socket_base_in(conn_path, short_socket_dir)
+}
+
+/// socket_base, with the short folder from `make_dir`.
+fn socket_base_in(conn_path: &Path, make_dir: impl FnOnce() -> Option<PathBuf>) -> Result<PathBuf, String> {
     let base = conn_path.with_extension("");
     if base.is_absolute() && base.as_os_str().len() + 2 <= SOCKET_PATH_MAX {
-        return Some(base);
+        return Ok(base);
     }
-    let dir = short_socket_dir()?;
-    std::fs::write(conn_path.with_extension("sockets"), dir.to_string_lossy().as_bytes()).ok()?;
-    Some(dir.join("kernel"))
+    let dir = make_dir().ok_or_else(no_private_sockets)?;
+    // Without its note nothing would find the folder again: it goes too.
+    let note = conn_path.with_extension("sockets");
+    if let Err(e) = std::fs::write(&note, dir.to_string_lossy().as_bytes()) {
+        let _ = std::fs::remove_dir(&dir);
+        return Err(trf!("couldn't write {}, which says where Ark's sockets are: {e}",
+                        "no pude escribir {}, que dice dónde están los sockets de Ark: {e}", note.display()));
+    }
+    Ok(dir.join("kernel"))
 }
 
 /// Why Ark can't start when socket_base found nowhere private for its sockets.
-pub(crate) fn no_private_sockets() -> String {
+fn no_private_sockets() -> String {
     tr("couldn't make a private folder for Ark's sockets (Corral's folder has too long a path, and neither the runtime folder nor /tmp would take one); Corral doesn't start Ark on TCP, where other users could read it",
        "no pude crear una carpeta privada para los sockets de Ark (la carpeta de Corral tiene una ruta demasiado larga, y ni la carpeta de ejecución ni /tmp aceptaron una); Corral no inicia Ark por TCP, donde otros usuarios podrían leerlo").into()
 }
@@ -215,7 +226,7 @@ fn short_socket_dir() -> Option<PathBuf> {
 /// any user on the machine can subscribe to IOPub and read the code and everything R
 /// prints.
 fn endpoints(conn_path: &Path) -> Result<(&'static str, String, Vec<u16>), String> {
-    let base = socket_base(conn_path).ok_or_else(no_private_sockets)?;
+    let base = socket_base(conn_path)?;
     Ok(("ipc", base.to_string_lossy().into_owned(), (1..=5).collect()))
 }
 
@@ -1604,6 +1615,20 @@ mod tests {
         drop(std::os::unix::net::UnixListener::bind(format!("{ip2}:1")).unwrap()); // Ark's, nobody behind it now
         remove_stale(&state, Duration::ZERO); // as a minute later
         assert!(!dir2.exists() && !conn2.with_extension("sockets").exists(), "the note's folder goes once nothing answers");
+    }
+
+    #[test]
+    fn a_note_that_cant_be_written_takes_its_folder() {
+        // Without its note nothing would find the short folder again: it goes, and Ark
+        // doesn't start, saying which file it couldn't write.
+        let root = std::env::temp_dir().join(format!("corral-ark-note-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let _root = Gone(root.clone());
+        let dir = root.join("corral-short");
+        let conn = root.join("gone").join("a".repeat(100)).join("kernel-1a2b3c4d.json"); // no such folder
+        let err = socket_base_in(&conn, || std::fs::create_dir_all(&dir).ok().map(|_| dir.clone())).unwrap_err();
+        assert!(!dir.exists(), "the folder goes");
+        assert!(err.contains("kernel-1a2b3c4d.sockets"), "{err}");
     }
 
     #[test]
