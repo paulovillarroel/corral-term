@@ -2098,6 +2098,9 @@ mod tests {
         assert_eq!(newer_than_installed(Some("0.1.24"), Some("0.1.23"), "0.1.25"), None);
         assert_eq!(newer_than_installed(Some("0.1.24"), None, "0.1.23").as_deref(), Some("0.1.24"));
         assert_eq!(newer_than_installed(Some("0.1.10"), Some("0.1.9"), "0.1.9").as_deref(), Some("0.1.10"));
+        // A new minor version is newer than any patch of the one before.
+        assert_eq!(newer_than_installed(Some("0.2.0"), Some("0.1.29"), "0.1.29").as_deref(), Some("0.2.0"));
+        assert_eq!(newer_than_installed(Some("0.1.30"), Some("0.2.0"), "0.2.0"), None);
         assert_eq!(newer_than_installed(None, Some("0.1.23"), "0.1.23"), None);
     }
 
