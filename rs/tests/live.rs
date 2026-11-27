@@ -39,6 +39,16 @@ impl Live {
 
     /// As start_with, with `setup` run in the project folder before the console opens.
     fn start_full(name: &str, extra: &[(&str, &str)], setup: impl FnOnce(&Path)) -> Live {
+        Live::start_inner(name, extra, setup, false)
+    }
+
+    /// As start_with, with herdr's server, and so every console, pane and popup it starts,
+    /// followed by strace for connections, into `strace-herdr.log` in the test's folder.
+    fn start_traced(name: &str, extra: &[(&str, &str)]) -> Live {
+        Live::start_inner(name, extra, |_| {}, true)
+    }
+
+    fn start_inner(name: &str, extra: &[(&str, &str)], setup: impl FnOnce(&Path), traced: bool) -> Live {
         // Under /tmp itself: herdr's socket path must stay short.
         let dir = PathBuf::from(format!("/tmp/corral-live-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -55,14 +65,25 @@ impl Live {
         // Agents run without asking: there is nobody to answer a popup here. No
         // check for new versions either: tests don't ask GitHub.
         std::fs::write(dir.join("config/corral/config.json"), r#"{"agents":"on","update_check":"off"}"#).unwrap();
+        // herdr doesn't ask herdr.dev either, for new versions or agent-detection updates.
+        std::fs::create_dir_all(dir.join("config/herdr")).unwrap();
+        std::fs::write(dir.join("config/herdr/config.toml"), "[update]\nversion_check = false\nmanifest_check = false\n").unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         std::fs::write(dir.join("Rprofile"), format!("if (interactive()) source(\"{}\")\n", repo.join("r/corral.R").display())).unwrap();
 
         let extra = extra.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), vars: String::new(), workspace: String::new(), extra };
-        live.server = live.command("herdr").arg("server")
-            .stdout(Stdio::null()).stderr(Stdio::null()).spawn()
-            .expect("herdr is not on the PATH");
+        let mut server = if traced {
+            let mut c = live.command("strace");
+            c.args(STRACE).arg(live.dir.join("strace-herdr.log")).args(["herdr", "server"]);
+            c
+        } else {
+            let mut c = live.command("herdr");
+            c.arg("server");
+            c
+        };
+        live.server = server.stdout(Stdio::null()).stderr(Stdio::null()).spawn()
+            .expect("herdr (or strace) is not on the PATH");
         let socket = live.dir.join("config/herdr/herdr.sock");
         wait_for(Duration::from_secs(10), "herdr's socket", || socket.exists());
 
@@ -1734,6 +1755,88 @@ fn a_plot_object_opens_mirador_while_r_draws() {
     assert_eq!(opened().lines().count(), 1, "windows opened: {}", opened());
     let _ = std::fs::remove_file(&script);
     let _ = std::fs::remove_file(&log);
+}
+
+/// strace's options for following connections: every child (-f), with the filter in the
+/// kernel so the processes followed don't slow down (--seccomp-bpf), into the file after -o.
+const STRACE: &[&str] = &["-f", "--seccomp-bpf", "-qq", "-e", "trace=execve,connect,sendto,sendmsg", "-o"];
+
+/// The lines of a strace log that reach beyond the machine: an IPv4 or IPv6 address other
+/// than loopback. Unix, netlink and unspecified sockets stay on it. A name looked up through
+/// DNS shows here too, as a connection to the name server. Each line comes with the program
+/// its process ran (its last execve before it), so a failure says who.
+fn beyond_the_machine(log: &str) -> Vec<String> {
+    let mut program: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for l in log.lines() {
+        let pid = l.split_whitespace().next().unwrap_or("");
+        if l.contains("execve(\"") && !l.contains("= -1") {
+            if let Some(args) = l.split_once(", [").map(|(_, a)| a.split("], ").next().unwrap_or("")) {
+                program.insert(pid, args.chars().take(160).collect());
+            }
+            continue;
+        }
+        let beyond = if l.contains("sa_family=AF_INET6") {
+            !(l.contains("\"::1\"") || l.contains("\"::ffff:127."))
+        } else if l.contains("sa_family=AF_INET,") {
+            !l.contains("inet_addr(\"127.")
+        } else {
+            false
+        };
+        if beyond {
+            out.push(format!("{l}\n    from {}", program.get(pid).map(String::as_str).unwrap_or("(a thread of an earlier process)")));
+        }
+    }
+    out
+}
+
+/// While you work, nothing leaves the machine. A console, `corral eval`, a plot (httpgd,
+/// the plots' checkpoint and Mirador), the table viewer's DuckDB, SQL, the variables and
+/// the context, with every process herdr starts and each corral command run here followed
+/// by strace: only 127.0.0.1, ::1, Unix and netlink sockets are reached. The daily version
+/// check is off, as in every test (the security page lists it with the rest of Corral's
+/// connections). Skipped without strace.
+#[test]
+#[ignore]
+fn ordinary_work_stays_on_the_machine() {
+    if Command::new("strace").arg("-V").output().is_err() {
+        eprintln!("strace isn't installed: skipped");
+        return;
+    }
+    // The check sees a connection when there is one: a deliberate one, to TEST-NET-1.
+    let probe = std::env::temp_dir().join(format!("corral-strace-probe-{}", std::process::id()));
+    let _ = Command::new("strace").args(STRACE).arg(&probe).args(["timeout", "2", "bash", "-c", "exec 3<>/dev/tcp/192.0.2.1/80"])
+        .stdout(Stdio::null()).stderr(Stdio::null()).status();
+    let caught = beyond_the_machine(&std::fs::read_to_string(&probe).unwrap_or_default());
+    let _ = std::fs::remove_file(&probe);
+    assert!(caught.iter().any(|l| l.contains("192.0.2.1")), "strace didn't see a deliberate connection: {caught:?}");
+
+    let live = Live::start_traced("offline", &[("CORRAL_BROWSER", "print")]);
+    let table = live.dir.join("x.parquet");
+    let traced = |n: usize, args: &[&str]| {
+        let out = live.command("strace").args(STRACE).arg(live.dir.join(format!("strace-{n}.log"))).arg("corral").args(args)
+            .stdin(Stdio::null()).output().unwrap();
+        assert!(out.status.success(), "corral {args:?}: {}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    };
+    traced(1, &["eval", "x <- data.frame(a = 1:1000, b = sin(1:1000)); summary(x)"]);
+    traced(2, &["eval", "plot(x$a, x$b)"]);
+    traced(3, &["mirador", "--url"]);
+    traced(4, &["eval", &format!("nanoparquet::write_parquet(x, \"{}\")", table.display())]);
+    traced(5, &["_table", "--bench", table.to_str().unwrap(), "b"]);
+    traced(6, &["eval", "--lang", "sql", "SELECT count(*) AS n, round(avg(b), 3) AS b FROM x"]);
+    traced(7, &["vars", "--json"]);
+    traced(8, &["context", "--json"]);
+    // The plot watcher copies the plot into the checkpoint, and Mirador reads it: let them.
+    std::thread::sleep(Duration::from_secs(3));
+    let mut logs: Vec<PathBuf> = std::fs::read_dir(&live.dir).unwrap().flatten().map(|e| e.path())
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("strace-"))).collect();
+    logs.sort();
+    assert_eq!(logs.len(), 9, "{logs:?}");
+    let seen: usize = logs.iter().map(|p| std::fs::read_to_string(p).unwrap_or_default().lines().filter(|l| !l.contains("execve(")).count()).sum();
+    let beyond: Vec<String> = logs.iter().flat_map(|p| beyond_the_machine(&std::fs::read_to_string(p).unwrap_or_default())).collect();
+    assert!(seen > 0, "strace logged nothing at all");
+    assert!(beyond.is_empty(), "connections beyond the machine:\n{}", beyond.join("\n"));
+    println!("{seen} connections followed, all on the machine");
 }
 
 /// The palette says what is in effect, with a real herdr and console: the global profile,
