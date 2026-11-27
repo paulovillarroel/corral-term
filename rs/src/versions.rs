@@ -94,6 +94,7 @@ pub fn rscript() -> Option<PathBuf> {
 /// The Python versions uv finds installed (`uv python list --only-installed`),
 /// one per minor version, newest first; None without uv.
 pub fn uv_versions() -> Option<Vec<Installed>> {
+    // net: local: only what is installed
     let out = Command::new("uv").args(["python", "list", "--only-installed", "--output-format", "json"])
         .stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     out.status.success().then(|| parse_uv(&String::from_utf8_lossy(&out.stdout)))
@@ -238,6 +239,7 @@ fn choose(lang: &str, id: Option<&str>, dir: &Path) -> Result<String, String> {
             None => tr("Corral uses uv's default Python outside uv projects", "Corral usa el Python predeterminado de uv fuera de proyectos uv").into(),
         });
     };
+    // net: local: writes .python-version; the next console fetches that Python (python-console)
     let mut cmd = Command::new("uv");
     cmd.args(["python", "pin"]).current_dir(&project).stdin(Stdio::null());
     match id {
@@ -405,6 +407,7 @@ fn consequences(lang: &str, id: Option<&str>, dir: &Path, list: &[Installed]) ->
             let has = setup::r_packages(&rscript, &["httpgd", "jsonlite"]);
             let missing: Vec<&str> = ["httpgd", "jsonlite"].into_iter().zip(has).filter(|(_, h)| !h).map(|(p, _)| p).collect();
             if !missing.is_empty() {
+                // net: text
                 lines.push(trf!("This R doesn't have {}: install.packages(c(\"httpgd\", \"jsonlite\")) in it.",
                                 "Este R no tiene {}: install.packages(c(\"httpgd\", \"jsonlite\")) en él.", missing.join(" y ")));
             }

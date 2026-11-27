@@ -72,6 +72,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Some(custom) => shell(custom),
             None => {
                 let here = std::env::current_dir().unwrap_or_else(|_| env::home());
+                // net: python-console: uv fetches the Python and packages its cache lacks
                 let mut c = Command::new("uv");
                 c.arg("run").args(crate::versions::uv_python_args(&here));
                 for p in PYTHON_PACKAGES {

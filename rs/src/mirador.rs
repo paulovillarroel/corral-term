@@ -97,6 +97,7 @@ fn mtime(path: &Path) -> Option<f64> {
 // --------------------------------------------------------------------------- small HTTP client (httpgd)
 
 pub(crate) fn http_get(host: &str, target: &str) -> Option<(Vec<u8>, String)> {
+    // net: local: httpgd, which plots_base only allows on 127.0.0.1 or localhost
     let mut s = TcpStream::connect(host).ok()?;
     s.set_read_timeout(Some(Duration::from_secs(10))).ok();
     write!(s, "GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").ok()?;
@@ -1018,6 +1019,7 @@ pub fn serve() -> Result<(), String> {
         None => env::secret_hex(12)?,
     };
     let wanted: u16 = std::env::var("CORRAL_MIRADOR_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7317);
+    // net: local
     let listener = TcpListener::bind(("127.0.0.1", wanted)).or_else(|_| TcpListener::bind(("127.0.0.1", 0)))
         .map_err(|e| trf!("Mirador couldn't open a port: {e}", "Mirador no pudo abrir un puerto: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();

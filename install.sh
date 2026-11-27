@@ -77,6 +77,7 @@ count_stop() {
     if [ -f "$config" ] && grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"' "$config" 2>/dev/null; then return 0; fi
     v=${3:-unknown}
     case "$v" in "" | *[!0-9.]*) v=unknown ;; esac
+    # net: install-count
     if curl -fsS -m 5 -X POST -H 'Content-Type: application/json' \
         --data "{\"version\":\"$v\",\"system\":\"$1\",\"kind\":\"stopped\",\"source\":\"release\",\"missing\":[\"$2\"]}" \
         "${CORRAL_TELEMETRY_URL:-https://corral-term.dev/api/installed}" >/dev/null 2>&1; then
@@ -137,6 +138,7 @@ attestation() {
         printf '%s\n' "$(t "! Attestation not checked (CORRAL_NO_ATTESTATION)." "! Atestación sin comprobar (CORRAL_NO_ATTESTATION).")"
         return 0
     fi
+    # net: local: only whether gh can check
     if ! command -v gh >/dev/null 2>&1 || ! gh attestation verify --help >/dev/null 2>&1; then
         printf '  %s\n' "$(t "Attestation not checked: that needs the GitHub CLI (gh 2.49 or later)." \
                              "Atestación sin comprobar: hace falta la CLI de GitHub (gh 2.49 o posterior).")"
@@ -147,6 +149,7 @@ attestation() {
                              "Atestación sin comprobar: gh no tiene una sesión iniciada (gh auth login).")"
         return 0
     fi
+    # net: attestation
     if why=$(gh attestation verify "$1" --repo "$REPO" </dev/null 2>&1); then
         printf '%s✓%s %s\n' "$green" "$off" "$(t "Attestation checked: built by $REPO's GitHub workflow" \
                                                   "Atestación comprobada: la compiló el flujo de GitHub de $REPO")"
@@ -164,6 +167,7 @@ attestation() {
 
 # latest_tag: the tag of the latest published version (v0.1.3), from GitHub's redirect.
 latest_tag() {
+    # net: corral-package: GitHub's "latest" link
     url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null) || return 0
     case "$url" in
         */releases/tag/v*) printf '%s' "${url##*/tag/}" ;;
@@ -232,6 +236,7 @@ main() {
                       "Para instalarlo sin comprobarlo, dilo: CORRAL_SHA256=skip")"
         [ "$expected" != skip ] || expected=""
         printf '%s\n' "$(t "Downloading Corral from $CORRAL_URL..." "Descargando Corral desde $CORRAL_URL...")"
+        # net: corral-package: a package from elsewhere (CORRAL_URL)
         curl -fsSL "$CORRAL_URL" -o "$tmp/$PACKAGE" ||
             stop "$(t "Couldn't download $CORRAL_URL." "No pude descargar $CORRAL_URL.")"
     else
@@ -242,10 +247,12 @@ main() {
         case "$tag" in v*) ;; *) tag="v$tag" ;; esac
         base="https://github.com/$REPO/releases/download/$tag"
         printf '%s\n' "$(t "Downloading Corral ${tag#v}..." "Descargando Corral ${tag#v}...")"
+        # net: corral-package
         curl -fsSL "$base/$PACKAGE" -o "$tmp/$PACKAGE" 2>/dev/null ||
             stop "$(t "Couldn't download Corral $tag from GitHub." "No pude descargar Corral $tag de GitHub.")" \
                  "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")" \
                  "$(t "Published versions: https://github.com/$REPO/releases" "Versiones publicadas: https://github.com/$REPO/releases")"
+        # net: corral-package
         curl -fsSL "$base/$PACKAGE.sha256" -o "$tmp/$PACKAGE.sha256" 2>/dev/null || {
             count_stop "$(system_name)" sha256_missing "${tag#v}"
             stop "$(t "Corral $tag has no published SHA-256 to check the download against." "Corral $tag no tiene un SHA-256 publicado para comprobar la descarga.")" \

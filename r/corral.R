@@ -818,6 +818,7 @@ local({
   sql_connection <- function() {
     if (!is.null(sql_db) && DBI::dbIsValid(sql_db)) return(sql_db)
     if (!has("duckdb") || !has("DBI")) {
+      # net: text
       stop(tr("SQL needs the duckdb package: install.packages(\"duckdb\")",
               "SQL necesita el paquete duckdb: install.packages(\"duckdb\")"), call. = FALSE)
     }

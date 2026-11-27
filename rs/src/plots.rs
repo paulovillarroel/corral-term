@@ -96,6 +96,7 @@ fn mirador_call(info: &Value, path: &str, body: Option<&Value>, timeout: Duratio
     let port = info.get("port").num().ok_or(tr("Mirador isn't running", "Mirador no está corriendo"))? as u16;
     let token = info.get("token").str().unwrap_or("");
     let host = format!("127.0.0.1:{port}");
+    // net: local: Mirador, on 127.0.0.1
     let mut s = TcpStream::connect_timeout(&host.parse().map_err(|e| format!("{e}"))?, timeout)
         .map_err(|e| trf!("Mirador isn't responding ({e})", "Mirador no responde ({e})"))?;
     s.set_read_timeout(Some(timeout)).ok();

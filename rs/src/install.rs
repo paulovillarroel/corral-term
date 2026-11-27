@@ -298,9 +298,9 @@ fn install_r(pkgs: &[&str]) -> String {
 fn install_r_with(pkgs: &[&str], pak: bool) -> String {
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
     if pak {
-        format!("Rscript -e 'pak::pak(c({list}))'")
+        format!("Rscript -e 'pak::pak(c({list}))'") // net: text
     } else {
-        format!("Rscript -e 'install.packages(c({list}), repos = \"{CRAN}\")'")
+        format!("Rscript -e 'install.packages(c({list}), repos = \"{CRAN}\")'") // net: text
     }
 }
 
@@ -719,6 +719,7 @@ fn path_step(saved: &mut Vec<String>) -> bool {
 fn bring_herdr() -> bool {
     let (v, url, sha) = HERDR;
     println!("  {}", trf!("… downloading herdr {v}", "… descargando herdr {v}"));
+    // net: tools
     let data = match setup::download(&url.replace("{v}", v)) {
         Ok(d) => d,
         Err(e) => {
@@ -774,6 +775,7 @@ fn uv_step() {
 fn bring_uv() -> bool {
     let (v, url, sha) = UV;
     println!("  {}", trf!("… downloading uv {v}", "… descargando uv {v}"));
+    // net: tools
     let data = match setup::download(&url.replace("{v}", v)) {
         Ok(d) => d,
         Err(e) => {
@@ -878,6 +880,7 @@ fn place(src: &Path) -> Result<PathBuf, String> {
 fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, sha: &str, done: &mut Value) {
     let url = url_t.replace("{v}", v);
     println!("  {}", trf!("… downloading {shown} {v} ({what})", "… descargando {shown} {v} ({what})"));
+    // net: tools
     let data = match setup::download(&url) {
         Ok(d) => d,
         Err(e) => return step(&trf!("couldn't download {shown}: {e}. Install it later and Corral will use it.",
@@ -1277,9 +1280,9 @@ fn r_install(r: &Path, pkgs: &[&str]) -> bool {
 fn r_install_code(pkgs: &[&str], pak: bool) -> String {
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
     let install = if pak {
-        "options(pkg.sysreqs = FALSE)\n  pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)"
+        "options(pkg.sysreqs = FALSE)\n  pak::pak(pkgs, lib = lib, upgrade = FALSE, ask = FALSE)" // net: r-packages
     } else {
-        "install.packages(pkgs, lib = lib, quiet = TRUE)"
+        "install.packages(pkgs, lib = lib, quiet = TRUE)" // net: r-packages
     };
     let repos = r_repos_code(p3m_codename().as_deref());
     format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
@@ -1584,6 +1587,7 @@ fn telemetry_off() -> bool {
 
 /// POSTs one ping to the site (api/installed.js): 5 seconds at most, never an error.
 fn send_ping(body: &str) -> bool {
+    // net: install-count
     let Some(curl) = env::which("curl") else { return false };
     let url = std::env::var("CORRAL_TELEMETRY_URL").unwrap_or_else(|_| "https://corral-term.dev/api/installed".into());
     Command::new(curl)
@@ -1736,6 +1740,7 @@ fn update_usage() -> &'static str {
 /// The tag of the latest published version (v0.1.12): where GitHub's "latest"
 /// link leads, as the installer finds it.
 fn latest_tag() -> Result<String, String> {
+    // net: update-check: GitHub's "latest" link, for the daily check and corral update
     let curl = env::which("curl").ok_or(tr("curl isn't installed", "curl no está instalado"))?;
     let url = format!("https://github.com/{REPO}/releases/latest");
     let out = Command::new(curl).args(["-fsSLI", "-o", "/dev/null", "-w", "%{url_effective}", "--max-time", "20", &url])

@@ -25,7 +25,7 @@ impl Stream {
         if addr.starts_with('/') {
             return Ok(Stream::Unix(UnixStream::connect(addr)?));
         }
-        let s = TcpStream::connect(addr)?;
+        let s = TcpStream::connect(addr)?; // net: local
         s.set_nodelay(true)?;
         Ok(Stream::Tcp(s))
     }
