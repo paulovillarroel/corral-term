@@ -133,22 +133,7 @@
     <p>Code that prints nothing, like an assignment, doesn't ask. With no answer in 5 minutes, the result is kept. <code>corral vars --json</code> leaves out previews of values in this mode, since they would skip your review.</p>
 
     <h3 id="profiles">Profiles</h3>
-    <p>Three names for the settings above, so you change them in one step:</p>
-    <table>
-    <thead><tr><th>Profile</th><th>Agents</th><th>What they get back</th><th>For</th></tr></thead>
-    <tbody>
-    <tr><td><code>open</code></td><td>run code without asking</td><td>everything printed</td><td>public or synthetic data</td></tr>
-    <tr><td><code>standard</code></td><td>ask before each request</td><td>everything printed</td><td>the default</td></tr>
-    <tr><td><code>sensitive</code></td><td>ask before each request</td><td>only the structure; every session is sensitive</td><td>personal or clinical data</td></tr>
-    </tbody>
-    </table>
-    <pre><code><span class="p">$ </span>corral profile sensitive
-<span class="p">$ </span>corral profile sensitive --project
-<span class="p">$ </span>corral profile</code></pre>
-    <p>Without <code>--project</code>, the profile is for all your work: it sets <code>agents</code> and <code>agent_output</code>. With <code>--project</code>, it is for one project folder (the folder you give, else the one the console in view started in) and every session that starts or runs in it or below it, without anyone remembering to call <code>corral_sensitive()</code>. A session that started in a sensitive project stays sensitive if it moves to another folder. The stricter one wins: a project can make things stricter than your global profile, never looser. <code>corral profile</code> shows both and the rules that result; <code>corral profile --project --clear</code> removes a project's own.</p>
-    <p>A project's profile lives in Corral's settings (<code>projects</code> in <code>~/.config/corral/config.json</code>), not in the repository. Making things stricter never asks; a looser profile, or removing a project's, from an agent's pane waits for your approval in a popup, as <code>corral config</code> does. The profile in effect shows in the variables pane's header (in the accent colour when it is sensitive), and <code>corral context</code> gives it to the agent.</p>
-    <p><strong>What a project's profile follows.</strong> Sessions, by the folder they work in: the one they started in, and the one they are in now, which Corral reads from the process itself (<code>/proc/PID/cwd</code>), so a <code>setwd()</code> or <code>os.chdir()</code> counts at once. A request that moves into a sensitive project gets that project's output for its own result, with a note saying so, and the next request already asks; approval can't be asked after the fact, so what that one request ran, it ran. It doesn't follow files: code that reads a project's files by absolute path from a session in another folder isn't covered, and approved code can do anything your user can (read any file, use the network). For data no agent may reach, make <code>sensitive</code> your global profile on that machine, and deny the agent's own tools those folders (below).</p>
-    <p><strong>In a team.</strong> A project's profile is set by each person, in their own Corral: cloning a repository doesn't bring it, by design, so a repository can't loosen anyone's rules. Make <code>corral profile sensitive --project</code> part of setting up a machine for that project. In the palette: "Agents: open profile", "standard profile", "sensitive profile", "this project is sensitive" and "this project follows the global profile". Working out the rules for a request takes about 2 µs.</p>
+    <p>Three names for these settings, <code>open</code>, <code>standard</code> and <code>sensitive</code>, set in one step for all your work or for one project folder, the stricter winning: <code>corral profile sensitive --project</code>. They have a page of their own: <a href="profiles.html">Security profiles</a>.</p>
 
     <h3>Sensitive sessions</h3>
     <p>One session can be stricter than the rest. In R or Python:</p>
