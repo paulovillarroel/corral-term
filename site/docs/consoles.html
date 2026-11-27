@@ -145,6 +145,28 @@
     <p> An agent whose request was running hears at once that the console ended, instead of waiting out its timeout. If R crashes again right after starting, the console stops and leaves the shell, so a broken R doesn't restart over and over.</p>
 
     <h2 id="checkpoints">Objects that outlive a crash</h2>
+    <figure class="arch" tabindex="0" aria-label="Diagram: When R crashes">
+      <svg viewBox="0 0 760 260" role="img" aria-labelledby="crash-t crash-d">
+        <title id="crash-t">When R crashes</title>
+        <desc id="crash-d">When R ends without being closed, Corral's console says why in words, from the signal and the system's out-of-memory count, and starts Ark again in the same pane, unless R had run for less than 5 seconds. The new R loads Corral, which reads the session's checkpoint in the same project folder: the packages, the objects and the newest 30 plots come back, and the console says how long it took and what came back before anything typed meanwhile runs.</desc>
+        <defs><marker id="crash-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="eng"><rect x="10" y="30" width="170" height="62" rx="6"/><text class="t" x="95" y="50" text-anchor="middle" dominant-baseline="central">R ends</text><text class="s" x="95" y="72" text-anchor="middle" dominant-baseline="central">crash, kill, no memory</text></g>
+        <line class="arr" x1="182" y1="61" x2="198" y2="61" marker-end="url(#crash-arrow)"/>
+        <g class="core"><rect x="200" y="30" width="170" height="62" rx="6"/><text class="t" x="285" y="50" text-anchor="middle" dominant-baseline="central">Corral's console</text><text class="s" x="285" y="72" text-anchor="middle" dominant-baseline="central">says why, in words</text></g>
+        <line class="arr" x1="372" y1="61" x2="388" y2="61" marker-end="url(#crash-arrow)"/>
+        <g class="core"><rect x="390" y="30" width="170" height="62" rx="6"/><text class="t" x="475" y="50" text-anchor="middle" dominant-baseline="central">Ark starts again</text><text class="s" x="475" y="72" text-anchor="middle" dominant-baseline="central">same pane, new session</text></g>
+        <line class="arr" x1="562" y1="61" x2="578" y2="61" marker-end="url(#crash-arrow)"/>
+        <g class="eng"><rect x="580" y="30" width="170" height="62" rx="6"/><text class="t" x="665" y="50" text-anchor="middle" dominant-baseline="central">R loads Corral</text><text class="s" x="665" y="72" text-anchor="middle" dominant-baseline="central">reads the checkpoint</text></g>
+        <line class="no" x1="475" y1="94" x2="475" y2="114"/>
+        <line class="no" x1="465" y1="114" x2="485" y2="114"/>
+        <text class="no-t" x="475" y="128" text-anchor="middle" dominant-baseline="central">ran under 5 s: it stops</text>
+        <g class="out"><rect x="580" y="150" width="170" height="62" rx="6"/><text class="t" x="665" y="170" text-anchor="middle" dominant-baseline="central">Checkpoint</text><text class="s" x="665" y="192" text-anchor="middle" dominant-baseline="central">copy on disk, this project</text></g>
+        <line class="arr" x1="665" y1="148" x2="665" y2="96" marker-end="url(#crash-arrow)"/>
+        <line class="arr" x1="578" y1="181" x2="562" y2="181" marker-end="url(#crash-arrow)"/>
+        <g class="eng"><rect x="200" y="150" width="360" height="62" rx="6"/><text class="t" x="380" y="170" text-anchor="middle" dominant-baseline="central">Back in X s</text><text class="s" x="380" y="192" text-anchor="middle" dominant-baseline="central">packages, objects, the newest 30 plots</text></g>
+        <text class="s" x="380" y="236" text-anchor="middle" dominant-baseline="central">said before anything you typed meanwhile runs</text>
+      </svg>
+    </figure>
     <p>Corral keeps a checkpoint of the objects of each R and Python console. If the session ends without you closing it (R or Python crashed, or herdr or WSL closed), the next console in the same project gets them back and says which:</p>
     <pre><code>[corral] Restored 12 objects (sales, model, clean, …), 2 packages (dplyr, ggplot2) and 4 plots from the R that ended without being closed (2026-11-23 14:32), first in Mirador (ctrl+b f).
 [corral] Not kept: con (a connection).</code></pre>

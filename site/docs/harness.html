@@ -57,6 +57,33 @@
     <p class="intro">The harness is what stands between your agent and your live R or Python session: a few commands the agent calls, a skill that teaches it how, and rules that Corral enforces around every call, in its own code, whatever the model was told. This page is the map; each part links to its details.</p>
 
     <h2 id="a-request">The life of a request</h2>
+    <figure class="arch" tabindex="0" aria-label="Diagram: The life of a request">
+      <svg viewBox="0 0 760 340" role="img" aria-labelledby="life-t life-d">
+        <title id="life-t">The life of a request</title>
+        <desc id="life-d">Your agent calls corral eval. Corral works out your rules for that session (global profile, project, session mark), asks for your approval when the rules say so (n, or no answer in 5 minutes, and nothing runs), and types the code in your console, one request at a time. The objects and plots stay in your session. Corral looks again at where the session ended up, returns everything, your review of it, or only its structure, and the agent reads what the rules allow. Every request goes in the audit log.</desc>
+        <defs><marker id="life-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="ui"><rect x="10" y="40" width="170" height="62" rx="6"/><text class="t" x="95" y="60" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="95" y="82" text-anchor="middle" dominant-baseline="central">calls corral eval</text></g>
+        <line class="arr" x1="182" y1="71" x2="198" y2="71" marker-end="url(#life-arrow)"/>
+        <g class="core"><rect x="200" y="40" width="170" height="62" rx="6"/><text class="t" x="285" y="60" text-anchor="middle" dominant-baseline="central">Your rules</text><text class="s" x="285" y="82" text-anchor="middle" dominant-baseline="central">profile + session mark</text></g>
+        <line class="arr" x1="372" y1="71" x2="388" y2="71" marker-end="url(#life-arrow)"/>
+        <g class="core"><rect x="390" y="40" width="170" height="62" rx="6"/><text class="t" x="475" y="60" text-anchor="middle" dominant-baseline="central">Your approval</text><text class="s" x="475" y="82" text-anchor="middle" dominant-baseline="central">with ask: Enter or n</text></g>
+        <line class="arr" x1="562" y1="71" x2="578" y2="71" marker-end="url(#life-arrow)"/>
+        <g class="eng"><rect x="580" y="40" width="170" height="62" rx="6"/><text class="t" x="665" y="60" text-anchor="middle" dominant-baseline="central">Your console</text><text class="s" x="665" y="82" text-anchor="middle" dominant-baseline="central">typed where you see it</text></g>
+        <line class="no" x1="475" y1="104" x2="475" y2="124"/>
+        <line class="no" x1="465" y1="124" x2="485" y2="124"/>
+        <text class="no-t" x="475" y="138" text-anchor="middle" dominant-baseline="central">n, or 5 min: nothing runs</text>
+        <line class="arr" x1="665" y1="104" x2="665" y2="168" marker-end="url(#life-arrow)"/>
+        <g class="eng"><rect x="580" y="170" width="170" height="62" rx="6"/><text class="t" x="665" y="190" text-anchor="middle" dominant-baseline="central">Your session</text><text class="s" x="665" y="212" text-anchor="middle" dominant-baseline="central">objects and plots stay</text></g>
+        <line class="arr" x1="578" y1="201" x2="562" y2="201" marker-end="url(#life-arrow)"/>
+        <g class="core"><rect x="390" y="170" width="170" height="62" rx="6"/><text class="t" x="475" y="190" text-anchor="middle" dominant-baseline="central">Rules again</text><text class="s" x="475" y="212" text-anchor="middle" dominant-baseline="central">where it ended up</text></g>
+        <line class="arr" x1="388" y1="201" x2="372" y2="201" marker-end="url(#life-arrow)"/>
+        <g class="core"><rect x="200" y="170" width="170" height="62" rx="6"/><text class="t" x="285" y="190" text-anchor="middle" dominant-baseline="central">What comes back</text><text class="s" x="285" y="212" text-anchor="middle" dominant-baseline="central">full · review · structure</text></g>
+        <line class="arr" x1="198" y1="201" x2="182" y2="201" marker-end="url(#life-arrow)"/>
+        <g class="ui"><rect x="10" y="170" width="170" height="62" rx="6"/><text class="t" x="95" y="190" text-anchor="middle" dominant-baseline="central">Your agent</text><text class="s" x="95" y="212" text-anchor="middle" dominant-baseline="central">reads what it may</text></g>
+        <g class="out"><rect x="10" y="262" width="740" height="36" rx="6"/><text class="t" x="380" y="280" text-anchor="middle" dominant-baseline="central">Audit log: every request, its code and what happened</text></g>
+        <g class="legend"><rect class="ui-k" x="10" y="314" width="12" height="12" rx="3"/><text class="s" x="28" y="320" dominant-baseline="central">the agent</text><rect class="core-k" x="120" y="314" width="12" height="12" rx="3"/><text class="s" x="138" y="320" dominant-baseline="central">Corral</text><rect class="eng-k" x="210" y="314" width="12" height="12" rx="3"/><text class="s" x="228" y="320" dominant-baseline="central">your session, in plain sight</text></g>
+      </svg>
+    </figure>
     <ol>
       <li><strong>The agent asks.</strong> To look, <code>corral vars --json</code> and <code>corral context --json</code>, which run nothing. To run code, <code>corral eval</code>.</li>
       <li><strong>Corral works out the rules for that session:</strong> your global profile, the project's, and the session's own mark, the stricter winning. It reads the folder the session is in from the process itself, so a <code>setwd()</code> counts at once.</li>

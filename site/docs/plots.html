@@ -105,7 +105,27 @@
     <h2 id="after-a-crash">After a crash</h2>
     <p>Your plots outlive a crash. In R, one small process per session (<code>corral _keep-plots</code>) copies each new plot into the session's checkpoint, the newest 30, as SVG (up to 20 MB) and PNG; Python's checkpoint writes its figures. The next console in the project shows them first, in Mirador and in the terminal's viewer (<a href="consoles.html#survives">what survives what</a>). Mirador's Delete removes a plot from the history and from that copy, so a deleted plot doesn't come back.</p>
 
-    <h2>Plot objects</h2>
+        <figure class="arch" tabindex="0" aria-label="Diagram: Where a plot goes">
+      <svg viewBox="0 0 760 230" role="img" aria-labelledby="plotway-t plotway-d">
+        <title id="plotway-t">Where a plot goes</title>
+        <desc id="plotway-d">A plot drawn in R by httpgd, or a matplotlib figure in Python, changes a small file, plots-rev, after the command. Mirador's server, on 127.0.0.1 behind a token, waits on that file and shows the plot in your browser about 80 ms later. In R, a small watcher per session (corral _keep-plots) copies each new plot into the checkpoint, the newest 30 as SVG and PNG, and the next console in the project shows them first after a crash.</desc>
+        <defs><marker id="plotway-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="eng"><rect x="10" y="30" width="170" height="62" rx="6"/><text class="t" x="95" y="50" text-anchor="middle" dominant-baseline="central">plot()</text><text class="s" x="95" y="72" text-anchor="middle" dominant-baseline="central">httpgd · matplotlib</text></g>
+        <line class="arr" x1="182" y1="61" x2="198" y2="61" marker-end="url(#plotway-arrow)"/>
+        <g class="core"><rect x="200" y="30" width="170" height="62" rx="6"/><text class="t" x="285" y="50" text-anchor="middle" dominant-baseline="central">plots-rev</text><text class="s" x="285" y="72" text-anchor="middle" dominant-baseline="central">changes after the command</text></g>
+        <line class="arr" x1="372" y1="61" x2="388" y2="61" marker-end="url(#plotway-arrow)"/>
+        <g class="core"><rect x="390" y="30" width="170" height="62" rx="6"/><text class="t" x="475" y="50" text-anchor="middle" dominant-baseline="central">Mirador</text><text class="s" x="475" y="72" text-anchor="middle" dominant-baseline="central">127.0.0.1 · token</text></g>
+        <line class="arr" x1="562" y1="61" x2="578" y2="61" marker-end="url(#plotway-arrow)"/>
+        <g class="ui"><rect x="580" y="30" width="170" height="62" rx="6"/><text class="t" x="665" y="50" text-anchor="middle" dominant-baseline="central">Your browser</text><text class="s" x="665" y="72" text-anchor="middle" dominant-baseline="central">about 80 ms later</text></g>
+        <line class="arr" x1="285" y1="94" x2="285" y2="140" marker-end="url(#plotway-arrow)"/>
+        <g class="core"><rect x="200" y="142" width="170" height="62" rx="6"/><text class="t" x="285" y="162" text-anchor="middle" dominant-baseline="central">Plot watcher</text><text class="s" x="285" y="184" text-anchor="middle" dominant-baseline="central">corral _keep-plots</text></g>
+        <line class="arr" x1="372" y1="173" x2="388" y2="173" marker-end="url(#plotway-arrow)"/>
+        <g class="out"><rect x="390" y="142" width="170" height="62" rx="6"/><text class="t" x="475" y="162" text-anchor="middle" dominant-baseline="central">Checkpoint</text><text class="s" x="475" y="184" text-anchor="middle" dominant-baseline="central">the newest 30, SVG + PNG</text></g>
+        <line class="arr" x1="562" y1="173" x2="578" y2="173" marker-end="url(#plotway-arrow)"/>
+        <g class="eng"><rect x="580" y="142" width="170" height="62" rx="6"/><text class="t" x="665" y="162" text-anchor="middle" dominant-baseline="central">After a crash</text><text class="s" x="665" y="184" text-anchor="middle" dominant-baseline="central">shown first again</text></g>
+      </svg>
+    </figure>
+<h2>Plot objects</h2>
     <p>Plots saved in variables (<code>ggplot</code>, <code>lattice</code>, <code>patchwork</code>) appear in the Plots tab of the variables pane. <kbd>Enter</kbd> on one draws it and opens it in Mirador. A plot object that is already drawn opens without being drawn again.</p>
 
     <h2 id="python-figures">Python figures</h2>

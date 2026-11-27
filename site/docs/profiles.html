@@ -79,6 +79,23 @@
     <p><code>corral profile</code> shows the global profile, this project's, and the rules that result here; <code>--json</code> gives the same to scripts (<code>global</code>, <code>project</code> with its folder and profile, the resulting <code>profile</code>, <code>access</code>, <code>output</code> and <code>sensitive</code>, and every project with a profile). The variables pane's header names the profile in effect, <code>profile: open</code> say, in the accent colour when it is sensitive, and <code>corral context</code> gives it to the agent.</p>
 
     <h2 id="stricter-wins">The stricter wins</h2>
+    <figure class="arch" tabindex="0" aria-label="Diagram: How a request's rules are worked out">
+      <svg viewBox="0 0 760 330" role="img" aria-labelledby="rules-t rules-d">
+        <title id="rules-t">How a request's rules are worked out</title>
+        <desc id="rules-d">Three things feed each request's rules: your global profile, the profile of the strictest project folder the session started in or is in now, and the session's own mark from corral_sensitive(). Corral takes the stricter of each part: who approves (off, then ask, then on) and what comes back (structure, then review, then full). The result, access, output and the profile's name, is what corral eval, corral vars --json, corral context and the variables pane use.</desc>
+        <defs><marker id="rules-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g class="ui"><rect x="10" y="20" width="236" height="62" rx="6"/><text class="t" x="128" y="40" text-anchor="middle" dominant-baseline="central">Global profile</text><text class="s" x="128" y="62" text-anchor="middle" dominant-baseline="central">corral profile …</text></g>
+        <g class="ui"><rect x="262" y="20" width="236" height="62" rx="6"/><text class="t" x="380" y="40" text-anchor="middle" dominant-baseline="central">Project profile</text><text class="s" x="380" y="62" text-anchor="middle" dominant-baseline="central">the strictest folder it is in</text></g>
+        <g class="ui"><rect x="514" y="20" width="236" height="62" rx="6"/><text class="t" x="632" y="40" text-anchor="middle" dominant-baseline="central">Session mark</text><text class="s" x="632" y="62" text-anchor="middle" dominant-baseline="central">corral_sensitive()</text></g>
+        <line class="arr" x1="128" y1="84" x2="300" y2="130" marker-end="url(#rules-arrow)"/>
+        <line class="arr" x1="380" y1="84" x2="380" y2="130" marker-end="url(#rules-arrow)"/>
+        <line class="arr" x1="632" y1="84" x2="460" y2="130" marker-end="url(#rules-arrow)"/>
+        <g class="core"><rect x="180" y="132" width="400" height="66" rx="6"/><text class="t" x="380" y="154" text-anchor="middle" dominant-baseline="central">Stricter wins, part by part</text><text class="s" x="380" y="176" text-anchor="middle" dominant-baseline="central">off &lt; ask &lt; on · structure &lt; review &lt; full</text></g>
+        <line class="arr" x1="380" y1="200" x2="380" y2="228" marker-end="url(#rules-arrow)"/>
+        <g class="eng"><rect x="180" y="230" width="400" height="62" rx="6"/><text class="t" x="380" y="250" text-anchor="middle" dominant-baseline="central">This request's rules</text><text class="s" x="380" y="272" text-anchor="middle" dominant-baseline="central">access · output · profile</text></g>
+        <text class="s" x="380" y="314" text-anchor="middle" dominant-baseline="central">used by corral eval, corral vars --json, corral context and the variables pane</text>
+      </svg>
+    </figure>
     <p>Corral works out each request's rules from your global profile, the project's and the session's own mark (<code>corral_sensitive()</code>), and takes the strictest of each part: who approves (<code>off</code> before <code>ask</code> before <code>on</code>) and what comes back (<code>structure</code> before <code>review</code> before <code>full</code>). Nested projects with different profiles get the strictest of them. A session that started in a sensitive project stays sensitive if it moves to another folder. In a sensitive project, <code>review</code> becomes <code>structure</code>; a session marked only with <code>corral_sensitive()</code> keeps your review. A mix that isn't one of the three profiles shows as <code>custom</code>.</p>
     <p>Making things stricter never asks. A looser profile, or removing a project's, from an agent's pane waits for your approval in a popup, as <code>corral config</code> does.</p>
 

@@ -61,7 +61,7 @@
 
     <h2 id="the-agent-harness">The agent harness</h2>
     <p>Corral is the harness between your agent and your live session: a few commands the agent calls from its own shell, a skill that teaches it when and how to call them, and rules that Corral enforces around every call. The agent gets no hidden channel into your session. Everything it runs is typed into the console you are looking at, it waits its turn, and what it gets back depends on what you allow.</p>
-    <figure class="arch">
+    <figure class="arch" tabindex="0" aria-label="Diagram: Corral as the agent harness">
       <svg viewBox="0 0 680 300" role="img" aria-labelledby="harness-t harness-d">
         <title id="harness-t">Corral as the agent harness</title>
         <desc id="harness-d">The agent calls corral eval; Corral checks what you allow, asks you if needed and queues it; the code runs in your console, where you see it; Corral returns the output or only its structure to the agent and records the request in the audit log.</desc>
