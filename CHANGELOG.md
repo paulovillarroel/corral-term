@@ -2,7 +2,9 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.29
+
+On a shared machine, other users can no longer read your R session: Ark talks to Corral over Unix sockets in its private folder. Keys only from the system's random source, and a threat model in the docs.
 
 - Ark now listens on Unix sockets in Corral's own folder (`~/.local/state/corral/ark`, which only you can open) instead of TCP ports on 127.0.0.1. On TCP, any user on the same machine could subscribe to Ark's output channel (IOPub) without the key and read, live, the code each session ran and everything R printed: the key signs each message but doesn't hide it. A test reproduced it, reading a value printed by R from a second process that never saw the key. Only shared machines were exposed; on a laptop or WSL with one user there was no one else to read it. TCP stays as a fallback when the folder's path is too long for a socket (over about 100 characters), and for the Jupyter console frontend (`ark_frontend jupyter`), whose client names the sockets differently. The console removes Ark's sockets with its connection file when it ends or starts R again; those a console that was killed leaves go once their connection file does (two days) and nothing answers on them. A live test checks that the connection file says `ipc`, that the sockets are in the private folder and that Ark has no TCP port open.
 - Ark's key and a new Mirador token come only from the system's random source (`/dev/urandom`); if it can't be read, Ark doesn't start, and Mirador doesn't when it has to make a token, with a message saying why. Before, a fallback used the clock, fine for file names but guessable for a key. Mirador keeps the token it already has in `mirador.json`; delete that file for a new one.
