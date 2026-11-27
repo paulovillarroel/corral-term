@@ -146,6 +146,7 @@
     <pre><code><span class="p">$ </span>corral audit
 <span class="p">$ </span>corral audit --last 100 --json</code></pre>
     <p>Every request is written to <code>~/.local/state/corral/audit.jsonl</code>, one JSON line each: when, which agent pane and workspace, the language (R, Python, or SQL with the console it ran in), the access level and output mode, whether it ran, was refused, blocked, left unanswered or never got to run (no console, busy, its turn didn't come), its status, how much it printed and returned, how many plots it shared, and the code itself. It doesn't keep what the code printed. The log stays on your machine, readable only by you, and entries older than 90 days are deleted. <code>corral config audit_days</code> changes that: a number of days, or <code>forever</code>. The palette has 30 days, 90 days and a year ("Agents: keep the audit log…").</p>
+    <p>It is an operational record, not a tamper-evident one: other users can't open it, but anything running as you can edit or delete it, an agent with an unrestricted shell included. Where it has to hold up, copy each line as it is written to somewhere your user can't change, such as your organization's central log.</p>
 
     <h3>Limits that are always on</h3>
     <ul>
@@ -172,6 +173,7 @@
     </tbody>
     </table>
     <p>Script drafts go in <code>.corral/</code> inside your project, which git ignores, or in a private temporary folder when there is no project. A draft no editor has open is deleted, and so are folders older than two days. Uninstalling leaves <code>~/.local/state/corral</code> in place; delete it if you won't come back.</p>
+    <p>Corral doesn't encrypt these files. The 700 keeps other users out, not programs running as you, and backups or snapshots of your home folder copy them like any other file. Deleting a file doesn't wipe it from the disk either. For a lost or stolen machine, turn on the system's disk encryption; for data whose copy mustn't exist at all, <code>corral config checkpoints off</code>.</p>
 
     <h2>What Corral doesn't do</h2>
     <ul>

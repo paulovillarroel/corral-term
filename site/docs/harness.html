@@ -67,7 +67,7 @@
     </ol>
 
     <h2 id="who-decides">Who decides what</h2>
-    <p>You do. Every control is in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, type <code>agents</code>), and none of them can be loosened by an agent without your yes in a popup.</p>
+    <p>You do. Every control is in the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>, type <code>agents</code>), and an agent can't loosen any of them through Corral's own commands without your yes in a popup. An agent with an unrestricted shell can go around those commands; its own permissions are what stop it (<a href="security.html#what-corral-doesn-t-do">details</a>).</p>
     <table>
     <thead><tr><th>Control</th><th>What it decides</th><th>Details</th></tr></thead>
     <tbody>
@@ -97,7 +97,7 @@
       <li><strong>What the agent reads goes to its model provider.</strong> Restricted output keeps values out of replies; for data that must not leave your organization, choose where the model runs.</li>
       <li><strong>Profiles follow folders, not files.</strong> A project's profile applies to sessions working in that folder; code reading its files by absolute path from elsewhere isn't covered.</li>
     </ul>
-    <p>The <a href="security.html">Security model</a> explains each of these and has a <a href="security.html#for-sensitive-data">setup for sensitive data</a>.</p>
+    <p>The <a href="security.html">Security model</a> explains each of these and has a <a href="security.html#for-sensitive-data">setup for sensitive data</a>. The <a href="threats.html">Threat model</a> sets them against the threats, one by one.</p>
 
     <div class="pager"></div>
   </main>
