@@ -235,6 +235,7 @@ const ACTIONS: &[(&str, Group, &str, &str)] = &[
     ("language-en", Group::Settings, "Language: English", "Language: English"),
     ("language-es", Group::Settings, "Idioma: español", "Idioma: español"),
     ("update", Group::Settings, "Update: install the latest version of Corral", "Actualizar: instalar la última versión de Corral"),
+    ("update-look", Group::Settings, "Update: look for a newer version, without installing", "Actualizar: buscar una versión nueva, sin instalar"),
     ("update-check-on", Group::Settings, "Update: tell me when there is a new version", "Actualizar: avisarme cuando haya una versión nueva"),
     ("update-check-off", Group::Settings, "Update: don't check for new versions", "Actualizar: no revisar si hay versiones nuevas"),
     ("telemetry-on", Group::Settings, "Install count: count my installs anonymously", "Conteo de instalaciones: contar las mías de forma anónima"),
@@ -250,6 +251,12 @@ fn action_label(id: &str, title: &str) -> (Group, String, usize) {
         Some(i) if id == "update" && crate::install::newer_version().is_some() => {
             let v = crate::install::newer_version().unwrap_or_default();
             (ACTIONS[i].1, trf!("Update: Corral {v} is out, install it", "Actualizar: salió Corral {v}, instalarla"), i)
+        }
+        // A month without looking: the entry says how long.
+        Some(i) if id == "update-look" && crate::install::check_reminder().is_some() => {
+            let d = crate::install::check_reminder().unwrap_or_default();
+            (ACTIONS[i].1, trf!("Update: look for a newer version ({d} days since the last look)",
+                                "Actualizar: buscar una versión nueva (hace {d} días que no se busca)"), i)
         }
         Some(i) => (ACTIONS[i].1, tr(ACTIONS[i].2, ACTIONS[i].3).to_string(), i),
         None => (Group::Layout, tidy(title), ACTIONS.len()),
