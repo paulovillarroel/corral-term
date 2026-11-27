@@ -711,10 +711,12 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     cfg.set(key, value.as_str().into());
     write_config(&cfg);
     // Off means no copy on disk: those of consoles that have ended go now, and each
-    // running console deletes its own at its next command.
-    if key == "checkpoints" && value == "off" {
-        env::remove_ended_checkpoints(&env::state_dir().join("checkpoints"));
-    }
+    // running console deletes its own at its next command. What can't be deleted is said.
+    let left = if key == "checkpoints" && value == "off" {
+        env::remove_ended_checkpoints(&env::state_dir().join("checkpoints")).1
+    } else {
+        Vec::new()
+    };
     // The security settings come from the palette too: say what they mean.
     let meaning = meaning_of(key, value).or_else(|| match (key.as_str(), value.as_str()) {
         ("checkpoints", "on") => Some((tr("Checkpoints: on", "Respaldos: activados").to_string(), tr("If R or Python crashes, the next console in the project gets the objects back.", "Si R o Python se cae, la próxima consola del proyecto recupera los objetos.").to_string())),
@@ -732,6 +734,10 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     match meaning {
         Some((title, body)) => say(&title, &body),
         None => println!("{key} = {value}"),
+    }
+    if !left.is_empty() {
+        eprintln!("{}", trf!("[corral] Some checkpoints couldn't be deleted; remove them by hand:\n  {}",
+                             "[corral] Algunos respaldos no se pudieron borrar; bórralos a mano:\n  {}", left.join("\n  ")));
     }
     Ok(())
 }

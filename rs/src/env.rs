@@ -189,24 +189,40 @@ pub fn sessions() -> Vec<Value> {
 }
 
 /// Is the process running? A zombie (ended, not yet collected) counts as ended.
-/// Checkpoint folders whose console has ended, closed or not, removed; returns how many.
-/// Each is named after its console's pid (r-PANE-PID, py-PANE-PID); a running console's
-/// is left to that console, which deletes it at its next command when checkpoints are off.
-pub fn remove_ended_checkpoints(dir: &Path) -> usize {
-    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
-    let mut removed = 0;
-    for e in entries.flatten() {
+/// Checkpoint folders whose console has ended, closed or not, removed: how many, and
+/// what couldn't be (folder or listing, with why), so nobody is told they are gone when
+/// they aren't. Each is named after its console's pid (r-PANE-PID, py-PANE-PID); a
+/// running console's is left to that console, which deletes it at its next command when
+/// checkpoints are off. No folder at all is nothing to remove.
+pub fn remove_ended_checkpoints(dir: &Path) -> (usize, Vec<String>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (0, Vec::new()),
+        Err(e) => return (0, vec![format!("{}: {e}", dir.display())]),
+    };
+    let (mut removed, mut failed) = (0, Vec::new());
+    for e in entries {
+        let e = match e {
+            Ok(e) => e,
+            Err(err) => {
+                failed.push(format!("{}: {err}", dir.display()));
+                continue;
+            }
+        };
         if !e.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
         }
         let name = e.file_name().to_string_lossy().into_owned();
         let pid = name.rsplit('-').next().and_then(|p| p.parse::<i64>().ok());
-        let ended = e.path().join("closed").exists() || !pid.is_some_and(pid_alive);
-        if ended && std::fs::remove_dir_all(e.path()).is_ok() {
-            removed += 1;
+        if !(e.path().join("closed").exists() || !pid.is_some_and(pid_alive)) {
+            continue;
+        }
+        match std::fs::remove_dir_all(e.path()) {
+            Ok(()) => removed += 1,
+            Err(err) => failed.push(format!("{}: {err}", e.path().display())),
         }
     }
-    removed
+    (removed, failed)
 }
 
 pub fn pid_alive(pid: i64) -> bool {
@@ -568,11 +584,21 @@ mod tests {
         }
         std::fs::write(dir.join(format!("py-w1-p3-{me}")).join("closed"), "").unwrap(); // closed on purpose
         std::fs::write(dir.join("notes.txt"), "").unwrap(); // not a folder: left alone
-        assert_eq!(remove_ended_checkpoints(&dir), 3);
+        assert_eq!(remove_ended_checkpoints(&dir), (3, vec![]));
         assert!(dir.join(format!("r-w1-p2-{me}")).is_dir(), "a running console's copy stays");
         assert!(!dir.join(format!("py-w1-p3-{me}")).exists() && !dir.join("r-w1-p4-999999999").exists() && !dir.join("py-pid-999999998").exists());
         assert!(dir.join("notes.txt").exists());
-        assert_eq!(remove_ended_checkpoints(&dir.join("missing")), 0);
+        assert_eq!(remove_ended_checkpoints(&dir.join("missing")), (0, vec![]));
+        // One that can't be removed is reported, not counted.
+        use std::os::unix::fs::PermissionsExt;
+        let stuck = dir.join("r-w1-p5-999999997");
+        std::fs::create_dir_all(stuck.join("plots")).unwrap();
+        std::fs::write(stuck.join("plots/1.png"), "").unwrap();
+        std::fs::set_permissions(stuck.join("plots"), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let (removed, failed) = remove_ended_checkpoints(&dir);
+        std::fs::set_permissions(stuck.join("plots"), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(removed, 0);
+        assert!(failed.len() == 1 && failed[0].contains("r-w1-p5-999999997"), "{failed:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
