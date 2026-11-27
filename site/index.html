@@ -506,8 +506,9 @@
     v.addEventListener("pause", () => { if (!ours) follow = false; ours = false; });
     v.addEventListener("play", () => { follow = true; });
     // isIntersecting is true from the first pixel: play from a quarter on screen, pause
-    // once it has left entirely.
-    new IntersectionObserver(([e]) => {
+    // once it has left entirely. Several entries can come at once: the last one counts.
+    new IntersectionObserver((entries) => {
+      const e = entries[entries.length - 1];
       if (e.intersectionRatio >= 0.25) { if (follow && v.paused) v.play().catch(() => {}); }
       else if (!e.isIntersecting && !v.paused) { ours = true; v.pause(); }
     }, { threshold: [0, 0.25] }).observe(v);
