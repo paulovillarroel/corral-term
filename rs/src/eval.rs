@@ -464,11 +464,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // instead of waiting out the timeout for an answer that will never come.
     let pid = session.get("pid").num().map(|p| p as i64);
     let (mut checked, mut ended) = (Instant::now(), false);
+    // Where the session goes while this runs: the code may move it into a stricter project.
+    let mut seen_cwd: Option<PathBuf> = None;
     while !result_file.exists() && Instant::now() < end {
         let waited = start.elapsed();
         std::thread::sleep(Duration::from_millis(if waited < Duration::from_secs(2) { 5 } else if waited < Duration::from_secs(15) { 25 } else { 100 }));
         if checked.elapsed() > Duration::from_millis(250) {
             checked = Instant::now();
+            if let Some(cwd) = crate::profile::live_cwd(&session) {
+                seen_cwd = Some(cwd);
+            }
             if pid.is_some_and(|p| !env::pid_alive(p)) && !result_file.exists() {
                 ended = true;
                 break;
@@ -476,6 +481,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
     let output = std::fs::read(&out_file).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
+    // The rules again, where the code left the session (or was last seen): a request that
+    // moved into a stricter project gets that project's output now, not the next time, and
+    // the session keeps the mark. Approval can't be asked after the fact; what goes back can.
+    let after = crate::profile::session_rules_seen(&sdir, &session, seen_cwd.as_deref());
+    let tightened = crate::profile::stricter_output(output_mode, after.output) != output_mode;
+    let output_mode = crate::profile::stricter_output(output_mode, after.output);
+    if tightened {
+        println!("{}", trf!("[corral] this request moved the session into a project whose profile is {}: you get what that profile allows, and so will every request to this session from now on.",
+                            "[corral] esta petición llevó la sesión a un proyecto con perfil {}: recibes lo que ese perfil permite, y así será en cada petición a esta sesión desde ahora.",
+                            crate::profile::shown(after.profile)));
+    }
     if ended {
         if output_mode == "full" && !output.trim().is_empty() {
             println!("{}", clip_output(output.trim_end(), o.max_chars, &out_file));
