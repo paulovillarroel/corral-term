@@ -486,6 +486,18 @@ kbd {
 .arch .eng rect, .arch .eng-k { fill: color-mix(in srgb, var(--accent) 13%, var(--chrome)); stroke: var(--accent); stroke-width: 1; }
 .arch .arr { stroke: var(--dim); stroke-width: 1.3; fill: none; }
 .arch marker path { stroke: var(--dim); }
+/* The security diagram: what leaves the machine, Corral's private folder, and what is kept out. */
+.arch .out rect { fill: none; stroke: var(--line-2); stroke-width: 1; }
+.arch .vault { fill: color-mix(in srgb, var(--accent) 5%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 5 4; }
+.arch .no { stroke: var(--warn); stroke-width: 1.5; fill: none; }
+.arch .no-t { fill: var(--warn); font: 12px var(--sans); }
+.security-arch { margin: 56px 0 0; }
+.security-arch svg { max-width: 860px; margin: 0 auto; }
+@media (max-width: 700px) {
+  /* Legible on a phone: it keeps its size and scrolls sideways. */
+  .security-arch { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .security-arch svg { min-width: 680px; }
+}
 
 /* FAQ: plain disclosure rows, the answer opens under its question. */
 .faq { padding: 104px 0 112px; border-top: 1px solid var(--line); }
