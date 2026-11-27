@@ -2,6 +2,11 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Ark's channels are private in every case. When Corral's folder has a path too long for a socket address, the sockets go in a new folder of their own with a short path, made 700, under `/run/user` or `/tmp`, and it goes when the console ends. The Jupyter console frontend (`ark_frontend jupyter`) uses Unix sockets too: its client names them `PATH-N` where Ark binds `PATH:N`, so Corral links one to the other on fixed ports before it starts. Before, both cases fell back to TCP on 127.0.0.1, where another user on the machine could read Ark's output; now that happens only if no private folder can be made. Tested with jupyter-console and with a state folder whose path is too long: R answers, and Ark has no TCP socket open.
+- The console makes Corral's folder private before Ark's sockets go in it, also when it is the first thing that creates it.
+
 ## 0.2.0
 
 A security release. Corral is for data work, often on records about people, and the last versions are about keeping that data where it belongs: Ark talks to Corral over private sockets, keys come only from the system's random source, a threat model says what is protected and what isn't, and now turning checkpoints off deletes the copies of your objects: at once for consoles that have ended, at its next command for one still open, naming any it couldn't delete.
