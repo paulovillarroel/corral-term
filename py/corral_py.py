@@ -557,6 +557,10 @@ class Checkpoints:
                 self.write(set(changed), full, names, modules)
                 if plots:
                     self.write_plots()
+                # Checkpoints turned off while it wrote, after its console may have ended
+                # and the cleanup run: the copy goes with what it wrote.
+                if setting("checkpoints") == "off":
+                    shutil.rmtree(self.dir, ignore_errors=True)
             finally:
                 os._exit(0)
         self.child = pid
@@ -565,6 +569,8 @@ class Checkpoints:
         """In the forked copy: write what changed, by hash, then the index."""
         import hashlib
         try:
+            if setting("checkpoints") == "off":
+                return  # turned off since this copy started: no folder at all
             self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             closed = self.dir / "closed"
             if closed.exists():
@@ -619,7 +625,7 @@ class Checkpoints:
                 os.replace(tmp, self.dir / file)
                 objects[n] = {"file": file, "hash": digest}
                 skipped.pop(n, None)
-            if closed.exists():
+            if closed.exists() or setting("checkpoints") == "off":
                 shutil.rmtree(self.dir, ignore_errors=True)
                 return
             write_json_atomic(index_path, {
@@ -637,6 +643,8 @@ class Checkpoints:
         figures no longer in the history go."""
         import hashlib
         try:
+            if setting("checkpoints") == "off" or not self.dir.is_dir():
+                return  # turned off, or the objects' copy found it closed: no folder made here
             d = self.dir / "plots"
             d.mkdir(parents=True, exist_ok=True, mode=0o700)
             pages = list(self.session.plots.pages)[-30:]  # the copy has no other threads: no lock

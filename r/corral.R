@@ -390,6 +390,8 @@ local({
   # printed: this copy has no console.
   write_checkpoint <- function(changed, full) {
     suppressWarnings(suppressMessages(tryCatch({
+      # Turned off since this copy started: no folder at all.
+      if (!checkpoints_on()) return(FALSE)
       dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE, mode = "0700")
       closed <- file.path(checkpoint_dir, "closed")
       if (file.exists(closed)) return(FALSE)
@@ -446,10 +448,13 @@ local({
         objects[[n]] <- list(file = file, hash = h)
         skipped[[n]] <- NULL
       }
-      if (file.exists(closed)) return(unlink(checkpoint_dir, recursive = TRUE))
+      if (file.exists(closed) || !checkpoints_on()) return(unlink(checkpoint_dir, recursive = TRUE))
       write_json_atomic(list(lang = "r", pid = r_pid, session = session_id, cwd = getwd(),
                              updated = as.numeric(Sys.time()), packages = .packages(),
                              objects = objects, skipped = skipped), index_file)
+      # Checkpoints turned off while it wrote, after its console may have ended and the
+      # cleanup run: the copy goes with what it wrote.
+      if (!checkpoints_on()) return(unlink(checkpoint_dir, recursive = TRUE))
       TRUE
     }, error = function(e) FALSE)))
   }
