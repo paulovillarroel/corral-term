@@ -189,6 +189,26 @@ pub fn sessions() -> Vec<Value> {
 }
 
 /// Is the process running? A zombie (ended, not yet collected) counts as ended.
+/// Checkpoint folders whose console has ended, closed or not, removed; returns how many.
+/// Each is named after its console's pid (r-PANE-PID, py-PANE-PID); a running console's
+/// is left to that console, which deletes it at its next command when checkpoints are off.
+pub fn remove_ended_checkpoints(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
+    let mut removed = 0;
+    for e in entries.flatten() {
+        if !e.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        let pid = name.rsplit('-').next().and_then(|p| p.parse::<i64>().ok());
+        let ended = e.path().join("closed").exists() || !pid.is_some_and(pid_alive);
+        if ended && std::fs::remove_dir_all(e.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 pub fn pid_alive(pid: i64) -> bool {
     match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
         // "pid (name) S ...": the state comes after the name, which may hold spaces.
@@ -537,6 +557,24 @@ pub fn sh_split(s: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checkpoints_of_ended_consoles_go_running_ones_stay() {
+        let dir = std::env::temp_dir().join(format!("corral-checkpoints-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let me = std::process::id();
+        for name in [format!("r-w1-p2-{me}"), format!("py-w1-p3-{me}"), "r-w1-p4-999999999".into(), "py-pid-999999998".into()] {
+            std::fs::create_dir_all(dir.join(&name)).unwrap();
+        }
+        std::fs::write(dir.join(format!("py-w1-p3-{me}")).join("closed"), "").unwrap(); // closed on purpose
+        std::fs::write(dir.join("notes.txt"), "").unwrap(); // not a folder: left alone
+        assert_eq!(remove_ended_checkpoints(&dir), 3);
+        assert!(dir.join(format!("r-w1-p2-{me}")).is_dir(), "a running console's copy stays");
+        assert!(!dir.join(format!("py-w1-p3-{me}")).exists() && !dir.join("r-w1-p4-999999999").exists() && !dir.join("py-pid-999999998").exists());
+        assert!(dir.join("notes.txt").exists());
+        assert_eq!(remove_ended_checkpoints(&dir.join("missing")), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn secrets_come_from_the_random_source() {

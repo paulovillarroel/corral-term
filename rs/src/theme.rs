@@ -710,10 +710,15 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
     confirm_if_loosened(&cfg, key, value)?;
     cfg.set(key, value.as_str().into());
     write_config(&cfg);
+    // Off means no copy on disk: those of consoles that have ended go now, and each
+    // running console deletes its own at its next command.
+    if key == "checkpoints" && value == "off" {
+        env::remove_ended_checkpoints(&env::state_dir().join("checkpoints"));
+    }
     // The security settings come from the palette too: say what they mean.
     let meaning = meaning_of(key, value).or_else(|| match (key.as_str(), value.as_str()) {
         ("checkpoints", "on") => Some((tr("Checkpoints: on", "Respaldos: activados").to_string(), tr("If R or Python crashes, the next console in the project gets the objects back.", "Si R o Python se cae, la próxima consola del proyecto recupera los objetos.").to_string())),
-        ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados").to_string(), tr("A crash loses the session's objects; existing checkpoints stay until a console starts.", "Una caída pierde los objetos de la sesión; los respaldos que había quedan hasta que abra una consola.").to_string())),
+        ("checkpoints", "off") => Some((tr("Checkpoints: off", "Respaldos: desactivados").to_string(), tr("A crash loses the session's objects. Copies of consoles that have ended are deleted now; each running console deletes its own at its next command.", "Una caída pierde los objetos de la sesión. Los respaldos de consolas que terminaron se borran ahora; cada consola abierta borra el suyo en su próximo comando.").to_string())),
         ("start", "r") => Some((tr("Corral starts with R", "Corral parte con R").to_string(), tr("New layouts open the R console and an R draft.", "Los layouts nuevos abren la consola de R y un borrador de R.").to_string())),
         ("start", "python") => Some((tr("Corral starts with Python", "Corral parte con Python").to_string(), tr("New layouts open the Python console and a Python draft.", "Los layouts nuevos abren la consola de Python y un borrador de Python.").to_string())),
         ("terminal_tab", "on") => Some((tr("Terminal tab: on", "Pestaña terminal: activada").to_string(), tr("A new layout opens a tab named terminal next to it, with a shell in the project folder.", "Un layout nuevo abre junto a él una pestaña llamada terminal, con una shell en la carpeta del proyecto.").to_string())),
