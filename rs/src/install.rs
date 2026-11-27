@@ -1796,7 +1796,7 @@ pub fn cmd_update(args: &[String], in_popup: bool) -> Result<(), String> {
     }
     // From the palette there is no terminal to show the installation: a popup has one.
     if !in_popup && std::env::var_os("HERDR_PLUGIN_ID").is_some() {
-        return crate::vars::open_popup("update", &[]);
+        return crate::vars::open_popup(if args.iter().any(|a| a == "--check") { "update-look" } else { "update" }, &[]);
     }
     let result = update(args.iter().any(|a| a == "--check"));
     if in_popup {
@@ -1819,6 +1819,7 @@ fn update(check: bool) -> Result<(), String> {
     let from_clone = done.get("in_place") != &Value::Bool(false);
     let tag = latest_tag()?;
     let latest = tag.trim_start_matches('v');
+    record_check(latest);
     match next_step(&have, latest, from_clone) {
         Next::UpToDate => {
             println!("{}", trf!("Corral {have} is the latest version.", "Corral {have} es la última versión."));
@@ -2048,6 +2049,35 @@ fn worth_telling(have: &str, latest: &str, told: Option<&str>) -> bool {
     as_tuple(latest) > as_tuple(have) && told != Some(latest)
 }
 
+/// A look for the latest version, made: when, and what it found. The daily check and
+/// `corral update` (with --check too) both count, so the reminder starts over.
+fn record_check(latest: &str) {
+    let path = update_state();
+    let mut st = env::read_json(&path);
+    st.set("checked", (now_secs() as f64).into());
+    st.set("latest", latest.into());
+    env::write_json(&path, &st);
+}
+
+/// After this many days without a look for a newer version, Corral says so.
+const REMIND_AFTER_DAYS: u64 = 30;
+
+/// Days since Corral last looked for a newer version, once they are REMIND_AFTER_DAYS or
+/// more: when the daily check doesn't run (the sensitive profile, update_check off) or
+/// can't reach GitHub, nothing else would say a newer one is out. Without a look yet, it
+/// counts from the installation. It reads two small files and asks nobody.
+pub fn check_reminder() -> Option<u64> {
+    let installed = std::fs::metadata(manifest()).and_then(|m| m.modified()).ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs());
+    let looked = env::read_json(&update_state()).get("checked").num().map(|c| c as u64);
+    reminder_days(looked.or(installed), now_secs())
+}
+
+fn reminder_days(last: Option<u64>, now: u64) -> Option<u64> {
+    let days = now.saturating_sub(last?) / 86_400;
+    (days >= REMIND_AFTER_DAYS).then_some(days)
+}
+
 /// Opening the workspace in `folder` calls this. At most once a day it starts `corral
 /// _update-check` on its own, which asks GitHub, so the layout never waits for the
 /// network. `corral config update_check off` stops it, and so does the sensitive
@@ -2097,6 +2127,20 @@ pub fn cmd_update_check() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A month without a look for a newer version, and Corral says how long it has been;
+    /// before that, or with no date at all, nothing.
+    #[test]
+    fn a_month_without_a_look_is_said() {
+        let day = 86_400;
+        let now = 1_800_000_000;
+        assert_eq!(reminder_days(Some(now - 29 * day), now), None);
+        assert_eq!(reminder_days(Some(now - 30 * day), now), Some(30));
+        assert_eq!(reminder_days(Some(now - 45 * day - 10), now), Some(45));
+        assert_eq!(reminder_days(None, now), None);
+        // A clock behind the last look counts as a look just made.
+        assert_eq!(reminder_days(Some(now + day), now), None);
+    }
 
     #[test]
     fn a_newer_version_is_shown_until_it_is_installed() {

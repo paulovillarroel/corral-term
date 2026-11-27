@@ -340,6 +340,13 @@ title = "Corral: update to the latest version"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["../rs/target/release/corral", "update"]
 
+# Whether there is a newer version, on request (the sensitive profile has no daily check).
+[[actions]]
+id = "update-look"
+title = "Corral: look for a newer version, without installing"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["../rs/target/release/corral", "update", "--check"]
+
 # Whether opening the workspace says when there is a newer version (corral config update_check).
 [[actions]]
 id = "update-check-on"
@@ -415,6 +422,15 @@ placement = "popup"
 width = "70%"
 height = "70%"
 command = ["../rs/target/release/corral", "_update"]
+
+# Whether there is a newer Corral, looked up on request and shown in a popup; nothing installed.
+[[panes]]
+id = "update-look"
+title = "Corral: is there a newer version?"
+placement = "popup"
+width = "60%"
+height = "40%"
+command = ["../rs/target/release/corral", "_update", "--check"]
 
 # The installed R (rig) or Python (uv) versions; Enter uses one.
 [[panes]]

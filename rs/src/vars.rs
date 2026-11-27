@@ -147,6 +147,9 @@ struct Viewer {
     theme_asked: Option<Instant>,
     /// A newer Corral, from the daily check: the hint row says so until you update.
     newer: Option<String>,
+    /// Days since Corral last looked for a newer version, after a month without a look
+    /// (the sensitive profile has no daily check): the same row says so.
+    remind: Option<u64>,
     newer_at: Instant,
     /// The security profile this session runs under (crate::profile), in the header.
     profile: &'static str,
@@ -351,9 +354,12 @@ impl Viewer {
                  "←/→ pestañas · ↑↓ mover · {action} · / buscar{quit} · ctrl+b space atajos")
         };
         // A newer Corral goes first on that row, in the accent colour, until you update.
-        let news = match (&self.newer, self.typing || !self.status.is_empty()) {
-            (Some(v), false) => trf!("Corral {v} is out: ctrl+b space → Update", "Salió Corral {v}: ctrl+b space → Actualizar"),
-            _ => String::new(),
+        let news = match (&self.newer, self.remind, self.typing || !self.status.is_empty()) {
+            (_, _, true) => String::new(),
+            (Some(v), _, _) => trf!("Corral {v} is out: ctrl+b space → Update", "Salió Corral {v}: ctrl+b space → Actualizar"),
+            // Short, to fit a narrow pane, as the notice above does.
+            (None, Some(d), _) => trf!("No update check in {d} days: ctrl+b space → Update", "{d} días sin revisar: ctrl+b space → Actualizar"),
+            (None, None, _) => String::new(),
         };
         let room = cols.saturating_sub(2);
         if news.is_empty() {
@@ -477,7 +483,7 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
         session, follow: !popup, keep_open: !popup, items: Vec::new(), meta: Value::obj(), rev: None,
         tab: 0, tab_chosen: false, sel: 0, top: 0, query: String::new(), typing: false, status: String::new(),
         tab_spans: Vec::new(), row_items: Vec::new(), colors: Colors::load(), theme_asked: None,
-        newer: crate::install::newer_version(), newer_at: Instant::now(), profile: "standard",
+        newer: crate::install::newer_version(), remind: crate::install::check_reminder(), newer_at: Instant::now(), profile: "standard",
     };
     v.load();
     v.profile = v.current_profile();
@@ -517,6 +523,9 @@ pub fn run(args: &[String], _all: &[String], popup: bool) -> Result<(), String> 
                     let newer = crate::install::newer_version();
                     changed |= newer != v.newer;
                     v.newer = newer;
+                    let remind = crate::install::check_reminder();
+                    changed |= remind != v.remind;
+                    v.remind = remind;
                     // The profile too: a setting or a project's profile may have changed.
                     let profile = v.current_profile();
                     changed |= profile != v.profile;
