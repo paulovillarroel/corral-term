@@ -2,6 +2,12 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
+## Unreleased
+
+- Ark's key and Mirador's token come only from the system's random source (`/dev/urandom`); if it can't be read, they don't start, with a message saying why. Before, a fallback used the clock, fine for file names but guessable for a key.
+- Python's plot server compares its token in constant time (`secrets.compare_digest`), and a token that isn't ASCII gets a 401 too.
+- The workflows' actions are pinned to a commit, with the version in a comment, since a tag can be moved and the release workflow's output is what gets attested.
+
 ## 0.1.28
 
 A request that moves into a sensitive project gets its rules at once.
