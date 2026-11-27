@@ -557,6 +557,21 @@ pub(crate) fn by_the_user() -> bool {
     std::io::stdin().is_terminal()
 }
 
+/// Whether an agent runs this command, for those only you may run (`corral send`):
+/// from a pane herdr sees an agent in, or from a shell outside herdr without a
+/// terminal. The palette, the editor's keys and your own terminal pass. Like
+/// by_the_user, it stops the plain way, not an agent set on passing for you.
+pub(crate) fn agent_caller() -> bool {
+    use std::io::IsTerminal;
+    if std::env::var_os("HERDR_PLUGIN_ID").is_some() {
+        return false;
+    }
+    match std::env::var("HERDR_PANE_ID") {
+        Ok(pane) => crate::herdr::agent_in(&pane).is_some(),
+        Err(_) => !std::io::stdin().is_terminal(),
+    }
+}
+
 /// What a harness setting means, for the notice and for the approval popup.
 fn meaning_of(key: &str, value: &str) -> Option<(String, String)> {
     let m = |t: &str, b: &str| Some((t.to_string(), b.to_string()));
@@ -691,6 +706,12 @@ pub fn cmd_config(args: &[String]) -> Result<(), String> {
                                    "Mirador dibuja los gráficos de R de este tamaño, sea cual sea su ventana; una ventana más chica los muestra reducidos.")),
         }
         return Ok(());
+    }
+    // Projects' profiles are a map, set one folder at a time with `corral profile`,
+    // which asks before loosening: a value here would replace all of them unasked.
+    if key == "projects" {
+        return Err(tr("a project's profile is set with corral profile open|standard|sensitive --project (or --project --clear)",
+                      "el perfil de un proyecto se fija con corral profile open|standard|sensitive --project (o --project --clear)").into());
     }
     if key == "checkpoint_max_mb" && !value.parse::<u64>().is_ok_and(|mb| mb >= 1) {
         return Err(tr("checkpoint_max_mb takes a size in MB (1 or more)", "checkpoint_max_mb acepta un tamaño en MB (1 o más)").into());

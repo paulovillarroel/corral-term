@@ -669,6 +669,12 @@ fn print_json(lang: Option<&str>) -> Result<(), String> {
     // values, which can be the data itself; dimensions and signatures stay.
     // review counts too: these previews would reach the agent without the user seeing them.
     let rules = crate::profile::session_rules(&dir, &session);
+    // agents off: no agent may touch the session, and this is how one would read it.
+    if rules.access == "off" {
+        eprintln!("{}", tr("corral: agents are off (corral config agents off), so corral vars --json lists nothing; corral config agents ask allows it",
+                           "corral: los agentes están desactivados (corral config agents off), así que corral vars --json no lista nada; corral config agents ask lo permite"));
+        std::process::exit(3);
+    }
     let restricted = rules.sensitive || matches!(rules.output, "structure" | "review");
     let mut vars = data.get("vars").clone();
     if restricted {
