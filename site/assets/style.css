@@ -109,6 +109,8 @@ code, kbd, pre, .mono, .card, .install, .stats, .meta { font-variant-ligatures: 
 .ver { margin-left: -10px; padding: 4px 7px; border: 1px solid var(--line-2); font: 500 11px/1 var(--mono); letter-spacing: 0.06em; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .ver:hover, .ver:focus-visible { color: var(--accent); border-color: var(--accent); }
 @media (max-width: 860px) { .ver { margin-left: 0; } }
+/* On the landing, between a phone and a wide screen, the menu needs the label's room. */
+@media (max-width: 1180px) { .logo .tag.wide { display: none; } }
 /* A phone needs the room for Docs, the theme and Install. */
 @media (max-width: 480px) { .ver { display: none; } }
 .nav { display: flex; align-items: center; gap: 22px; margin-left: auto; }
@@ -462,6 +464,8 @@ kbd {
 .tui-shot { margin: 0; border: 1px solid var(--line-2); background: #101010; min-width: 0; max-width: 100%; }
 .tui-bar { display: flex; justify-content: space-between; gap: 16px; padding: 9px 14px; border-bottom: 1px solid #2a2a2a; background: #161616; font: 12px/1 var(--mono); color: #8c8c8c; }
 .tui-shot pre { margin: 0; padding: 12px 14px 14px; color: #e6e6e6; background: none; border: 0; font: 12px/1.45 var(--mono); white-space: pre; overflow-x: auto; }
+/* Security: the same request seen from your console and from the agent, one over the other. */
+.security-shot pre + .tui-bar { border-top: 1px solid #2a2a2a; }
 @media (max-width: 1180px) {
   .split, .show-head, .show-grid, .mirador-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
 }

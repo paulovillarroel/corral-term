@@ -77,12 +77,13 @@
 <header class="top">
   <a class="logo" href="./">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
-    corral <span class="tag">agentic Data Science IDE</span>
+    corral <span class="tag wide">agentic Data Science IDE</span>
   </a>
   <a class="ver" href="https://github.com/paulovillarroel/corral-term/releases/tag/v0.1.29" title="What's new in Corral 0.1.29">v0.1.29</a>
   <nav class="nav">
     <a class="docs-link" href="docs/" data-text="Docs">Docs</a>
     <a class="hide-sm" href="#harness">Harness</a>
+    <a class="hide-sm" href="#security">Security</a>
     <a class="hide-sm" href="docs/performance.html">Performance</a>
     <a class="hide-sm" href="https://github.com/paulovillarroel/corral-term">GitHub</a>
     <span class="theme-switch"><button type="button" data-theme="ink">Ink</button><button type="button" data-theme="paper">Paper</button></span>
@@ -96,7 +97,7 @@
     <div class="hero-text">
       <div class="eyebrow">R, Python and SQL · in your terminal</div>
       <h1>An agentic Data Science IDE that opens in <em>milliseconds.</em></h1>
-      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R, Python and SQL, blazing fast with massive data, ready for professional work.</p>
+      <p class="lead">Corral is a terminal-native data science workspace, built with modern technology for the way data scientists work today and for working alongside AI agents, with no friction. For R, Python and SQL: blazing fast with massive data, careful with sensitive data, ready for professional work.</p>
       <div class="install">
         <code>curl -LsSf <span class="nw">https://corral-term.dev/install.sh</span> | sh</code>
         <button class="copy" type="button">Copy</button>
@@ -167,6 +168,38 @@
       <figure class="browser harness-shot">
         <div class="browser-bar"><i></i><i></i><i></i><span>Corral: approve the agent's code</span></div>
         <img src="assets/shots/harness.webp" width="2000" height="1170" loading="lazy" alt="Corral's approval popup over the IDE: Claude Code wants to run a plot in your R console; the exact code, which agent asks, what it will see back, and Enter to run it or n to refuse">
+      </figure>
+    </div>
+  </section>
+
+  <section class="showcase" id="security">
+    <div class="mirador-grid">
+      <div class="show-text">
+        <div class="section-label"><span>Security</span><span>for sensitive data</span></div>
+        <h2>Built for data you have to protect.</h2>
+        <p>Data science runs on records about people: patients, clients, students. Corral treats protecting them as part of the work. It decides how much of each result reaches your agent's model, keeps your sessions closed to everyone else on the machine, deletes its copies of your data when you ask, and writes down where its protection ends.</p>
+        <ul class="points">
+          <li><b>Values stay out</b><span>in a sensitive project the agent learns whether the code worked and the shape of your objects, never their values; your plots stay with you</span></li>
+          <li><b>Closed to others</b><span>on a shared server, other users can't read your sessions: R talks to Corral over sockets in a folder only you can open, and every local server asks for a token</span></li>
+          <li><b>No copies left</b><span>turn checkpoints off and the copies of your objects on disk are deleted, not just no longer made</span></li>
+          <li><b>Verified install</b><span>every download checked by SHA-256 and build provenance before it runs; no sudo; Corral itself has no third-party Rust dependencies</span></li>
+          <li><b>Honest limits</b><span>a threat model that says what Corral protects, from whom, and what stays with your agent's permissions, its model provider and your machine</span></li>
+        </ul>
+        <p class="more-links"><a href="docs/threats.html">Threat model</a><a href="docs/security.html#for-sensitive-data">Setup for sensitive data</a><a href="docs/security.html">Security model</a></p>
+      </div>
+      <figure class="tui-shot security-shot" role="img" aria-label="The same request in a sensitive project: your console shows the counts by region; the agent gets back only that it ran, how many lines were printed and the shape of the objects">
+        <div class="tui-bar"><span>your console</span><span>sensitive project</span></div>
+        <pre><span style="color:#8c8c8c;">&gt;</span> dplyr::count(patients, region)
+   region   n
+1 Central 512
+2   North 301
+3   South 344
+4    West 127</pre>
+        <div class="tui-bar"><span>what your agent gets back</span><span>corral eval</span></div>
+        <pre><span style="color:#ffc799;">[corral]</span> restricted output: the agent
+         doesn't see values (5 lines printed
+         in the user's console)
+<span style="color:#ffc799;">[corral]</span> objects: patients (data.frame, 1284 × 9)</pre>
       </figure>
     </div>
   </section>
@@ -474,7 +507,7 @@
     </details>
     <details>
       <summary>Can I use it with sensitive data?</summary>
-      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), review each result before the agent sees it (<code>agent_output review</code>) or let it see only the shape of results, without their values (<code>agent_output structure</code>, together with <code>ask</code>, since the agent writes the code), set all of that in one step with a profile, for all your work or for one project folder (<code>corral profile sensitive --project</code>: every session there asks and gets no values, and the stricter profile wins), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. The <a href="docs/security.html">Security model</a> has the details and a checklist.</p>
+      <p>Corral gives you the controls, and tells you plainly what they cover. You can require your approval for every request an agent makes (<code>corral config agents ask</code>), review each result before the agent sees it (<code>agent_output review</code>) or let it see only the shape of results, without their values (<code>agent_output structure</code>, together with <code>ask</code>, since the agent writes the code), set all of that in one step with a profile, for all your work or for one project folder (<code>corral profile sensitive --project</code>: every session there asks and gets no values, and the stricter profile wins), mark a single session as sensitive (<code>corral_sensitive()</code>), and review everything with <code>corral audit</code>. What the agent reads still goes to its model provider, so for data such as health records pair this with a local model or an approved provider, and with the agent's own permissions. On a shared server, other users can't read your sessions, and turning checkpoints off deletes the copies of your objects. The <a href="docs/security.html">Security model</a> has the details and a checklist; the <a href="docs/threats.html">Threat model</a> says what each control holds against.</p>
     </details>
     <details>
       <summary>Can I use it in Spanish?</summary>
