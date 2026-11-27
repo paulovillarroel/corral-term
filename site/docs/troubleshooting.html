@@ -59,7 +59,7 @@
     <h2>Check your setup</h2>
     <pre><code><span class="p">$ </span>corral doctor
 <span class="p">$ </span>corral install --check</code></pre>
-    <p><code>corral doctor</code> checks the dependencies, the herdr plugin, the theme, Mirador and its browser, and which terminal it detects, one line each, with what to do about each problem. <code>corral install --check</code> prints the installer's checklist, and <code>corral install</code> repairs the installation.</p>
+    <p><code>corral doctor</code> checks the dependencies, the herdr plugin, the theme, Mirador and its browser, which terminal it detects, and whether Corral's folder (<code>~/.local/state/corral</code>) is private, one line each, with what to do about each problem. <code>corral install --check</code> prints the installer's checklist, and <code>corral install</code> repairs the installation.</p>
 
     <h2>Common problems</h2>
     <table>
@@ -76,6 +76,11 @@
     <tr><td>Claude opens its own R instead of using your console</td><td><code>corral context</code> should show R running. If it doesn't, switch Corral on in that R with <kbd>ctrl+b</kbd> <kbd>m</kbd>.</td></tr>
     <tr><td>The panes say <code>command not found: orral</code> (or <code>laude</code>): a letter is missing from each command</td><td>Your shell asks something as it starts and took that letter as the answer. With zsh it is usually <em>"zsh compinit: insecure directories… continue [y] or abort compinit [n]?"</em>, which shows in every new terminal. <code>compaudit</code> lists those folders; <code>compaudit | xargs chmod g-w,o-w</code> takes away others' write access to them, which is safe (put <code>sudo</code> before <code>chmod</code> if they belong to root). Then open the layout again (<kbd>ctrl+b</kbd> <kbd>shift+q</kbd>, then <kbd>ctrl+b</kbd> <kbd>a</kbd>). Corral 0.1.15 and later start their commands so that a question like this doesn't swallow a letter.</td></tr>
     <tr><td>The R console says Ark didn't respond</td><td>Ark's log is in <code>~/.local/state/corral/ark.log</code>. <code>corral config r_console r</code> goes back to plain R while you look into it.</td></tr>
+    <tr><td>An agent's request says "the user didn't answer within 300 s; nothing ran"</td><td>With <code>agents ask</code>, each request waits up to 5 minutes for your <kbd>Enter</kbd> in the approval popup. Nothing ran; the agent can ask again.</td></tr>
+    <tr><td>"another Corral window stayed open in herdr, so the user couldn't be asked; nothing ran"</td><td>A popup (approval, review, palette) was still open, so a new one couldn't be shown. Close it and let the agent ask again.</td></tr>
+    <tr><td>"couldn't read /dev/urandom for a key"</td><td>Ark's key and Mirador's token come only from the system's random source; without it they don't start. Check that <code>/dev/urandom</code> exists and is readable, as it is on any normal Linux or WSL.</td></tr>
+    <tr><td>"couldn't make a private folder for Ark's sockets"</td><td>Corral's folder has a path too long for a socket address, and no short private folder could be made under <code>$XDG_RUNTIME_DIR</code>, <code>$TMPDIR</code> or <code>/tmp</code> (each folder above it must be yours or root's and closed to others' writes, or sticky). Corral doesn't start Ark on TCP instead. Set <code>XDG_STATE_HOME</code> to a shorter path, or fix the permissions of one of those folders.</td></tr>
+    <tr><td>"Some checkpoints couldn't be deleted; remove them by hand"</td><td>After <code>corral config checkpoints off</code>, the folders it names (in <code>~/.local/state/corral/checkpoints</code>) couldn't be removed, usually for their permissions. Delete them yourself.</td></tr>
     </tbody>
     </table>
 

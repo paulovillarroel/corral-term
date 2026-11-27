@@ -246,7 +246,7 @@
 
     <h2>Corral in Rust</h2>
     <picture data-themed><source srcset="../assets/charts/before-after-dark.svg" media="all"><img src="../assets/charts/before-after-light.svg" width="760" alt="Before and now, on a log scale: the time and memory of each piece of Corral; the values are in the tables below"></picture>
-    <p>The engines were already in Rust: herdr, Fresh, Ark, Air, Ruff and uv. Now all of Corral is one Rust binary, built from <code>rs/</code> with no dependencies. The only parts that aren't Rust run inside your own sessions: <code>r/corral.R</code> in R and <code>py/</code> in IPython.</p>
+    <p>The engines were already in Rust: herdr, Fresh, Ark, Air, Ruff and uv. Now all of Corral is one Rust binary, built from <code>rs/</code> with no dependencies. The only parts that aren't Rust are the R and Python code that runs in your sessions (<code>r/</code>, <code>py/</code>), the editor plugin, Mirador's page in the browser and the install script.</p>
     <p>The first pieces to move to Rust were what runs on every key press, what Claude uses and the processes that stay open. These are the gains of that stage:</p>
     <table>
     <thead><tr><th>Piece</th><th>Rust</th><th>Before, in Python</th></tr></thead>
@@ -260,7 +260,7 @@
     <tr><td>Ark console (<code>corral _console r</code>)</td><td>3 MB, starts in 0.33 s</td><td><code>jupyter-console</code>: 55 MB, 0.47 s</td></tr>
     </tbody>
     </table>
-    <p>What repeats after each command, and what keeps running in the editor, went down too:</p>
+    <p>What repeats after each command, and what keeps running in the editor, went down too (measured at that rewrite, on 2026-11-22, before checkpoints; the checkpoints section above has the current cost after each command):</p>
     <table>
     <thead><tr><th>What</th><th>Before</th><th>Now</th></tr></thead>
     <tbody>
@@ -275,7 +275,7 @@
     <tr><td>A plot of 100 thousand points in Mirador</td><td>7.1 MB SVG</td><td>0.7 MB PNG</td></tr>
     </tbody>
     </table>
-    <p>While you work, each command in the R console takes about 2.5 ms from <kbd>Enter</kbd> to the next prompt (1.5 ms without Corral), also with a table of 2 million cells in memory. In Python it takes about 6 ms, with or without Corral.</p>
+    <p>While you work, each command in the R console took about 2.5 ms from <kbd>Enter</kbd> to the next prompt (1.5 ms without Corral) when measured on 2026-11-22, before checkpoints, also with a table of 2 million cells in memory. In Python it takes about 6 ms, with or without Corral.</p>
 
     <h3>What changed in R and Python</h3>
     <p><code>corral.R</code> no longer loads packages it doesn't need at startup. httpgd (with unigd, systemfonts, lifecycle and cli) loads with the first plot, and each variable's fingerprint uses the memory address base R gives, without rlang, which took 54 ms to load.</p>
@@ -288,7 +288,7 @@
     <p>Fresh comes with about 50 plugins. Corral turns off the ones it doesn't use in <code>fresh/config.json</code>: agent orchestration, which herdr already does, welcome screens, Kubernetes, devcontainers, and languages such as C# or C++. With that, Fresh opens with 46 MB instead of 60, and at rest it uses 0.20 % CPU instead of 0.57 %. Checking every 2 s whether the open files changed (when Claude edits them, for example) costs so little that it doesn't show in the measurements, so it stays.</p>
 
     <h3>One binary</h3>
-    <p>The binary talks to herdr over its socket and to Ark over the Jupyter protocol (ZeroMQ and HMAC-SHA256 signatures, implemented in <code>rs/src/zmtp.rs</code> and <code>rs/src/sha256.rs</code>). Everything else is in the binary too: it reads herdr's configuration with its own TOML reader, unpacks Ark (published as a zip), Fresh, DuckDB and Air with its own decompressor, and writes the editor's theme and the palette.</p>
+    <p>The binary talks to herdr over its socket and to Ark over the Jupyter protocol, on Unix sockets in Corral's private folder (ZeroMQ and HMAC-SHA256 signatures with a key from <code>/dev/urandom</code>, implemented in <code>rs/src/zmtp.rs</code> and <code>rs/src/sha256.rs</code>). Everything else is in the binary too: it reads herdr's configuration with its own TOML reader, unpacks Ark (published as a zip), Fresh, DuckDB and Air with its own decompressor, and writes the editor's theme and the palette.</p>
     <p>If you change something in <code>rs/</code>, build it again with <code>cargo build --release</code>. <code>corral --version</code> says which folder the binary you are using comes from.</p>
 
     <nav class="pager" aria-label="Pages"></nav>

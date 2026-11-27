@@ -88,7 +88,7 @@
     </figure>
     <ul>
       <li><strong>herdr</strong> is the terminal workspace. The agent, the script, the console and the variables are herdr panes, so closing the window loses nothing. Corral talks to herdr through its socket, one JSON request and one JSON reply, for the frequent calls (listing panes, sending code, focus); splits, renames, new tabs and starting commands go through herdr's command line.</li>
-      <li><strong>corral</strong> is one Rust binary that depends only on the C library. The short commands (a layout, sending code, <code>corral eval</code>) run and exit in milliseconds; the long-lived ones are the viewers (the variables pane, the table viewer) and Mirador's server, a few MB each.</li>
+      <li><strong>corral</strong> is one Rust binary that depends only on the C library. A layout or sending code runs and exits in milliseconds, and <code>corral eval</code> lives as long as the code it waits for; the long-lived ones are the console in front of Ark, the viewers (the variables pane, the table viewer), Mirador's server, the editor's language-server bridge and, for each R session that has drawn a plot, the plot watcher, a few MB each.</li>
       <li><strong>The engines.</strong> Ark runs R, and corral talks to it over ZeroMQ with the Jupyter protocol, implemented in corral itself, on Unix sockets in Corral's own folder, which only you can open. IPython runs Python in your project's uv environment. DuckDB answers the table viewer's queries. Mirador, written from scratch for Corral and exclusive to it, shows plots, and tables when you ask, in your browser: its server is part of the <code>corral</code> binary, in Rust, and its tables run on DuckDB.</li>
     </ul>
 
@@ -101,8 +101,9 @@
         <tr><td><code>console</code>, <code>workspace</code>, <code>layout</code></td><td>The layouts, which pane gets the space, and finding, starting or bringing in a console.</td></tr>
         <tr><td><code>send</code>, <code>eval</code></td><td>Code from the editor (<kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>) and from agents into the console.</td></tr>
         <tr><td><code>approve</code>, <code>audit</code></td><td>The popup that asks you about an agent's request, and the audit log.</td></tr>
-        <tr><td><code>vars</code>, <code>table</code>, <code>duckdb</code></td><td>The variables pane and the table viewer, which asks DuckDB only for what is on screen; one DuckDB stays open for it and Mirador, and closes after 30 seconds without queries.</td></tr>
-        <tr><td><code>plots</code>, <code>mirador</code></td><td><code>View()</code>, plots, and Mirador's server and page.</td></tr>
+        <tr><td><code>vars</code>, <code>table</code>, <code>duckdb</code></td><td>The variables pane and the table viewer, which asks DuckDB only for what is on screen; each of them (the viewer, Mirador's server) keeps one DuckDB open, which closes after 30 seconds without queries.</td></tr>
+        <tr><td><code>plots</code>, <code>mirador</code></td><td><code>View()</code>, plots, Mirador's server and page (on 127.0.0.1, behind a token and a <code>Host</code> check), and the watcher that keeps an R session's plots in its checkpoint (<code>corral _keep-plots</code>).</td></tr>
+        <tr><td><code>context</code>, <code>profile</code></td><td>What an agent is told before it runs anything (<code>corral context</code>), and the security profiles, global or per project, the stricter winning.</td></tr>
         <tr><td><code>shortcuts</code>, <code>theme</code></td><td>The shortcut palette, and one palette of colors taken from herdr's theme.</td></tr>
         <tr><td><code>install</code>, <code>setup</code>, <code>zip</code>, <code>versions</code></td><td>The installer and updates, Ark's download, unzip and inflate for the releases, and the R (rig) and Python (uv) versions the consoles run.</td></tr>
         <tr><td><code>editor</code>, <code>i18n</code></td><td>The script pane, which throws the draft away when the editor ends, and Corral's messages in English and Spanish.</td></tr>
@@ -114,7 +115,7 @@
     <figure class="arch">
       <svg viewBox="0 0 680 350" role="img" aria-labelledby="arch2-t arch2-d">
         <title id="arch2-t">How code, tables and plots travel</title>
-        <desc id="arch2-d">Code: Ctrl+R or corral eval, then corral send, then the console, then the variables pane reads vars.json. Tables: View(df), then a Parquet file, then the table viewer, then DuckDB returns only what is visible. Plots: plot(), then httpgd, then Mirador's server, then the browser in about 80 ms.</desc>
+        <desc id="arch2-d">Code: Ctrl+R runs corral send and an agent corral eval; both type into the console through herdr, then the variables pane reads vars.json. Tables: View(df), then a Parquet file, then the table viewer, then DuckDB returns only what is visible. Plots: plot(), then httpgd, then Mirador's server, then the browser in about 80 ms.</desc>
         <defs><marker id="arch2-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
         <text class="t" x="40" y="22" dominant-baseline="central">Code</text>
         <g class="ui"><rect x="40" y="40" width="132" height="56" rx="6"/><text class="t" x="106" y="58" text-anchor="middle" dominant-baseline="central">Ctrl+R / eval</text><text class="s" x="106" y="78" text-anchor="middle" dominant-baseline="central">editor or agent</text></g>
@@ -170,7 +171,7 @@
     </table>
 
     <h2>State on disk</h2>
-    <p>Corral keeps no database, and nothing of its own stays in the background except Mirador's server once you open it. What it remembers is in plain files:</p>
+    <p>Corral keeps no database, and nothing of its own stays in the background except Mirador's server once you open it, and one small plot watcher for each R session that has drawn a plot. What it remembers is in plain files:</p>
     <ul>
       <li><code>~/.local/state/corral/sessions/&lt;id&gt;/</code>: one folder per R or Python session, with <code>meta.json</code>, <code>vars.json</code>, the plot server's address and what <code>corral eval</code> exchanges. It is removed when the session ends.</li>
       <li><code>~/.local/state/corral/</code>: Mirador's address and token, the list of script drafts (the drafts themselves are in the project's <code>.corral/</code> folder), the R console's history, the objects' checkpoints (<code>checkpoints/</code>), the last update check (<code>update-check.json</code>) and the installer's record of what it changed (<code>install.json</code>).</li>

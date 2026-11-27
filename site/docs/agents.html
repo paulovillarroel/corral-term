@@ -146,12 +146,12 @@
 
     <h3 id="context">What the agent knows before it runs anything</h3>
     <pre><code><span class="p">$ </span>corral context --json</code></pre>
-    <p>One call tells the agent where it is and what it may do, so it doesn't learn it by being refused. For each console, R and Python: whether it runs, its session, version and folder, whether it is the one in view, and whether SQL works there (R needs the duckdb and DBI packages). Then the rules you set, as they apply to that session: <code>access</code> (<code>on</code>, <code>ask</code> or <code>off</code>) and <code>output</code> (<code>full</code>, <code>review</code> or <code>structure</code>); a session marked with <code>corral_sensitive()</code> always asks and never gives full output. <code>agents</code> holds the rules for a console that hasn't started. It reads files Corral already writes and herdr's list of panes: it starts no console, Python included, and takes about 2 ms.</p>
+    <p>One call tells the agent where it is and what it may do, so it doesn't learn it by being refused. For each console, R and Python: whether it runs, its session, version and folder, whether it is the one in view, and whether SQL works there (R needs the duckdb and DBI packages). Then the rules you set, as they apply to that session: <code>access</code> (<code>on</code>, <code>ask</code> or <code>off</code>) and <code>output</code> (<code>full</code>, <code>review</code> or <code>structure</code>); a session marked with <code>corral_sensitive()</code> always asks and never gives full output; <code>profile</code> names the profile they come from. <code>agents</code> holds the rules for a console that would start in the agent's current folder, that project's profile included. It reads files Corral already writes and herdr's list of panes: it starts no console, Python included, and takes about 2 ms.</p>
     <pre><code>{"corral":"0.2.0","herdr":true,"workspace":"w1","showing":"r",
- "consoles":{"r":{"running":true,"pane":"w1:p3","session":"w1-p3-162502","version":"4.6.1","cwd":"~/proj",
-                  "showing":true,"sql":true,"sensitive":false,"access":"ask","output":"full"},
+ "consoles":{"r":{"running":true,"pane":"w1:p3","session":"w1-p3-162502","version":"4.6.1","cwd":"/home/ana/proj",
+                  "showing":true,"sql":true,"sensitive":false,"access":"ask","output":"full","profile":"standard"},
              "python":{"running":false,"starts_on_request":true}},
- "agents":{"access":"ask","output":"full"}}</code></pre>
+ "agents":{"access":"ask","output":"full","profile":"standard"}}</code></pre>
     <p>The agent can read the rules, not change them. To see exactly what it sees, open the palette (<kbd>ctrl+b</kbd> <kbd>space</kbd>) and pick "Agents: what your agent sees": a window shows the same in words. <code>corral context</code> without <code>--json</code> prints it in a terminal.</p>
     <h3>Check one console</h3>
     <pre><code><span class="p">$ </span>corral eval --check
@@ -184,7 +184,7 @@
     <li>It keeps the output small (<code>head()</code>, <code>str()</code>, <code>summary()</code>, <code>df.head()</code>), and does scratch work in <code>local({ ... })</code> in R, or in a function in Python, so your environment stays clean.</li>
     <li>To show you a table, it runs <code>View(df)</code> through <code>corral eval</code>, and the table opens in your viewer.</li>
     <li>When you ask, it rearranges the panes (<code>corral toggle</code>, <code>corral switch</code>), and reads or changes your shortcuts (<code>corral keys</code>).</li>
-    <li>It answers questions about Corral from these pages, which come with Corral, and from <code>corral --help</code>, and reads your settings with <code>corral config</code>. It changes a setting only when you ask, and never <code>agents</code> or <code>agent_output</code>: for those it gives you the command or the palette entry, so the change comes from you.</li>
+    <li>It answers questions about Corral from these pages, which come with Corral, and from <code>corral --help</code>, and reads your settings with <code>corral config</code>. It changes a setting only when you ask, and never <code>agents</code>, <code>agent_output</code>, <code>audit_days</code> or a profile: for those it gives you the command or the palette entry, so the change comes from you.</li>
     </ul>
 
     <h3>What it asks before doing</h3>
