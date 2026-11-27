@@ -2,7 +2,7 @@
 
 What changed in each version of Corral. The release workflow publishes each version's section as its release notes on GitHub, so add one here before you tag a version.
 
-## Unreleased
+## 0.1.27
 
 Security profiles, for all your work or for one project.
 
