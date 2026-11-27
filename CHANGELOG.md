@@ -4,7 +4,7 @@ What changed in each version of Corral. The release workflow publishes each vers
 
 ## Unreleased
 
-- Mirador's plot size menu opens again. Clicking it did nothing: a handler that keeps buttons from taking the focus (so Enter and space stay the table's) also caught the menu, which needs that click to open. Now it opens, and once you choose a size it lets the focus go, so ← and → move between plots again. Checked with a real click in Chromium: the menu opens, 800 × 500 redraws the plot at that size, and Window fits it to the window again.
+- Mirador's plot size menu opens again. Clicking it did nothing: a handler that keeps buttons from taking the focus (so Enter and space stay the table's) also caught the menu, which needs that click to open. Now it opens. Opened with the mouse, it gives the keys back to Mirador once you choose a size, or at the next key if you close it without choosing, so ← and → move between plots; reached with the keyboard, its arrows choose a size, as in any menu. Checked with real clicks and keys in Chromium: the menu opens, 800 × 500 redraws the plot at that size, and Window fits it to the window again.
 
 ## 0.2.1
 
