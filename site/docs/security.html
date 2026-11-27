@@ -173,7 +173,7 @@
     </tbody>
     </table>
     <p>Script drafts go in <code>.corral/</code> inside your project, which git ignores, or in a private temporary folder when there is no project. A draft no editor has open is deleted, and so are folders older than two days. Uninstalling leaves <code>~/.local/state/corral</code> in place; delete it if you won't come back.</p>
-    <p>Corral doesn't encrypt these files. The 700 keeps other users out, not programs running as you, and backups or snapshots of your home folder copy them like any other file. Deleting a file doesn't wipe it from the disk either. For a lost or stolen machine, turn on the system's disk encryption; for data whose copy mustn't exist at all, <code>corral config checkpoints off</code>.</p>
+    <p>Corral doesn't encrypt these files. The 700 keeps other users out, not programs running as you, and backups or snapshots of your home folder copy them like any other file. Deleting a file doesn't wipe it from the disk either. For a lost or stolen machine, turn on the system's disk encryption. For data whose copy mustn't exist at all, turn checkpoints off with <code>corral config checkpoints off</code> before the data is loaded: that stops new copies, and a copy already written stays until its console is closed on purpose (which deletes it) or a week has passed.</p>
 
     <h2>What Corral doesn't do</h2>
     <ul>
