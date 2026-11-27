@@ -137,7 +137,7 @@
   <section class="together" id="together">
     <div class="section-label"><span>Humans and agents, one session</span><span>under your control</span></div>
     <h2>Not an IDE with AI bolted on. A workspace you and your agent share.</h2>
-    <p class="together-lead">You and your agent work on the same computational context. No copying code from a chat into a console, no re-running an agent's script to get its objects back, no switching windows: the agent works in the session you are looking at, and you decide what it may do. Corral is the harness in between: a few commands the agent calls, a skill that teaches them, and rules it can't skip (<a href="docs/agents.html#the-agent-harness">how it works</a>). Built for the flow of data science as it is done today, and out of your way.</p>
+    <p class="together-lead">You and your agent work on the same computational context. No copying code from a chat into a console, no re-running an agent's script to get its objects back, no switching windows: the agent works in the session you are looking at, and you decide what it may do. Corral is the harness in between: a few commands the agent calls, a skill that teaches them, and rules for every request it makes through Corral (<a href="docs/agents.html#the-agent-harness">how it works</a>). Built for the flow of data science as it is done today, and out of your way.</p>
     <div class="trio">
       <div class="who"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><b>You, the data scientist</b><span>Write, inspect, correct and decide.</span></div>
       <div class="op" aria-hidden="true">+</div>
@@ -152,7 +152,7 @@
       <div class="show-text">
         <div class="section-label"><span>Corral Harness</span><span>corral eval</span></div>
         <h2>The agent proposes. You decide.</h2>
-        <p>Every time your agent runs code, it goes through <code>corral eval</code>: the code is typed into the console you are looking at, and its objects, tables and plots stay there for both of you to inspect and build on. Corral Harness is the set of rules around each request that makes this joint work safe, enforced in Corral's own code, whatever the model was told.</p>
+        <p>When your agent runs code in your session, it goes through <code>corral eval</code>: the code is typed into the console you are looking at, and its objects, tables and plots stay there for both of you to inspect and build on. Corral Harness is the set of rules around each request that makes this joint work safe, enforced in Corral's own code, whatever the model was told. Commands an agent runs with its own tools, outside Corral, are up to its own permissions.</p>
         <ul class="points">
           <li><b>In plain sight</b><span>you watch each request run in your console, one at a time</span></li>
           <li><b>Your call</b><span>each request waits for your yes by default, showing the exact code and which agent asks</span></li>
@@ -306,8 +306,8 @@
 
   <article class="feature">
     <div class="n">01</div>
-    <div><h3><a href="docs/performance.html">Rust, end to end.</a></h3>
-      <p>Corral is one small Rust binary with no dependencies: the layout, the consoles, the variables pane, the table viewer, the shortcut palette, Mirador's server and the installer. The engines it drives are Rust too: herdr, Fresh, Ark, Air, Ruff, ty and uv. That's why a whole workspace, editor and language server included, is ready in about 400 milliseconds.</p></div>
+    <div><h3><a href="docs/performance.html">A small Rust core.</a></h3>
+      <p>Corral is one small Rust binary with no third-party dependencies: the layout, the consoles, the variables pane, the table viewer, the shortcut palette, Mirador's server and the installer; thin R, Python and editor pieces connect it to your sessions. The engines it drives are Rust too: herdr, Fresh, Ark, Air, Ruff, ty and uv. That's why a whole workspace, editor and language server included, is ready in about 400 milliseconds.</p></div>
     <div class="card">
       <div class="row"><span>layout created</span><span>31 ms</span></div>
       <div class="row"><span>R console ready</span><span>0.39–0.45 s</span></div>
@@ -393,7 +393,7 @@
     <div class="show-text">
       <div class="section-label"><span>Table viewer</span><span>View(df)</span></div>
       <h2>Ten million rows, on screen in under two seconds.</h2>
-      <p><code>View(df)</code> opens the table in a pane right next to your console. Corral never loads it whole: DuckDB reads the Parquet file and returns only the rows you're looking at, so scrolling, sorting, searching and filtering stay instant at any size.</p>
+      <p><code>View(df)</code> opens the table in a pane right next to your console. Corral never loads it whole: DuckDB reads the Parquet file and returns only the rows you're looking at, so scrolling, sorting, searching and filtering stay instant with millions of rows (ten million, measured).</p>
       <p>Want more room? Press <kbd>m</kbd> and the same table opens in Mirador, in your browser. Only when you ask: the terminal stays the default.</p>
       <div class="card">
         <div class="row"><span>10,000,000 rows, saved as Parquet</span><span>1.1 s</span></div>
@@ -471,7 +471,7 @@
 
   <section class="compare">
     <h2>Measured, not promised.</h2>
-    <p>Same machine, same project, R in WSL. Positron and Cursor are capable editors; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. <a href="docs/performance.html">How it was measured →</a></p>
+    <p>Same machine, same project, R in WSL. Positron and Cursor are capable editors; Corral gives you the same everyday loop (write, run, look at your data and plots) without the weight of a desktop application. Measured on one Windows machine with WSL. Corral's figures leave out the terminal app, and Positron's and Cursor's include their window; herdr is counted apart against Positron (200 MB with it) and included against Cursor. <a href="docs/performance.html">How it was measured →</a></p>
     <picture data-themed>
       <source srcset="assets/charts/vs-editors-dark.svg" media="all">
       <img src="assets/charts/vs-editors-light.svg" width="760" alt="Corral, Positron and Cursor: ready in 0.45 s, 13.3 s and 12.9 s; 155 MB, 3.2 GB and 2.5 GB of memory; 0.36 %, 13.9 % and 8.9 % of one core at rest">
@@ -542,7 +542,7 @@
     </details>
     <details>
       <summary>Does my data leave my machine?</summary>
-      <p>Your data and code never leave it: Corral runs everything locally, and Mirador listens only on 127.0.0.1, behind a token. Your agent talks to its own provider as it always does. Corral sends two things. The installer sends an anonymous ping when it installs, updates, stops or uninstalls (version, system, country and coarse categories such as the agent and herdr's version, no IP); <code>corral config telemetry off</code> or <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>). And once a day, opening the workspace asks GitHub which version is the latest, which carries nothing about you; <code>corral config update_check off</code> stops it.</p>
+      <p>Corral runs everything locally: your sessions, files and data stay on your machine, and Mirador listens only on 127.0.0.1, behind a token. What your agent reads (results, errors, plots, previews of variables, the script draft) goes to its model provider, under that provider's terms. Corral decides what comes back through its harness (review, results without values, sensitive projects); what the agent reads with its own tools is up to its own permissions. For sensitive data, use a local or approved model and limit the agent's permissions (<a href="docs/security.html#for-sensitive-data">setup</a>). Corral itself sends two things. The installer sends an anonymous ping when it installs, updates, stops or uninstalls (version, system, country and coarse categories such as the agent and herdr's version, no IP); <code>corral config telemetry off</code> or <code>CORRAL_NO_TELEMETRY=1</code> turns it off (<a href="docs/install.html#install-count">details</a>). And once a day, opening the workspace asks GitHub which version is the latest, which carries nothing about you; <code>corral config update_check off</code> stops it.</p>
     </details>
     <details>
       <summary>Can I use it with sensitive data?</summary>
