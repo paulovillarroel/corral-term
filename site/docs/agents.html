@@ -38,7 +38,7 @@
 <header class="top">
   <a class="logo" href="../">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16M10 4v16M16 4v16M22 4v16M2 9h22M2 15h22"/></svg>
-    corral <span class="tag">docs · 0.1.28</span>
+    corral <span class="tag">docs · 0.1.29</span>
   </a>
   <nav class="nav">
     <button class="menu-toggle" type="button">Menu</button>
@@ -147,7 +147,7 @@
     <h3 id="context">What the agent knows before it runs anything</h3>
     <pre><code><span class="p">$ </span>corral context --json</code></pre>
     <p>One call tells the agent where it is and what it may do, so it doesn't learn it by being refused. For each console, R and Python: whether it runs, its session, version and folder, whether it is the one in view, and whether SQL works there (R needs the duckdb and DBI packages). Then the rules you set, as they apply to that session: <code>access</code> (<code>on</code>, <code>ask</code> or <code>off</code>) and <code>output</code> (<code>full</code>, <code>review</code> or <code>structure</code>); a session marked with <code>corral_sensitive()</code> always asks and never gives full output. <code>agents</code> holds the rules for a console that hasn't started. It reads files Corral already writes and herdr's list of panes: it starts no console, Python included, and takes about 2 ms.</p>
-    <pre><code>{"corral":"0.1.28","herdr":true,"workspace":"w1","showing":"r",
+    <pre><code>{"corral":"0.1.29","herdr":true,"workspace":"w1","showing":"r",
  "consoles":{"r":{"running":true,"pane":"w1:p3","session":"w1-p3-162502","version":"4.6.1","cwd":"~/proj",
                   "showing":true,"sql":true,"sensitive":false,"access":"ask","output":"full"},
              "python":{"running":false,"starts_on_request":true}},
