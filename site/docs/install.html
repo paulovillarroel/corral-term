@@ -54,7 +54,7 @@
 
   <main class="content">
     <h1>Install</h1>
-    <p class="intro">Before you start you need a Linux system (or Windows with WSL) and R. The installer brings everything else, and it checks all of it before it changes anything. If herdr or the R package jsonlite is missing, or herdr is too old, it offers to install or update them; if something else is missing, it tells you what to run and stops.</p>
+    <p class="intro">Before you start you need a Linux system (or Windows with WSL) and R. The installer brings everything else by itself, without questions, and checks all of it before it changes anything: herdr (or a newer one), the R packages, uv for Python, and the line that puts <code>~/.local/bin</code> on your PATH. R is the one thing it can't install, since that takes your password: if it's missing, it shows the step for your system, waits while you do it, and goes on.</p>
 
     <h2 id="windows">On Windows: set up WSL first</h2>
     <p>Corral runs on Linux. On Windows it runs inside WSL (Windows Subsystem for Linux), which gives you a real Ubuntu next to Windows, with no virtual machine to manage. You set it up once, in about ten minutes, and you don't need to know Linux for it: copy each command, paste it, and press <kbd>Enter</kbd>. On Linux, skip to <a href="#before-you-install">Before you install</a>.</p>
@@ -70,7 +70,7 @@
     <pre><code><span class="p">$ </span>curl -LsSf https://r-lib.github.io/rig/install.sh | sh
 <span class="p">$ </span>rig add release</code></pre>
     <p>Close Ubuntu and open it again, so it finds R.</p></li>
-    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first. It offers to install <a href="https://herdr.dev/tui/">herdr</a>, the terminal workspace Corral lives in, and the R packages it needs: press <kbd>Enter</kbd> to say yes. If anything else is missing, it tells you, with the command to fix it.</p></li>
+    <li><p><strong>Install Corral</strong> with the line in <a href="#install-with-one-line">Install with one line</a>. It checks everything first, then installs <a href="https://herdr.dev/tui/">herdr</a>, the terminal workspace Corral lives in, the R packages it needs and the rest by itself. If R is missing, it tells you how to install it and waits.</p></li>
     </ol>
 
     <h3>Working in WSL</h3>
@@ -81,14 +81,14 @@
     </ul>
 
     <h2 id="before-you-install">Before you install</h2>
-    <p>You don't need to check these by hand: the installer does. It offers to install herdr and the R package jsonlite when they are missing, or to update herdr when it is older than Corral needs, and shows the command for anything else.</p>
+    <p>You don't need to check these by hand: the installer does. It installs herdr and the R package jsonlite when they are missing, and updates herdr when it is older than Corral needs. R it can't install for you: it shows the step for your system (<code>sudo apt install r-base</code> on Ubuntu and Debian), waits until you press <kbd>Enter</kbd>, checks again and goes on, without running the line again. <code>CORRAL_ASK=1</code> makes it ask before each thing it brings.</p>
     <table>
     <thead><tr><th>You need</th><th>How to get it</th></tr></thead>
     <tbody>
     <tr><td><strong>Linux x86_64</strong>, or <strong>Windows with WSL</strong></td><td>On Windows, install WSL with Ubuntu (<code>wsl --install</code> in PowerShell) and do everything else inside it: <a href="#windows">step by step</a>. The macOS version is in development.</td></tr>
     <tr><td><code>curl</code> and <code>tar</code></td><td>Ubuntu has them. If not: <code>sudo apt install curl tar</code>.</td></tr>
-    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer offers to install it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it, and if yours is older than 0.9.5 the installer offers to run it. A herdr you already have is never replaced by another.</td></tr>
-    <tr><td><strong>R</strong>, with the <code>jsonlite</code> package</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). jsonlite carries the variables to Corral; the installer offers to put it in your R library, without <code>sudo</code>, and with pak if you use it. httpgd, for the plots, it installs by itself (next section). To install both yourself (with pak, <code>pak::pak(c("httpgd", "jsonlite"))</code>):</td></tr>
+    <tr><td><a href="https://herdr.dev/tui/">herdr TUI</a> 0.9.5 or newer</td><td>The terminal workspace Corral lives in: herdr TUI, the version of herdr that runs in your terminal, not the Herdr App. If you don't have it, the installer installs it in <code>~/.local/bin</code>, where herdr's own installer puts it; or install it yourself from <a href="https://herdr.dev/tui/">herdr.dev/tui</a>. <code>herdr update</code> updates it, and if yours is older than 0.9.5 the installer runs it. A herdr you already have is never replaced by another.</td></tr>
+    <tr><td><strong>R</strong>, with the <code>jsonlite</code> package</td><td>R from <a href="https://cloud.r-project.org">CRAN</a> (or <a href="https://github.com/r-lib/rig">rig</a>). jsonlite carries the variables to Corral; the installer puts it in your R library, without <code>sudo</code>, and with pak if you use it. httpgd, for the plots, it installs by itself (next section). To install both yourself (with pak, <code>pak::pak(c("httpgd", "jsonlite"))</code>):</td></tr>
     </tbody>
     </table>
     <pre><code><span class="p">$ </span>Rscript -e 'install.packages(c("httpgd", "jsonlite"), repos = "https://cloud.r-project.org")'</code></pre>
@@ -118,7 +118,7 @@
     <thead><tr><th>Program</th><th>What it adds</th></tr></thead>
     <tbody>
     <tr><td>An agent: Claude Code, Codex, Gemini CLI, opencode…</td><td>Install it on its own. The layout opens the first one installed; with several, the installer asks which, and the palette or <code>corral config agent</code> picks another. The installer puts Corral's skill where agents look for it; if you install one later, run the install line again.</td></tr>
-    <tr><td><a href="https://docs.astral.sh/uv/">uv</a></td><td>The Python console. Without uv there is no Python in Corral. If it's missing, the installer offers it, in a terminal: uv 0.13.9 from its GitHub release, checked against a SHA-256 in Corral's code, in <code>~/.local/bin</code> as uv's own installer puts it. Then it prepares the Python console, which gets Python and its packages once (about 400 MB on disk). Uninstalling Corral leaves uv.</td></tr>
+    <tr><td><a href="https://docs.astral.sh/uv/">uv</a></td><td>The Python console. Without uv there is no Python in Corral. If it's missing, the installer brings it: uv 0.13.9 from its GitHub release, checked against a SHA-256 in Corral's code, in <code>~/.local/bin</code> as uv's own installer puts it. Then it prepares the Python console, which gets Python and its packages once (about 400 MB on disk). Uninstalling Corral leaves uv.</td></tr>
     <tr><td>The R package <code>rlang</code></td><td>Saves redrawing a plot, and lets checkpoints see objects changed in place.</td></tr>
     <tr><td>A browser</td><td>For Mirador. On WSL, Corral uses your Windows browser; on Linux, <code>xdg-open</code>; on macOS, your default browser (<code>open</code>).</td></tr>
     </tbody>
@@ -182,18 +182,18 @@ Optional
   ✓ Skill for agents  goes in ~/.agents/skills (Codex, opencode and other agents) and ~/.claude/skills (Claude Code)
   ✓ Browser           the Windows one, for Mirador
   ✓ PATH              ~/.local/bin is on the PATH</code></pre>
-    <p>If you have several agents and haven't chosen one, it asks which one the agent pane opens; <kbd>Enter</kbd> leaves it to Corral, which opens the first one installed. It asks once, and only in a terminal where you can answer; later, the palette changes it ("Agent: … in its pane").</p>
+    <p>If you have several agents and haven't chosen one, the agent pane opens the first one installed, and the palette changes it ("Agent: … in its pane"). With <code>CORRAL_ASK=1</code> the installer asks once instead.</p>
     <h3 id="how-the-download-is-checked">How the download is checked</h3>
     <ul>
       <li>It installs a published version, the latest unless you pick one with <code>CORRAL_VERSION=v0.1.3</code>, and says which. It never falls back to unreleased code: if the download fails, it stops and says why.</li>
       <li>Before opening the package it checks its SHA-256 against the one published with that version, and stops if they differ. That catches a download that arrived broken or changed on the way. Both files come from the same release, though, so someone able to publish there could replace both.</li>
       <li>The attestation covers that case. Each package carries a build provenance attestation, signed by GitHub when the project's workflow builds it, which proves the package came from that workflow and that version's code. If you have the <a href="https://cli.github.com">GitHub CLI</a> (<code>gh</code> 2.49 or later, logged in), the installer checks it and stops if it doesn't hold; without it, it says the attestation wasn't checked. You can also check it yourself, with the package for your system (from the first macOS version, <code>corral-term-aarch64-macos.tar.gz</code> or <code>corral-term-x86_64-macos.tar.gz</code> on a Mac):
 <pre><code><span class="p">$ </span>gh attestation verify corral-term-x86_64-linux.tar.gz --repo paulovillarroel/corral-term</code></pre></li>
-      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, and herdr and uv, when you say yes to them, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
+      <li>Fresh, DuckDB, Air and Ark, which it downloads when you don't have them, and herdr and uv, when you don't have them, are each checked against a SHA-256 written into Corral's own code for the version it installs, so the check doesn't depend on their projects publishing one. A version of Ark you choose yourself (<code>corral ark --install 0.1.250</code>) is checked against the SHA-256 GitHub reports for it, and refused if there is none.</li>
       <li>The script runs from a single function called on its last line, so a download cut halfway runs nothing.</li>
     </ul>
 
-    <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there. If it isn't, it offers to add the line to <code>~/.bashrc</code> (or <code>~/.zshrc</code>), after saving a copy of the file; uninstalling leaves that line, since herdr and other tools live there too. Without a terminal to ask in, add this line at the end of <code>~/.bashrc</code> (or <code>~/.zshrc</code>) and open a new terminal:</p>
+    <p>It never uses <code>sudo</code> and only writes inside your home folder. It also checks that <code>~/.local/bin</code> is on your <code>PATH</code>, since R and the editor look for <code>corral</code> there. If it isn't, it adds the line to <code>~/.bashrc</code> (or <code>~/.zshrc</code>, the shell macOS starts), after saving a copy of the file; uninstalling leaves that line, since herdr and other tools live there too. With another shell, add this line to its startup file and open a new terminal:</p>
     <pre><code>export PATH="$HOME/.local/bin:$PATH"</code></pre>
     <p>When it finishes, go to a project folder and type <code>corral</code>: herdr opens with the workspace. The <a href="quickstart.html">quick start</a> takes it from there.</p>
 

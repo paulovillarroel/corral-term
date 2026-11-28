@@ -60,7 +60,7 @@
     <p>When Ark is installed, the R console is Ark. Corral starts it and talks to it directly over the Jupyter protocol, on Unix sockets in its own folder that other users on the machine can't open, with its own console written in Rust (3 MB). This is how it behaves:</p>
     <ul>
     <li>The prompt is <code>In [1]:</code>, and <code>...:</code> on the lines that follow. Code from <kbd>Ctrl</kbd>+<kbd>R</kbd> arrives as one pasted block and shows complete at the prompt.</li>
-    <li><kbd>Enter</kbd> runs the code when the expression is complete. If a parenthesis or a brace is still open, it moves to the next line, indented. <kbd>Alt</kbd>+<kbd>Enter</kbd> runs it anyway.</li>
+    <li><kbd>Enter</kbd> runs the code when the expression is complete. If a parenthesis or a brace is still open, it moves to the next line, indented. <kbd>Ctrl</kbd>+<kbd>J</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> runs it anyway.</li>
     <li><kbd>↑</kbd> <kbd>↓</kbd> go through the history; if you already typed something, only the entries that start the same. The history is saved in <code>~/.local/state/corral/history-r.jsonl</code>.</li>
     <li><kbd>Tab</kbd> completes with R's own completion: functions, arguments, columns after <code>$</code>, packages.</li>
     <li><kbd>Ctrl</kbd>+<kbd>C</kbd> interrupts what is running, or clears what you typed. <kbd>Ctrl</kbd>+<kbd>D</kbd> on an empty line closes the console, like <code>q()</code>. <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>E</kbd>, <kbd>Ctrl</kbd>+<kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>W</kbd> and <kbd>Ctrl</kbd>+<kbd>L</kbd> work too.</li>
