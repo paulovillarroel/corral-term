@@ -17,8 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Linux, and macOS on Apple silicon: the code that asks the system about terminals and
+  # processes is different on each (rs/src/term.rs, rs/src/os.rs), and its tests run on both.
   test:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
