@@ -1399,6 +1399,12 @@ try({{
 quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#)
 }
 
+/// r_install_code with install.packages, but only packages already compiled for this
+/// system (macOS's binaries): none of them is compiled from source.
+fn r_install_binary_code(pkgs: &[&str]) -> String {
+    r_install_code(pkgs, false).replace("install.packages(pkgs, lib = lib, quiet = TRUE)", r#"install.packages(pkgs, lib = lib, quiet = TRUE, type = "binary")"#)
+}
+
 /// The start of the R code that installs packages: into the first library of R_LIBS_USER
 /// (yours), and with R's User-Agent, by which Posit's server picks compiled packages.
 const R_LIB: &str = r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
@@ -1544,7 +1550,10 @@ fn r_duckdb() -> Option<&'static str> {
     }
     println!("  {}", tr("… installing duckdb and DBI in your R library, already compiled (SQL in R)",
                         "… instalo duckdb y DBI en tu biblioteca de R, ya compilados (SQL en R)"));
-    if r_install(&r, &["duckdb", "DBI"]) {
+    // On macOS only a compiled one: R would otherwise compile it from source wherever the
+    // repository has no build for this Mac, and that takes a long while.
+    let ok = if cfg!(target_os = "macos") { run_r(&r, &r_install_binary_code(&["duckdb", "DBI"])) } else { r_install(&r, &["duckdb", "DBI"]) };
+    if ok {
         step(tr("duckdb in your R library (SQL in R)", "duckdb en tu biblioteca de R (SQL en R)"), State::Ok);
         None
     } else {
@@ -2285,6 +2294,14 @@ mod tests {
 
     /// The system a ping names when it isn't WSL.
     const SYS: &str = if cfg!(target_os = "macos") { "macos" } else { "linux" };
+
+    /// duckdb on macOS goes in only compiled, never from source.
+    #[test]
+    fn duckdb_on_macos_goes_in_only_compiled() {
+        let code = r_install_binary_code(&["duckdb", "DBI"]);
+        assert!(code.contains(r#"install.packages(pkgs, lib = lib, quiet = TRUE, type = "binary")"#), "{code}");
+        assert!(code.contains(r#"pkgs <- c("duckdb", "DBI")"#) && !code.contains("pak::"), "{code}");
+    }
 
     /// httpgd on macOS comes compiled from CRAN, but only in the version the snapshot
     /// (or your repository) has, and without pulling newer dependencies from CRAN.
