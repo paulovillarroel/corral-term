@@ -108,7 +108,9 @@ pub fn pid_alive(pid: i64) -> bool {
     match bsd_status(pid) {
         Ok(status) => status != SZOMB,
         Err(Some(ESRCH)) => false,
-        // No answer for another user's process (EPERM): kill(pid, 0) says whether it exists.
+        // Any other failure (EPERM for another user's process): kill(pid, 0) says whether it
+        // exists, so an unexpected error never makes a live session look ended (its folders
+        // would be removed).
         Err(_) => {
             // SAFETY: signal 0 only checks that the process exists.
             let exists = unsafe { kill(pid, 0) } == 0;
