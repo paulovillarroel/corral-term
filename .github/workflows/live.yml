@@ -112,6 +112,8 @@ jobs:
           export CORRAL_URL="file://$RUNNER_TEMP/${{ matrix.package }}"
           CORRAL_SHA256=$( (sha256sum "$RUNNER_TEMP/${{ matrix.package }}" 2>/dev/null || shasum -a 256 "$RUNNER_TEMP/${{ matrix.package }}") | cut -d' ' -f1)
           export CORRAL_SHA256
+          # The default shell (bash -e) has no pipefail: without it, tee's status would hide the installer's.
+          set -o pipefail
           sh "$RUNNER_TEMP/install.sh" < /dev/null | tee "$RUNNER_TEMP/install.out"
 
       # What a person would do with the closing lines: run the command they name, then
@@ -178,8 +180,8 @@ jobs:
             got=$(curl -fsS -X POST "$wd/session/$session/execute/sync" -H 'Content-Type: application/json' \
               -d "$(python3 -c 'import json, sys; print(json.dumps({"script": sys.argv[1], "args": []}))' "$check")" | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')
             echo "$got"
-            python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got" && break
+            python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador · Corral" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got" && break
             sleep 0.2
           done
-          python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got"
+          python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador · Corral" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got"
           curl -fsS -X DELETE "$wd/session/$session" >/dev/null
