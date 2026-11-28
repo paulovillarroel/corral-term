@@ -9,9 +9,23 @@ use crate::theme;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The Ark version Corral was tested with, and the SHA-256 of its Linux package.
+/// The systems Corral is built for, in the order every table of downloads lists them.
+pub const SYSTEMS: [&str; 3] = ["Linux x86_64", "macOS, Apple silicon", "macOS, Intel"];
+
+/// This one, as an index into SYSTEMS and the tables of downloads.
+pub const SYSTEM: usize = if cfg!(target_os = "macos") { if cfg!(target_arch = "aarch64") { 1 } else { 2 } } else { 0 };
+
+/// One file for each of SYSTEMS: its name or URL, and its SHA-256.
+pub type PerSystem = [(&'static str, &'static str); 3];
+
+/// The Ark version Corral was tested with: the end of its package's name on each system
+/// (ark-0.1.252-linux-x64.zip), and that package's SHA-256.
 pub const ARK_VERSION: &str = "0.1.252";
-const ARK_SHA256: &str = "7dda5d05b6c4d67e7ae74e70b6bec5fd3bc526b19e222fa78306e14972cf4495";
+const ARK_FILES: PerSystem = [
+    ("linux-x64", "7dda5d05b6c4d67e7ae74e70b6bec5fd3bc526b19e222fa78306e14972cf4495"),
+    ("darwin-arm64", "aa1186f6e1ad271abaf246fd76e0aa9039cdeeff2cb52147e8887060afd5fb07"),
+    ("darwin-x64", "a8df8b55d951732b73fd05e8857b9c4b185b8dc9d6bc307f2ae5dcb84d4cc913"),
+];
 
 /// Check a download against the SHA-256 it should have, before anything uses it.
 pub fn checked(what: &str, data: &[u8], expected: &str) -> Result<(), String> {
@@ -49,10 +63,11 @@ pub fn download(url: &str) -> Result<Vec<u8>, String> {
 /// was tested with is checked against the SHA-256 written above, in Corral's own code;
 /// another one, against the SHA-256 GitHub reports for it, and refused if there is none.
 pub fn install_ark(version: &str) -> Result<PathBuf, String> {
-    let file = format!("ark-{version}-linux-x64.zip");
+    let (system, sha) = ARK_FILES[SYSTEM];
+    let file = format!("ark-{version}-{system}.zip");
     let url = format!("https://github.com/posit-dev/ark/releases/download/{version}/{file}");
     let expected = if version == ARK_VERSION {
-        ARK_SHA256.to_string()
+        sha.to_string()
     } else {
         // net: tools
         github_digest("posit-dev/ark", version, &file).ok_or_else(|| trf!(
@@ -249,6 +264,14 @@ mod tests {
         assert!(checked("x", b"abc", &abc.to_uppercase()).is_ok());
         assert!(checked("x", b"abd", abc).is_err());
         assert!(checked("x", b"abc", "").is_err());
-        assert!(ARK_SHA256.len() == 64 && ARK_SHA256.bytes().all(|b| b.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn ark_has_a_package_and_a_sha256_for_each_system() {
+        for (system, sha) in ARK_FILES {
+            assert!(["linux-x64", "darwin-arm64", "darwin-x64"].contains(&system), "{system}");
+            assert!(sha.len() == 64 && sha.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()), "{system}");
+        }
+        assert_eq!(SYSTEMS.len(), ARK_FILES.len());
     }
 }
