@@ -25,6 +25,8 @@ struct Live {
     workspace: String,
     /// More environment for herdr, and so for the consoles it starts.
     extra: Vec<(String, String)>,
+    /// Started with start_traced: the setup's corral commands are followed by strace too.
+    traced: bool,
 }
 
 impl Live {
@@ -72,7 +74,7 @@ impl Live {
         std::fs::write(dir.join("Rprofile"), format!("if (interactive()) source(\"{}\")\n", repo.join("r/corral.R").display())).unwrap();
 
         let extra = extra.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), vars: String::new(), workspace: String::new(), extra };
+        let mut live = Live { server: spawn_placeholder(), dir, console: String::new(), vars: String::new(), workspace: String::new(), extra, traced };
         let mut server = if traced {
             let mut c = live.command("strace");
             c.args(STRACE).arg(live.dir.join("strace-herdr.log")).args(["herdr", "server"]);
@@ -89,16 +91,28 @@ impl Live {
 
         let created = live.run("herdr", &["workspace", "create", "--cwd", live.dir.join("proj").to_str().unwrap()]);
         live.workspace = field(&created, "workspace_id").expect("no workspace");
-        let layout = live.run("corral", &["layout", "--editor", ""]);
+        let out = live.setup_corral(&["layout", "--editor", ""]);
+        assert!(out.status.success(), "corral layout: {}", String::from_utf8_lossy(&out.stderr));
+        let layout = String::from_utf8_lossy(&out.stdout).into_owned();
         live.console = field(&layout, "console").unwrap_or_else(|| panic!("no console in {layout}"));
         live.vars = field(&layout, "vars").unwrap_or_default();
-        wait_for(Duration::from_secs(60), "the R console", || live.corral(&["eval", "--check"]).status.success());
+        wait_for(Duration::from_secs(60), "the R console", || live.setup_corral(&["eval", "--check"]).status.success());
         // The console in the pane must be the corral under test, not one installed elsewhere.
         let stat = std::fs::read_to_string(format!("/proc/{}/stat", live.kernel_pid())).unwrap();
         let parent = stat.rsplit_once(')').unwrap().1.split_whitespace().nth(1).unwrap().to_string();
         let console = std::fs::canonicalize(format!("/proc/{parent}/exe")).unwrap();
         assert_eq!(console, std::fs::canonicalize(env!("CARGO_BIN_EXE_corral")).unwrap(), "the pane runs another corral");
         live
+    }
+
+    /// `corral ARGS` while the test starts: followed by strace too in a traced test,
+    /// appending to strace-setup.log, which the test reads with the other strace-* logs.
+    fn setup_corral(&self, args: &[&str]) -> Output {
+        if !self.traced {
+            return self.corral(args);
+        }
+        self.command("strace").arg("-A").args(STRACE).arg(self.dir.join("strace-setup.log")).arg("corral").args(args)
+            .stdin(Stdio::null()).output().unwrap()
     }
 
     /// A command with this test's environment: its herdr, its settings and state.
@@ -677,12 +691,13 @@ fn a_month_without_a_look_shows_in_the_variables_pane() {
     let state = live.dir.join("state/corral/update-check.json");
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     let version = env!("CARGO_PKG_VERSION");
-    std::fs::write(&state, format!(r#"{{"checked":{},"latest":"{version}"}}"#, now - 40 * 86_400)).unwrap();
+    std::fs::write(&state, format!(r#"{{"checked":{now},"looked":{},"latest":"{version}"}}"#, now - 40 * 86_400)).unwrap();
     live.wait_screen(&live.vars, &["No update check in 40 days: ctrl+b space → Update"]);
     let palette = live.run("corral", &["keys", "--json"]);
     assert!(palette.contains("Update: look for a newer version (40 days since the last look)"), "{palette}");
-    // A look since (the daily check, or `corral update --check`): the row is the hints again.
-    std::fs::write(&state, format!(r#"{{"checked":{now},"latest":"{version}"}}"#)).unwrap();
+    // A look since that reached GitHub (the daily check, or `corral update --check`): the row
+    // is the hints again. An attempt that didn't (`checked` alone, as above) didn't put it away.
+    std::fs::write(&state, format!(r#"{{"checked":{now},"looked":{now},"latest":"{version}"}}"#)).unwrap();
     wait_for(Duration::from_secs(20), "the reminder to go", || !live.screen(&live.vars).contains("No update check"));
 }
 
@@ -1781,9 +1796,10 @@ fn a_plot_object_opens_mirador_while_r_draws() {
 const STRACE: &[&str] = &["-f", "--seccomp-bpf", "-qq", "-e", "trace=execve,connect,sendto,sendmsg", "-o"];
 
 /// The lines of a strace log that reach beyond the machine: an IPv4 or IPv6 address other
-/// than loopback. Unix, netlink and unspecified sockets stay on it. A name looked up through
-/// DNS shows here too, as a connection to the name server. Each line comes with the program
-/// its process ran (its last execve before it), so a failure says who.
+/// than loopback, and any DNS query (port 53), a resolver on the machine included, since it
+/// passes the name on from outside the trace. Unix, netlink and unspecified sockets stay on
+/// it. Each line comes with the program its process ran (its last execve before it), so a
+/// failure says who.
 fn beyond_the_machine(log: &str) -> Vec<String> {
     let mut program: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
     let mut out = Vec::new();
@@ -1795,7 +1811,9 @@ fn beyond_the_machine(log: &str) -> Vec<String> {
             }
             continue;
         }
-        let beyond = if l.contains("sa_family=AF_INET6") {
+        let beyond = if (l.contains("sa_family=AF_INET,") || l.contains("sa_family=AF_INET6")) && l.contains("_port=htons(53)") {
+            true
+        } else if l.contains("sa_family=AF_INET6") {
             !(l.contains("\"::1\"") || l.contains("\"::ffff:127."))
         } else if l.contains("sa_family=AF_INET,") {
             !l.contains("inet_addr(\"127.")
@@ -1850,7 +1868,7 @@ fn ordinary_work_stays_on_the_machine() {
     let mut logs: Vec<PathBuf> = std::fs::read_dir(&live.dir).unwrap().flatten().map(|e| e.path())
         .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("strace-"))).collect();
     logs.sort();
-    assert_eq!(logs.len(), 9, "{logs:?}");
+    assert_eq!(logs.len(), 10, "herdr's, the setup's and the eight above: {logs:?}");
     let seen: usize = logs.iter().map(|p| std::fs::read_to_string(p).unwrap_or_default().lines().filter(|l| !l.contains("execve(")).count()).sum();
     let beyond: Vec<String> = logs.iter().flat_map(|p| beyond_the_machine(&std::fs::read_to_string(p).unwrap_or_default())).collect();
     assert!(seen > 0, "strace logged nothing at all");
