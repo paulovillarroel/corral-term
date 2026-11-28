@@ -99,21 +99,36 @@ fn pidinfo(pid: i32, flavor: i32, buf: &mut [u8]) -> bool {
     unsafe { proc_pidinfo(pid, flavor, 0, buf.as_mut_ptr().cast(), size) == size }
 }
 
-/// Running, and not a zombie (ended, waiting for its parent to collect it). The state
-/// comes from struct proc_bsdinfo (136 bytes: pbi_flags, then pbi_status); without an
-/// answer (another user's process), kill(pid, 0) says whether it exists at all.
+/// Running, and not a zombie (ended, waiting for its parent to collect it).
 #[cfg(target_os = "macos")]
 pub fn pid_alive(pid: i64) -> bool {
-    const PROC_PIDTBSDINFO: i32 = 3;
     const SZOMB: u32 = 5;
+    const ESRCH: i32 = 3;
     let Some(pid) = valid(pid) else { return false };
-    let mut info = [0u8; 136];
-    if pidinfo(pid, PROC_PIDTBSDINFO, &mut info) {
-        return u32::from_ne_bytes([info[4], info[5], info[6], info[7]]) != SZOMB;
+    match bsd_status(pid) {
+        Ok(status) => status != SZOMB,
+        Err(Some(ESRCH)) => false,
+        // No answer for another user's process (EPERM): kill(pid, 0) says whether it exists.
+        Err(_) => {
+            // SAFETY: signal 0 only checks that the process exists.
+            let exists = unsafe { kill(pid, 0) } == 0;
+            exists || std::io::Error::last_os_error().raw_os_error() == Some(1) // EPERM: it exists, and isn't ours
+        }
     }
-    // SAFETY: signal 0 only checks that the process exists.
-    let exists = unsafe { kill(pid, 0) } == 0;
-    exists || std::io::Error::last_os_error().raw_os_error() == Some(1) // EPERM: it exists, and isn't ours
+}
+
+/// pbi_status from struct proc_bsdinfo (136 bytes: pbi_flags, then pbi_status), or the
+/// error. The argument 1 asks for zombies too: without it the kernel doesn't find them.
+#[cfg(target_os = "macos")]
+fn bsd_status(pid: i32) -> Result<u32, Option<i32>> {
+    const PROC_PIDTBSDINFO: i32 = 3;
+    let mut info = [0u8; 136];
+    // SAFETY: the kernel writes at most the buffer's size.
+    let n = unsafe { proc_pidinfo(pid, PROC_PIDTBSDINFO, 1, info.as_mut_ptr().cast(), info.len() as i32) };
+    if n != info.len() as i32 {
+        return Err(std::io::Error::last_os_error().raw_os_error());
+    }
+    Ok(u32::from_ne_bytes([info[4], info[5], info[6], info[7]]))
 }
 
 /// The folder process `pid` is in right now, as the kernel has it: struct
@@ -234,11 +249,22 @@ mod tests {
         child.kill().unwrap();
         let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while pid_alive(pid) {
-            assert!(std::time::Instant::now() < end, "a zombie still counts as alive");
+            assert!(std::time::Instant::now() < end, "a zombie still counts as alive: {}", state(pid));
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         child.wait().unwrap();
         assert!(!pid_alive(pid));
+    }
+
+    /// What the kernel says about `pid`, for a failed assertion.
+    #[cfg(target_os = "linux")]
+    fn state(pid: i64) -> String {
+        std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_else(|e| e.to_string())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn state(pid: i64) -> String {
+        format!("pbi_status or errno: {:?}", bsd_status(pid as i32))
     }
 
     #[test]
