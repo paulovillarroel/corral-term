@@ -1357,6 +1357,7 @@ fn run_r(r: &Path, code: &str) -> bool {
     let (stdout, stderr) = match out.as_ref().map(|f| (f.try_clone(), f.try_clone())) {
         Some((Ok(a), Ok(b))) => {
             let mut f = &a;
+            // net: text: it only looks for the install line, to head the log with it
             let _ = writeln!(f, "\n==> {} {}", env::stamp(), code.lines().rev().find(|l| l.contains("install.packages") || l.contains("pak::pak")).unwrap_or("").trim());
             (Stdio::from(a), Stdio::from(b))
         }
@@ -1402,6 +1403,7 @@ quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib
 /// r_install_code with install.packages, but only packages already compiled for this
 /// system (macOS's binaries): none of them is compiled from source.
 fn r_install_binary_code(pkgs: &[&str]) -> String {
+    // net: r-packages
     r_install_code(pkgs, false).replace("install.packages(pkgs, lib = lib, quiet = TRUE)", r#"install.packages(pkgs, lib = lib, quiet = TRUE, type = "binary")"#)
 }
 
