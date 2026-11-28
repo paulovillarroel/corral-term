@@ -710,7 +710,7 @@ fn missing_steps(rows: &[Check], again: &str, offer: bool, unchanged: bool) -> b
             }
         }
         // R alone, with a terminal: the installer waits for it here (guide_r).
-        let guided = offer && manual.iter().all(|r| r.id == "r");
+        let guided = offer && can_ask() && manual.iter().all(|r| r.id == "r");
         if !later.is_empty() {
             let names: Vec<&str> = later.iter().filter_map(|r| r.brings.as_ref().map(|b| b.0.as_str())).collect();
             if guided {
@@ -1815,7 +1815,10 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         println!("  {n}. {}", tr("Open a new terminal, so it finds herdr and corral.", "Abre una terminal nueva, para que encuentre herdr y corral."));
         n += 1;
     } else if !on_path(&bin()) {
-        let rc = if std::env::var("SHELL").unwrap_or_default().ends_with("zsh") || cfg!(target_os = "macos") { "~/.zshrc" } else { "~/.bashrc" };
+        // Your shell's file; macOS's own (zsh) only when the shell isn't known.
+        let shell = std::env::var("SHELL").unwrap_or_default();
+        let rc = if shell.ends_with("zsh") { "~/.zshrc" } else if shell.ends_with("bash") { "~/.bashrc" }
+                 else if cfg!(target_os = "macos") { "~/.zshrc" } else { "~/.bashrc" };
         println!("  {n}. {}", trf!("Add {bold}{PATH_LINE}{off} at the end of {rc} and open a new terminal.",
                                    "Agrega {bold}{PATH_LINE}{off} al final de {rc} y abre una terminal nueva."));
         n += 1;
