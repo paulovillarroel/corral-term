@@ -74,10 +74,12 @@ check_only=0
 count_stop() {
     case "${CORRAL_NO_TELEMETRY:-0}${DO_NOT_TRACK:-0}" in 00 | 0 | "") ;; *) return 0 ;; esac
     if [ "$check_only" = 1 ] || ! command -v curl >/dev/null 2>&1; then return 0; fi
-    if [ -f "$config" ] && grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"' "$config" 2>/dev/null; then return 0; fi
+    # The settings on one line: JSON may put a key and its value on separate ones.
+    flat=$([ -f "$config" ] && tr '\n\r' '  ' < "$config" 2>/dev/null)
+    if printf '%s' "$flat" | grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"'; then return 0; fi
     # Nor with the sensitive profile: results without values, and agents asking (the default).
-    if [ -f "$config" ] && grep -q '"agent_output"[[:space:]]*:[[:space:]]*"structure"' "$config" 2>/dev/null &&
-        ! grep -Eq '"agents"[[:space:]]*:[[:space:]]*"(on|off)"' "$config" 2>/dev/null; then return 0; fi
+    if printf '%s' "$flat" | grep -q '"agent_output"[[:space:]]*:[[:space:]]*"structure"' &&
+        ! printf '%s' "$flat" | grep -Eq '"agents"[[:space:]]*:[[:space:]]*"(on|off)"'; then return 0; fi
     v=${3:-unknown}
     case "$v" in "" | *[!0-9.]*) v=unknown ;; esac
     # net: install-count
@@ -147,6 +149,7 @@ attestation() {
                              "Atestación sin comprobar: hace falta la CLI de GitHub (gh 2.49 o posterior).")"
         return 0
     fi
+    # net: attestation: gh checks its login with GitHub
     if ! gh auth status >/dev/null 2>&1; then
         printf '  %s\n' "$(t "Attestation not checked: gh isn't logged in (gh auth login)." \
                              "Atestación sin comprobar: gh no tiene una sesión iniciada (gh auth login).")"
