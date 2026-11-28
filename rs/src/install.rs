@@ -1228,12 +1228,13 @@ fn ask_agent(before: &Value, done: &mut Value) {
     }
 }
 
-/// The Python console's packages (IPython, cloudpickle, pyarrow) into uv's cache, so
-/// the first Python console starts at once instead of downloading them then.
+/// The Python console's packages (IPython, cloudpickle, pyarrow, duckdb) into uv's cache,
+/// so the first Python console starts at once instead of downloading them then.
 fn python_ready() {
     let Some(uv) = which("uv") else { return };
     println!("  {}", tr("… preparing the Python console (uv downloads IPython, pyarrow and duckdb once)",
                         "… preparo la consola de Python (uv descarga IPython, pyarrow y duckdb una vez)"));
+    // net: python-console: corral install fills uv's cache with the console's Python and packages
     let mut c = Command::new(uv);
     // As a console outside a project starts: in your home folder, with the same choice
     // of Python (a uv-managed one when uv would otherwise take the system's).
