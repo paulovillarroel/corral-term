@@ -15,7 +15,9 @@ fn repo() -> PathBuf {
 fn sources() -> Vec<(PathBuf, &'static [&'static str])> {
     const RUST: &[&str] = &["Command::new(\"curl\")", "which(\"curl\")", "Command::new(\"uv\")", "Command::new(\"uvx\")",
                             "Command::new(\"gh\")", "Command::new(\"wget\")", "TcpStream::connect", "UdpSocket", "TcpListener::bind",
-                            "pak::pak", "install.packages(", "setup::download(", "github_digest("];
+                            "pak::pak", "install.packages(", "setup::download(", "github_digest(",
+                            // The same programs run through a variable that holds their path.
+                            "Command::new(uv", "Command::new(&uv", "Command::new(curl", "Command::new(&curl", "Command::new(gh", "Command::new(&gh"];
     const SHELL: &[&str] = &["curl -f", "wget ", "gh attestation", "gh auth status"];
     const R: &[&str] = &["download.file(", "install.packages(", "pak::", "url(\"http", "socketConnection(", "curl::", "httr"];
     const PYTHON: &[&str] = &["urllib.request", "urlopen(", "requests.", "http.client", "socket.socket(", "create_connection(", "pip install"];
