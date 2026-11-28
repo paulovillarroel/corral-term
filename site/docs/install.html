@@ -267,7 +267,7 @@ Optional
     <p>When Fresh, DuckDB, Air or Ark move to a new version, their SHA-256s change too, one per system: put them next to the version in <code>rs/src/install.rs</code> (<code>rs/src/setup.rs</code> for Ark). GitHub shows them on the release page, and this prints them:</p>
     <pre><code><span class="p">$ </span>gh api repos/posit-dev/air/releases/tags/0.13.0 --jq '.assets[] | .name + "  " + .digest'</code></pre>
 
-    <h2>macOS</h2>
+    <h2 id="macos">macOS</h2>
     <div class="note warn"><p>The macOS version, for Apple silicon and Intel, is in development. Corral's code runs on a Mac and its tests pass there, and a Mac in the project's tests installs it from scratch with only R from CRAN, but no version with macOS packages is published yet. Until one is, the install line stops on a Mac and says so.</p></div>
 
     <nav class="pager" aria-label="Pages"></nav>
