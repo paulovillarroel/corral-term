@@ -38,11 +38,16 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
+      # The linker signs the Apple silicon build ad hoc, as macOS requires for arm64; the
+      # Intel build comes unsigned, and gets the same ad hoc signature here.
       - name: Build corral for Apple silicon and Intel
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
             cargo build --release --locked --target "$target" --manifest-path rs/Cargo.toml
+          done
+          codesign --force --sign - rs/target/x86_64-apple-darwin/release/corral
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
             codesign --verify --verbose "rs/target/$target/release/corral"
           done
           file rs/target/*-apple-darwin/release/corral
