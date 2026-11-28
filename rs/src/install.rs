@@ -1338,10 +1338,32 @@ fn r_install(r: &Path, pkgs: &[&str]) -> bool {
     (has_pak() && run_r(r, &r_install_code(pkgs, true))) || run_r(r, &r_install_code(pkgs, false))
 }
 
-/// R code run without your .Rprofile and without output; true when it ends with status 0.
+/// Where R's output goes while the installer puts packages in: kept, so a package that
+/// didn't go in can be looked into. Started over once it passes 1 MB.
+fn r_log() -> PathBuf {
+    state().join("corral/install-r.log")
+}
+
+/// R code run without your .Rprofile, its output added to r_log; true when it ends with
+/// status 0.
 fn run_r(r: &Path, code: &str) -> bool {
-    Command::new(r).args(["--no-init-file", "-e", code]).stdin(Stdio::null()).stdout(Stdio::null())
-        .stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    use std::io::Write;
+    let log = r_log();
+    let _ = std::fs::create_dir_all(log.parent().unwrap_or(Path::new(".")));
+    if std::fs::metadata(&log).is_ok_and(|m| m.len() > 1 << 20) {
+        let _ = std::fs::remove_file(&log);
+    }
+    let out = std::fs::OpenOptions::new().create(true).append(true).open(&log).ok();
+    let (stdout, stderr) = match out.as_ref().map(|f| (f.try_clone(), f.try_clone())) {
+        Some((Ok(a), Ok(b))) => {
+            let mut f = &a;
+            let _ = writeln!(f, "\n==> {} {}", env::stamp(), code.lines().rev().find(|l| l.contains("install.packages") || l.contains("pak::pak")).unwrap_or("").trim());
+            (Stdio::from(a), Stdio::from(b))
+        }
+        _ => (Stdio::null(), Stdio::null()),
+    };
+    Command::new(r).args(["--no-init-file", "-e", code]).stdin(Stdio::null()).stdout(stdout)
+        .stderr(stderr).status().is_ok_and(|s| s.success())
 }
 
 /// Whether R packages come already compiled here: on Linux, on a release Posit's package
@@ -1461,6 +1483,7 @@ fn system_libs_step(r: &Path, pkgs: &[&str]) {
         println!("    {}", trf!("If a system library is missing, pak says what they need: {cmd}",
                                 "Si falta una librería del sistema, pak indica lo que necesitan: {cmd}"));
     }
+    println!("    {}", trf!("What R said: {}", "Lo que dijo R: {}", short(&r_log())));
 }
 
 /// httpgd, which draws R's plots for Mirador and the agent. If it can't be installed
