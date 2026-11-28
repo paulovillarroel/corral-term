@@ -244,47 +244,179 @@ pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-// ----------------------------------------------------------------------- the browser (Windows from WSL, open on macOS, or xdg-open)
+// ----------------------------------------------------------------------- the browser: the system's default
 
-/// Windows browsers reachable from WSL, in default order. Firefox has no app
-/// mode, so it gets a new window; Edge and Chrome open one without tabs or address bar.
-const WINDOWS_BROWSERS: &[(&str, &[&str], &[&str])] = &[
+/// How a browser opens Mirador: Chromium-based ones as an app window (no tabs or address
+/// bar), Firefox in a new window, any other as the system opens a link.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Kind {
+    Chromium,
+    Firefox,
+    Other,
+}
+
+/// The kind of a browser by its program, app or desktop file name (msedge.exe,
+/// com.google.Chrome, brave-browser.desktop, org.mozilla.firefox…).
+fn kind_of(name: &str) -> Kind {
+    let n = name.to_lowercase();
+    if ["chrome", "msedge", "edgemac", "microsoft-edge", "brave", "chromium", "vivaldi"].iter().any(|k| n.contains(k)) {
+        Kind::Chromium
+    } else if n.contains("firefox") {
+        Kind::Firefox
+    } else {
+        Kind::Other
+    }
+}
+
+/// The browsers CORRAL_BROWSER can name, and where each lives on each system: on WSL its
+/// Windows program, on macOS its app, on Linux its command.
+const NAMED: &[(&str, &[&str], &[&str], &[&str])] = &[
     ("firefox", &["/mnt/c/Program Files/Mozilla Firefox/firefox.exe", "/mnt/c/Program Files (x86)/Mozilla Firefox/firefox.exe"],
-     &["--new-window", "{url}"]),
-    ("edge", &["/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-               "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe"], &["--app={url}"]),
-    ("chrome", &["/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"], &["--app={url}"]),
+     &["Firefox.app"], &["firefox"]),
+    ("edge", &["/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe"],
+     &["Microsoft Edge.app"], &["microsoft-edge", "microsoft-edge-stable"]),
+    ("chrome", &["/mnt/c/Program Files/Google/Chrome/Application/chrome.exe", "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe"],
+     &["Google Chrome.app"], &["google-chrome", "google-chrome-stable"]),
+    ("brave", &["/mnt/c/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"],
+     &["Brave Browser.app"], &["brave-browser", "brave"]),
+    ("chromium", &[], &["Chromium.app"], &["chromium", "chromium-browser"]),
+    ("safari", &[], &["Safari.app"], &[]),
 ];
 
-/// The command that opens `url`, or None when it should only be printed.
-/// CORRAL_BROWSER: firefox | edge | chrome | print | a command (`{url}` is replaced).
+/// The command that opens `url` in a browser of `kind` that runs as `program` (a Windows
+/// .exe from WSL, a command on Linux) or, on macOS, as the app `app`.
+fn open_with(kind: Kind, program: Option<&str>, app: Option<&str>, url: &str) -> Vec<String> {
+    let s = |v: &[&str]| v.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+    match (app, program, kind) {
+        // macOS: a new instance passes its arguments to the running one, which opens the window.
+        (Some(app), _, Kind::Chromium) => s(&["open", "-na", app, "--args", &format!("--app={url}")]),
+        (Some(app), _, _) => s(&["open", "-a", app, url]),
+        (None, Some(p), Kind::Chromium) => s(&[p, &format!("--app={url}")]),
+        (None, Some(p), Kind::Firefox) => s(&[p, "--new-window", url]),
+        (None, Some(p), Kind::Other) => s(&[p, url]),
+        (None, None, _) => s(&[if cfg!(target_os = "macos") { "open" } else { "xdg-open" }, url]),
+    }
+}
+
+/// A macOS app by its name, in /Applications or ~/Applications.
+fn mac_app(name: &str) -> Option<PathBuf> {
+    [PathBuf::from("/Applications"), env::home().join("Applications")].into_iter().map(|d| d.join(name)).find(|p| p.is_dir())
+}
+
+fn wsl() -> bool {
+    std::env::var_os("WSL_DISTRO_NAME").is_some()
+}
+
+/// The browser CORRAL_BROWSER names, as installed on this system.
+fn named_browser(name: &str, url: &str) -> Option<Vec<String>> {
+    let (_, windows, apps, commands) = NAMED.iter().find(|(n, ..)| *n == name)?;
+    let kind = kind_of(name);
+    if wsl() {
+        let exe = windows.iter().find(|p| Path::new(p).exists())?;
+        return Some(open_with(kind, Some(exe), None, url));
+    }
+    if cfg!(target_os = "macos") {
+        let app = apps.iter().find_map(|a| mac_app(a))?;
+        return Some(open_with(kind, None, Some(&app.to_string_lossy()), url));
+    }
+    let cmd = commands.iter().find_map(|c| env::which(c))?;
+    Some(open_with(kind, Some(&cmd.to_string_lossy()), None, url))
+}
+
+/// Windows' default browser, seen from WSL: the program its https handler runs, from the
+/// registry (reg.exe answers in about 40 ms), as a path WSL can run.
+fn windows_default() -> Option<(String, Kind)> {
+    let reg = |args: &[&str]| -> Option<String> {
+        let mut cmd = Command::new("reg.exe");
+        cmd.args(args).current_dir("/mnt/c").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        env::windows_env(&mut cmd);
+        let out = cmd.output().ok().filter(|o| o.status.success())?;
+        Some(String::from_utf8_lossy(&out.stdout).replace('\r', ""))
+    };
+    let choice = reg(&["query", r"HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice", "/v", "ProgId"])?;
+    let prog_id = choice.lines().find(|l| l.contains("ProgId"))?.split_whitespace().last()?.to_string();
+    let command = reg(&["query", &format!(r"HKCR\{prog_id}\shell\open\command"), "/ve"])?;
+    windows_program(command.lines().find(|l| l.contains("REG_SZ"))?)
+}
+
+/// The program at the start of a registry open command (`"C:\…\firefox.exe" -osint -url
+/// "%1"`), as a WSL path (/mnt/c/…), and its kind.
+fn windows_program(line: &str) -> Option<(String, Kind)> {
+    let command = line.split_once("REG_SZ").map(|(_, c)| c.trim()).unwrap_or(line.trim());
+    let exe = match command.strip_prefix('"') {
+        Some(rest) => rest.split('"').next()?,
+        None => command.split_whitespace().next()?,
+    };
+    let (drive, rest) = exe.split_once(":\\")?;
+    let path = format!("/mnt/{}/{}", drive.to_lowercase(), rest.replace('\\', "/"));
+    let name = path.rsplit('/').next().unwrap_or("").to_string();
+    Some((path, kind_of(&name)))
+}
+
+/// macOS's default browser: the app LaunchServices hands https links to, by its bundle id
+/// (Safari when none was chosen).
+fn mac_default() -> String {
+    let plist = env::home().join("Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist");
+    let json = Command::new("plutil").args(["-convert", "json", "-o", "-"]).arg(&plist).output().ok()
+        .and_then(|o| json::parse(String::from_utf8_lossy(&o.stdout).trim()).ok()).unwrap_or(Value::Null);
+    mac_default_in(&json)
+}
+
+fn mac_default_in(plist: &Value) -> String {
+    plist.get("LSHandlers").arr().iter().find(|h| h.get("LSHandlerURLScheme").str() == Some("https"))
+        .and_then(|h| h.get("LSHandlerRoleAll").str()).unwrap_or("com.apple.safari").to_string()
+}
+
+/// Linux's default browser, as xdg-settings names it (firefox.desktop).
+fn linux_default() -> Option<String> {
+    let out = Command::new(env::which("xdg-settings")?).args(["get", "default-web-browser"]).output().ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// The command that opens `url`, or None when it should only be printed. Mirador opens in
+/// the system's default browser, on WSL (Windows'), macOS and Linux alike: as an app
+/// window when that browser is Chromium-based, in a new window with Firefox.
+/// CORRAL_BROWSER: firefox | edge | chrome | brave | chromium | safari | print | a command
+/// (`{url}` is replaced).
 pub fn browser_argv(url: &str) -> Option<Vec<String>> {
     let choice = std::env::var("CORRAL_BROWSER").unwrap_or_default().trim().to_string();
     if choice == "print" {
         return None;
     }
-    if !choice.is_empty() && !WINDOWS_BROWSERS.iter().any(|(n, _, _)| *n == choice) {
+    if NAMED.iter().any(|(n, ..)| *n == choice) {
+        if let Some(argv) = named_browser(&choice, url) {
+            return Some(argv);
+        }
+    } else if !choice.is_empty() {
         let mut argv: Vec<String> = env::sh_split(&choice).into_iter().map(|a| a.replace("{url}", url)).collect();
         if !choice.contains("{url}") {
             argv.push(url.to_string());
         }
         return Some(argv);
     }
-    if std::env::var_os("WSL_DISTRO_NAME").is_some() {
-        for (name, paths, args) in WINDOWS_BROWSERS {
-            if !choice.is_empty() && *name != choice {
-                continue;
-            }
-            if let Some(exe) = paths.iter().find(|p| Path::new(p).exists()) {
-                // The .exe directly, so cmd.exe never parses the '&' in httpgd's token URL.
-                let mut argv = vec![exe.to_string()];
-                argv.extend(args.iter().map(|a| a.replace("{url}", url)));
-                return Some(argv);
-            }
+    if wsl() {
+        // The .exe directly, so cmd.exe never parses the '&' in httpgd's token URL.
+        let (exe, kind) = windows_default().filter(|(p, _)| Path::new(p).exists())
+            .or_else(|| ["firefox", "edge", "chrome"].iter().find_map(|n| {
+                let (_, windows, ..) = NAMED.iter().find(|(m, ..)| m == n)?;
+                windows.iter().find(|p| Path::new(p).exists()).map(|p| (p.to_string(), kind_of(n)))
+            }))?;
+        return Some(open_with(kind, Some(&exe), None, url));
+    }
+    if cfg!(target_os = "macos") {
+        let id = mac_default();
+        if kind_of(&id) == Kind::Chromium {
+            return Some(vec!["open".into(), "-nb".into(), id, "--args".into(), format!("--app={url}")]);
+        }
+        return Some(open_with(Kind::Other, None, None, url));
+    }
+    if let Some(desktop) = linux_default().filter(|d| kind_of(d) == Kind::Chromium) {
+        let name = NAMED.iter().find(|(n, ..)| desktop.to_lowercase().contains(&n.replace("edge", "microsoft-edge")));
+        if let Some(cmd) = name.and_then(|(_, _, _, cmds)| cmds.iter().find_map(|c| env::which(c))) {
+            return Some(open_with(Kind::Chromium, Some(&cmd.to_string_lossy()), None, url));
         }
     }
-    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-    env::which(opener).map(|_| vec![opener.to_string(), url.to_string()])
+    env::which("xdg-open").map(|_| open_with(Kind::Other, None, None, url))
 }
 
 pub fn open_app_window(url: &str) {
@@ -351,11 +483,92 @@ pub fn bring_to_front(title: &str, place: bool) {
         return; // no windows are being opened, so none to raise
     }
     let (where_, w, h) = window_place();
-    let extra = if place && !where_.is_empty() { format!(" -Place {where_} -Width {w} -Height {h}") } else { String::new() };
-    if let Some(mut cmd) = front_command(title, 8.0, &extra) {
+    let placing = place && !where_.is_empty();
+    let extra = if placing { format!(" -Place {where_} -Width {w} -Height {h}") } else { String::new() };
+    let place_arg = if placing { where_ } else { "" };
+    let cmd = front_command(title, 8.0, &extra).or_else(|| {
+        if cfg!(target_os = "macos") {
+            let mut c = Command::new("osascript");
+            c.args(["-l", "JavaScript", "-e", MAC_FRONT, title, "8", place_arg, &w.to_string(), &h.to_string()]);
+            Some(c)
+        } else if std::env::var_os("DISPLAY").is_some() && env::which("wmctrl").is_some() {
+            let mut c = Command::new("sh");
+            c.args(["-c", LINUX_FRONT, "sh", title, "8", place_arg, &w.to_string(), &h.to_string()]);
+            Some(c)
+        } else {
+            None
+        }
+    });
+    if let Some(mut cmd) = cmd {
         let _ = env::spawn_detached(&mut cmd, None);
     }
 }
+
+/// lib/front.ps1's job on macOS, run by osascript: wait up to WAIT seconds for a window
+/// whose title starts with PREFIX, in any app (System Events), and with PLACE "right" put
+/// it on the right of the screen's visible area (W x H, fractions of it), as on WSL; then
+/// raise it and its app. It needs the terminal to be allowed to control the computer
+/// (System Settings → Privacy & Security → Accessibility); without that it does nothing.
+/// Arguments: PREFIX WAIT PLACE W H.
+const MAC_FRONT: &str = r#"function run(argv) {
+  const [prefix, wait, place, fw, fh] = argv;
+  try {
+    ObjC.import('AppKit');
+    const se = Application('System Events');
+    let win = null, proc = null;
+    const end = Date.now() + parseFloat(wait) * 1000;
+    while (!win && Date.now() < end) {
+      for (const p of se.processes.whose({ backgroundOnly: false })()) {
+        try {
+          const ws = p.windows.whose({ name: { _beginsWith: prefix } })();
+          if (ws.length) { win = ws[0]; proc = p; break; }
+        } catch (e) {}
+      }
+      if (!win) delay(0.2);
+    }
+    if (!win) return 'not found';
+    if (place === 'right') {
+      const screen = $.NSScreen.mainScreen, full = screen.frame, vis = screen.visibleFrame;
+      const aw = vis.size.width, ah = vis.size.height;
+      const w = Math.round(aw * parseFloat(fw)), h = Math.round(ah * parseFloat(fh));
+      const margin = Math.round(aw * 0.012);
+      // System Events counts from the top left; AppKit, from the bottom left.
+      const top = full.size.height - (vis.origin.y + vis.size.height);
+      win.position = [Math.round(vis.origin.x + aw - w - margin), Math.round(top + (ah - h) / 2)];
+      win.size = [w, h];
+    }
+    try { win.actions['AXRaise'].perform(); } catch (e) {}
+    proc.frontmost = true;
+    return 'ok';
+  } catch (e) {
+    return 'not allowed: ' + e;
+  }
+}"#;
+
+/// lib/front.ps1's job on Linux with an X11 window manager, through wmctrl: wait up to
+/// WAIT seconds for a window whose title starts with PREFIX, with PLACE "right" put it on
+/// the right of the work area (W x H, fractions of it), then raise it. Wayland doesn't
+/// let a program move another's windows, so there it does nothing.
+/// Arguments: PREFIX WAIT PLACE W H.
+const LINUX_FRONT: &str = r#"prefix=$1 wait=$2 place=$3 fw=$4 fh=$5
+tries=$(awk -v w="$wait" 'BEGIN { print int(w * 5) }')
+id=""
+while [ "$tries" -gt 0 ]; do
+  id=$(wmctrl -l 2>/dev/null | awk -v p="$prefix" '{ t = $0; for (k = 1; k <= 3; k++) sub(/^[^ ]+ +/, "", t); if (index(t, p) == 1) { print $1; exit } }')
+  [ -n "$id" ] && break
+  sleep 0.2
+  tries=$((tries - 1))
+done
+[ -n "$id" ] || exit 0
+if [ "$place" = right ]; then
+  geometry=$(wmctrl -d 2>/dev/null | awk -v fw="$fw" -v fh="$fh" '$2 == "*" { for (k = 1; k <= NF; k++) if ($k == "WA:") { split($(k+1), o, ","); split($(k+2), s, "x");
+    w = int(s[1] * fw); h = int(s[2] * fh); m = int(s[1] * 0.012); print "0," o[1] + s[1] - w - m "," o[2] + int((s[2] - h) / 2) "," w "," h; exit } }')
+  if [ -n "$geometry" ]; then
+    wmctrl -i -r "$id" -b remove,maximized_vert,maximized_horz
+    wmctrl -i -r "$id" -e "$geometry"
+  fi
+fi
+wmctrl -i -a "$id""#;
 
 // ----------------------------------------------------------------------- showing a plot
 
@@ -825,6 +1038,106 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_browser_is_known_by_its_name() {
+        for name in ["chrome.exe", "msedge.exe", "com.google.chrome", "com.microsoft.edgemac", "com.brave.Browser",
+                     "google-chrome.desktop", "microsoft-edge.desktop", "chromium-browser.desktop", "brave", "chromium"] {
+            assert_eq!(kind_of(name), Kind::Chromium, "{name}");
+        }
+        for name in ["firefox.exe", "org.mozilla.firefox", "firefox.desktop"] {
+            assert_eq!(kind_of(name), Kind::Firefox, "{name}");
+        }
+        for name in ["com.apple.safari", "company.thebrowser.browser", "epiphany.desktop"] {
+            assert_eq!(kind_of(name), Kind::Other, "{name}");
+        }
+    }
+
+    /// Windows' default browser comes from its open command in the registry, as reg.exe prints it.
+    #[test]
+    fn windows_default_browser_from_the_registry() {
+        let line = r#"    (Predeterminado)    REG_SZ    "C:\Program Files\Mozilla Firefox\firefox.exe" -osint -url "%1""#;
+        assert_eq!(windows_program(line), Some(("/mnt/c/Program Files/Mozilla Firefox/firefox.exe".into(), Kind::Firefox)));
+        let edge = r#"    (Default)    REG_SZ    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --single-argument %1"#;
+        assert_eq!(windows_program(edge), Some(("/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe".into(), Kind::Chromium)));
+        let bare = r#"    (Default)    REG_SZ    D:\Apps\Browser\browser.exe %1"#;
+        assert_eq!(windows_program(bare), Some(("/mnt/d/Apps/Browser/browser.exe".into(), Kind::Other)));
+        assert_eq!(windows_program("nothing here"), None);
+    }
+
+    /// macOS's default browser comes from LaunchServices' handler for https; Safari otherwise.
+    #[test]
+    fn macos_default_browser_from_launchservices() {
+        let plist = json::parse(r#"{"LSHandlers":[{"LSHandlerURLScheme":"mailto","LSHandlerRoleAll":"com.apple.mail"},
+            {"LSHandlerURLScheme":"https","LSHandlerRoleAll":"org.mozilla.firefox"}]}"#).unwrap();
+        assert_eq!(mac_default_in(&plist), "org.mozilla.firefox");
+        assert_eq!(mac_default_in(&Value::Null), "com.apple.safari");
+    }
+
+    /// Chromium-based browsers open Mirador as an app window, Firefox in a new window, and
+    /// the rest as the system opens a link.
+    #[test]
+    fn each_kind_of_browser_opens_its_way() {
+        let url = "http://127.0.0.1:9/?token=a&b=c";
+        assert_eq!(open_with(Kind::Chromium, Some("/mnt/c/x/msedge.exe"), None, url), ["/mnt/c/x/msedge.exe", &format!("--app={url}")]);
+        assert_eq!(open_with(Kind::Firefox, Some("/usr/bin/firefox"), None, url), ["/usr/bin/firefox", "--new-window", url]);
+        assert_eq!(open_with(Kind::Chromium, None, Some("/Applications/Google Chrome.app"), url),
+                   ["open", "-na", "/Applications/Google Chrome.app", "--args", &format!("--app={url}")]);
+        assert_eq!(open_with(Kind::Other, None, Some("/Applications/Safari.app"), url), ["open", "-a", "/Applications/Safari.app", url]);
+        let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        assert_eq!(open_with(Kind::Other, None, None, url), [opener, url]);
+    }
+
+    /// On Linux with X11, wmctrl finds the window by its title, places it on the right of
+    /// the work area as on WSL, and raises it. Checked with a stand-in wmctrl.
+    #[test]
+    fn linux_places_and_raises_the_window_with_wmctrl() {
+        let dir = std::env::temp_dir().join(format!("corral-test-wmctrl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("calls");
+        std::fs::write(dir.join("wmctrl"), format!(r#"#!/bin/sh
+case "$1" in
+  -l) printf '0x01  0 host Corral notes\n0x02  0 host Mirador — plots\n' ;;
+  -d) printf '0  * DG: 1920x1080  VP: 0,0  WA: 0,27 1920x1053  Workspace 1\n' ;;
+  *) echo "$*" >> {} ;;
+esac
+"#, log.display())).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.join("wmctrl"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = format!("{}:/usr/bin:/bin", dir.display());
+        let status = Command::new("sh").args(["-c", LINUX_FRONT, "sh", "Mirador", "1", "right", "0.5", "0.85"])
+            .env("PATH", &path).status().unwrap();
+        assert!(status.success());
+        let calls = std::fs::read_to_string(&log).unwrap();
+        // 960 x 895 at 1920 - 960 - 23 = 937, 27 + (1053 - 895) / 2 = 106.
+        assert_eq!(calls, "-i -r 0x02 -b remove,maximized_vert,maximized_horz\n-i -r 0x02 -e 0,937,106,960,895\n-i -a 0x02\n");
+        // Without placing, only raised.
+        std::fs::remove_file(&log).unwrap();
+        Command::new("sh").args(["-c", LINUX_FRONT, "sh", "Mirador", "1", "", "0.5", "0.85"]).env("PATH", &path).status().unwrap();
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "-i -a 0x02\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// On macOS the script that places and raises the window runs (osascript compiles it)
+    /// and gives up when no window matches, or when the terminal may not control others.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_front_script_runs() {
+        let mut child = Command::new("osascript").args(["-l", "JavaScript", "-e", MAC_FRONT, "NoSuchCorralWindow", "0", "", "0.5", "0.85"])
+            .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
+        let end = Instant::now() + Duration::from_secs(60);
+        while child.try_wait().unwrap().is_none() {
+            if Instant::now() > end {
+                let _ = child.kill();
+                panic!("osascript didn't finish in 60 s");
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let out = child.wait_with_output().unwrap();
+        let said = String::from_utf8_lossy(&out.stdout);
+        assert!(said.starts_with("not found") || said.starts_with("not allowed"), "{said} {}", String::from_utf8_lossy(&out.stderr));
+    }
 
     /// A new window's address says where Corral will place it, after the plot it shows.
     #[test]
