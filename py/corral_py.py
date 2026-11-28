@@ -111,10 +111,25 @@ def setting(key: str):
 
 
 def pid_alive(pid) -> bool:
-    """Running, and not a zombie."""
+    """Running, and not a zombie: Linux says so in /proc. macOS has no /proc, and there
+    kill(pid, 0) only says the process exists (a zombie counts as running)."""
     try:
-        stat = Path(f"/proc/{int(pid)}/stat").read_text()
-    except (OSError, ValueError, TypeError):
+        pid = int(pid)
+    except (ValueError, TypeError):
+        return False
+    if pid <= 0:
+        return False
+    if not sys.platform.startswith("linux"):
+        try:
+            os.kill(pid, 0)
+        except PermissionError:
+            return True  # it exists, and isn't ours
+        except OSError:
+            return False
+        return True
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
         return False
     return stat.rsplit(")", 1)[-1].split()[0] not in ("Z", "X")
 
