@@ -112,7 +112,24 @@ jobs:
           export CORRAL_URL="file://$RUNNER_TEMP/${{ matrix.package }}"
           CORRAL_SHA256=$( (sha256sum "$RUNNER_TEMP/${{ matrix.package }}" 2>/dev/null || shasum -a 256 "$RUNNER_TEMP/${{ matrix.package }}") | cut -d' ' -f1)
           export CORRAL_SHA256
-          sh "$RUNNER_TEMP/install.sh" < /dev/null
+          sh "$RUNNER_TEMP/install.sh" < /dev/null | tee "$RUNNER_TEMP/install.out"
+
+      # What a person would do with the closing lines: run the command they name, then
+      # corral install. Only when the installer names one: a new Ubuntu lacks httpgd's
+      # system libraries, while a Mac needs none.
+      - name: Follow the installer's advice
+        env:
+          CORRAL_NO_TELEMETRY: "1"
+          CORRAL_LANG: en
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cmd=$(grep -o 'sudo apt install [a-z0-9 .+-]*[a-z0-9]' "$RUNNER_TEMP/install.out" | tail -n 1 || true)
+          if [ -n "$cmd" ]; then
+            echo "The installer said: $cmd"
+            sudo apt-get update -q
+            $cmd -y
+            corral install < /dev/null
+          fi
 
       - name: What it brought runs
         run: |
