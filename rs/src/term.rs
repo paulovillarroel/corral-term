@@ -6,18 +6,63 @@ use std::io::{Read, Write};
 use std::mem::ManuallyDrop;
 use std::os::fd::FromRawFd;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Termios {
-    c_iflag: u32,
-    c_oflag: u32,
-    c_cflag: u32,
-    c_lflag: u32,
-    c_line: u8,
-    c_cc: [u8; 32],
-    c_ispeed: u32,
-    c_ospeed: u32,
+// termios, as each system's C headers lay it out: Linux (glibc and musl) with 32-bit
+// flags and a line discipline byte, macOS with `unsigned long` flags and 20 control
+// characters. A wrong layout would have tcgetattr write past the struct.
+#[cfg(target_os = "linux")]
+mod sys {
+    pub type Flag = u32;
+    pub type NFds = u64;
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct Termios {
+        pub c_iflag: Flag,
+        pub c_oflag: Flag,
+        pub c_cflag: Flag,
+        pub c_lflag: Flag,
+        pub c_line: u8,
+        pub c_cc: [u8; 32],
+        pub c_ispeed: u32,
+        pub c_ospeed: u32,
+    }
+    pub const ICANON: Flag = 0o2;
+    pub const ECHO: Flag = 0o10;
+    pub const ISIG: Flag = 0o1;
+    pub const IEXTEN: Flag = 0o100000;
+    pub const IXON: Flag = 0o2000;
+    pub const ICRNL: Flag = 0o400;
+    pub const VTIME: usize = 5;
+    pub const VMIN: usize = 6;
+    pub const TIOCGWINSZ: u64 = 0x5413;
 }
+
+#[cfg(target_os = "macos")]
+mod sys {
+    pub type Flag = u64;
+    pub type NFds = u32;
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct Termios {
+        pub c_iflag: Flag,
+        pub c_oflag: Flag,
+        pub c_cflag: Flag,
+        pub c_lflag: Flag,
+        pub c_cc: [u8; 20],
+        pub c_ispeed: u64,
+        pub c_ospeed: u64,
+    }
+    pub const ICANON: Flag = 0x100;
+    pub const ECHO: Flag = 0x8;
+    pub const ISIG: Flag = 0x80;
+    pub const IEXTEN: Flag = 0x400;
+    pub const IXON: Flag = 0x200;
+    pub const ICRNL: Flag = 0x100;
+    pub const VTIME: usize = 17;
+    pub const VMIN: usize = 16;
+    pub const TIOCGWINSZ: u64 = 0x4008_7468;
+}
+
+use sys::*;
 
 #[repr(C)]
 struct PollFd {
@@ -39,16 +84,42 @@ extern "C" {
     fn tcgetattr(fd: i32, t: *mut Termios) -> i32;
     fn tcsetattr(fd: i32, action: i32, t: *const Termios) -> i32;
     fn ioctl(fd: i32, request: u64, ...) -> i32;
-    fn poll(fds: *mut PollFd, n: u64, timeout: i32) -> i32;
+    fn poll(fds: *mut PollFd, n: NFds, timeout: i32) -> i32;
 }
 
-const ICANON: u32 = 0o2;
-const ECHO: u32 = 0o10;
-const VTIME: usize = 5;
-const VMIN: usize = 6;
 const TCSADRAIN: i32 = 1;
-const TIOCGWINSZ: u64 = 0x5413;
 const POLLIN: i16 = 1;
+
+/// The settings of the terminal on `fd`, or None when it isn't one.
+fn get(fd: i32) -> Option<Termios> {
+    // SAFETY: an all-zero termios is a valid value of this plain C struct.
+    let mut t: Termios = unsafe { std::mem::zeroed() };
+    // SAFETY: tcgetattr fills a struct laid out as this system's headers say (mod sys).
+    (unsafe { tcgetattr(fd, &mut t) } == 0).then_some(t)
+}
+
+fn set(fd: i32, t: &Termios) {
+    // SAFETY: a struct tcgetattr filled, with some flags changed.
+    unsafe { tcsetattr(fd, TCSADRAIN, t) };
+}
+
+/// Keys one at a time, without echo (`plain_keys`: Ctrl+C, Ctrl+Z and Ctrl+S too).
+fn keys_mode(mut t: Termios, plain_keys: bool) -> Termios {
+    t.c_lflag &= !(ICANON | ECHO);
+    if plain_keys {
+        t.c_lflag &= !(ISIG | IEXTEN);
+        t.c_iflag &= !(IXON | ICRNL);
+    }
+    t.c_cc[VMIN] = 1;
+    t.c_cc[VTIME] = 0;
+    t
+}
+
+fn winsize(fd: i32) -> Option<Winsize> {
+    let mut ws = Winsize::default();
+    // SAFETY: TIOCGWINSZ fills a winsize struct.
+    (unsafe { ioctl(fd, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0).then_some(ws)
+}
 
 pub struct Screen {
     saved: Termios,
@@ -64,16 +135,8 @@ pub fn out(s: &str) {
 
 impl Screen {
     pub fn enter(mouse: bool) -> Option<Screen> {
-        let mut t = Termios { c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0, c_cc: [0; 32], c_ispeed: 0, c_ospeed: 0 };
-        // SAFETY: plain C calls on stdin with a correctly laid out struct.
-        if unsafe { tcgetattr(0, &mut t) } != 0 {
-            return None;
-        }
-        let saved = t;
-        t.c_lflag &= !(ICANON | ECHO);
-        t.c_cc[VMIN] = 1;
-        t.c_cc[VTIME] = 0;
-        unsafe { tcsetattr(0, TCSADRAIN, &t) };
+        let saved = get(0)?;
+        set(0, &keys_mode(saved, false));
         out(&format!("\x1b[?1049h\x1b[?25l{}", if mouse { "\x1b[?1000h\x1b[?1006h" } else { "" }));
         Some(Screen { saved, mouse, pending: Default::default() })
     }
@@ -246,62 +309,39 @@ pub struct Raw {
     saved: Termios,
 }
 
-const ISIG: u32 = 0o1;
-const IEXTEN: u32 = 0o100000;
-const IXON: u32 = 0o2000;
-const ICRNL: u32 = 0o400;
-
 impl Raw {
     pub fn enter() -> Option<Raw> {
-        let mut t = Termios { c_iflag: 0, c_oflag: 0, c_cflag: 0, c_lflag: 0, c_line: 0, c_cc: [0; 32], c_ispeed: 0, c_ospeed: 0 };
-        // SAFETY: plain C calls on stdin with a correctly laid out struct.
-        if unsafe { tcgetattr(0, &mut t) } != 0 {
-            return None;
-        }
-        let saved = t;
-        t.c_lflag &= !(ICANON | ECHO | ISIG | IEXTEN);
-        t.c_iflag &= !(IXON | ICRNL);
-        t.c_cc[VMIN] = 1;
-        t.c_cc[VTIME] = 0;
-        unsafe { tcsetattr(0, TCSADRAIN, &t) };
+        let saved = get(0)?;
+        set(0, &keys_mode(saved, true));
         Some(Raw { saved })
     }
 }
 
 impl Drop for Raw {
     fn drop(&mut self) {
-        // SAFETY: restore the settings read in enter().
-        unsafe { tcsetattr(0, TCSADRAIN, &self.saved) };
+        // Restore the settings read in enter().
+        set(0, &self.saved);
     }
 }
 
 /// Columns and rows of the terminal on stdout.
 pub fn size() -> (usize, usize) {
-    let mut ws = Winsize::default();
-    // SAFETY: TIOCGWINSZ fills a winsize struct.
-    if unsafe { ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0 && ws.cols > 0 {
-        (ws.cols as usize, ws.rows as usize)
-    } else {
-        (80, 24)
+    match winsize(1) {
+        Some(ws) if ws.cols > 0 => (ws.cols as usize, ws.rows as usize),
+        _ => (80, 24),
     }
 }
 
 /// Width and height of the terminal in pixels, when the terminal reports them (else 0, 0).
 pub fn pixels() -> (usize, usize) {
-    let mut ws = Winsize::default();
-    // SAFETY: TIOCGWINSZ fills a winsize struct.
-    if unsafe { ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize) } == 0 {
-        (ws.xpixel as usize, ws.ypixel as usize)
-    } else {
-        (0, 0)
-    }
+    winsize(1).map(|ws| (ws.xpixel as usize, ws.ypixel as usize)).unwrap_or((0, 0))
 }
 
 impl Drop for Screen {
     fn drop(&mut self) {
         out(&format!("{}\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l", if self.mouse { "\x1b[?1006l\x1b[?1000l" } else { "" }));
-        // SAFETY: restore the settings read in enter().
-        unsafe { tcsetattr(0, TCSADRAIN, &self.saved) };
+        // Restore the settings read in enter().
+        set(0, &self.saved);
     }
 }
 
@@ -375,6 +415,82 @@ pub fn wrap(s: &str, width: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::fd::AsRawFd;
+    use std::process::Command;
+
+    /// A new pseudo-terminal: its main side, kept open, and the terminal itself.
+    fn pty() -> (File, File) {
+        use std::os::unix::fs::OpenOptionsExt;
+        extern "C" {
+            fn posix_openpt(flags: i32) -> i32;
+            fn grantpt(fd: i32) -> i32;
+            fn unlockpt(fd: i32) -> i32;
+            fn ptsname(fd: i32) -> *const std::ffi::c_char;
+        }
+        #[cfg(target_os = "linux")]
+        const O_NOCTTY: i32 = 0o400;
+        #[cfg(target_os = "macos")]
+        const O_NOCTTY: i32 = 0x20000;
+        const O_RDWR: i32 = 2;
+        // SAFETY: plain C calls; ptsname's string is copied before anything else runs.
+        unsafe {
+            let fd = posix_openpt(O_RDWR | O_NOCTTY);
+            assert!(fd >= 0, "posix_openpt failed");
+            assert!(grantpt(fd) == 0 && unlockpt(fd) == 0, "grantpt/unlockpt failed");
+            let name = std::ffi::CStr::from_ptr(ptsname(fd)).to_string_lossy().into_owned();
+            let tty = std::fs::OpenOptions::new().read(true).write(true).custom_flags(O_NOCTTY).open(&name).unwrap();
+            (File::from_raw_fd(fd), tty)
+        }
+    }
+
+    /// The system's own stty, run on `tty`.
+    fn stty(tty: &File, args: &[&str]) -> String {
+        let out = Command::new("stty").args(args).stdin(tty.try_clone().unwrap()).output().unwrap();
+        assert!(out.status.success(), "stty {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn words(text: &str) -> Vec<String> {
+        text.split_whitespace().map(|w| w.trim_end_matches(';').to_string()).collect()
+    }
+
+    /// The layout and the values in `mod sys`, checked against the system's stty on a
+    /// real terminal: a wrong layout or flag shows here, not as a console that echoes
+    /// keys or a stack overwritten by tcgetattr.
+    #[test]
+    fn terminal_settings_match_the_system() {
+        let (_main, tty) = pty();
+        let fd = tty.as_raw_fd();
+        let saved = get(fd).expect("tcgetattr on a pty");
+
+        // Written back unchanged, nothing changes: every field is where the system has it.
+        let before = stty(&tty, &["-g"]);
+        set(fd, &saved);
+        assert_eq!(stty(&tty, &["-g"]), before);
+
+        // What the console's mode switches off reads back as off, and nothing else.
+        let on = words(&stty(&tty, &["-a"]));
+        for flag in ["icanon", "echo", "isig", "iexten", "ixon", "icrnl", "opost"] {
+            assert!(on.iter().any(|w| w == flag), "a new terminal should have {flag}: {on:?}");
+        }
+        set(fd, &keys_mode(saved, true));
+        let off = words(&stty(&tty, &["-a"]));
+        for flag in ["-icanon", "-echo", "-isig", "-iexten", "-ixon", "-icrnl", "opost"] {
+            assert!(off.iter().any(|w| w == flag), "expected {flag} after keys_mode: {off:?}");
+        }
+        set(fd, &saved);
+        assert_eq!(stty(&tty, &["-g"]), before);
+
+        // VMIN and VTIME are read where stty writes them.
+        stty(&tty, &["min", "5", "time", "3"]);
+        let t = get(fd).unwrap();
+        assert_eq!((t.c_cc[VMIN], t.c_cc[VTIME]), (5, 3));
+
+        // TIOCGWINSZ reads the size stty sets.
+        stty(&tty, &["rows", "33", "columns", "101"]);
+        let ws = winsize(fd).expect("TIOCGWINSZ on a pty");
+        assert_eq!((ws.cols, ws.rows), (101, 33));
+    }
 
     #[test]
     fn alt_and_function_keys() {
