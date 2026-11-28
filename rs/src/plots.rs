@@ -192,7 +192,7 @@ pub fn open_window_once(info: &Value, url: &str) -> bool {
 /// instead of at the size it opens with and again when it is placed. Unchanged when
 /// windows aren't placed (corral config mirador_window free).
 fn with_fit(url: &str) -> String {
-    fit_url(url, window_place())
+    fit_url(url, if own_window() { window_place() } else { ("", 0.0, 0.0) })
 }
 
 fn fit_url(url: &str, (place, w, h): (&str, f64, f64)) -> String {
@@ -290,6 +290,9 @@ fn open_with(kind: Kind, program: Option<&str>, app: Option<&str>, url: &str) ->
     match (app, program, kind) {
         // macOS: a new instance passes its arguments to the running one, which opens the window.
         (Some(app), _, Kind::Chromium) => s(&["open", "-na", app, "--args", &format!("--app={url}")]),
+        // Firefox's own program hands --new-window to the running Firefox; `open` would
+        // pass a plain link, which may land as a tab in a window you already have.
+        (Some(app), _, Kind::Firefox) => s(&[&format!("{app}/Contents/MacOS/firefox"), "--new-window", url]),
         (Some(app), _, _) => s(&["open", "-a", app, url]),
         (None, Some(p), Kind::Chromium) => s(&[p, &format!("--app={url}")]),
         (None, Some(p), Kind::Firefox) => s(&[p, "--new-window", url]),
@@ -388,20 +391,35 @@ fn linux_default() -> Option<String> {
 /// CORRAL_BROWSER: firefox | edge | chrome | brave | chromium | safari | print | a command
 /// (`{url}` is replaced).
 pub fn browser_argv(url: &str) -> Option<Vec<String>> {
+    choose(url).map(|(_, argv)| argv)
+}
+
+/// Whether Mirador gets a window of its own, which Corral may place and size: an app
+/// window, or Firefox's new window (a command of yours, when it asks for one of those).
+/// Safari or another browser may open it as a tab in your own window, which Corral then
+/// only raises, so it never moves or resizes your browser.
+fn own_window() -> bool {
+    matches!(choose("").map(|(kind, _)| kind), Some(Some(Kind::Chromium | Kind::Firefox)))
+}
+
+/// browser_argv's command, with the kind of window it opens (None for a command whose
+/// window Corral can't tell).
+fn choose(url: &str) -> Option<(Option<Kind>, Vec<String>)> {
     let choice = std::env::var("CORRAL_BROWSER").unwrap_or_default().trim().to_string();
     if choice == "print" {
         return None;
     }
     if NAMED.iter().any(|(n, ..)| *n == choice) {
         if let Some(argv) = named_browser(&choice, url) {
-            return Some(argv);
+            return Some((Some(named_kind(&choice)), argv));
         }
     } else if !choice.is_empty() {
         let mut argv: Vec<String> = env::sh_split(&choice).into_iter().map(|a| a.replace("{url}", url)).collect();
         if !choice.contains("{url}") {
             argv.push(url.to_string());
         }
-        return Some(argv);
+        let kind = if choice.contains("--app") { Some(Kind::Chromium) } else if choice.contains("--new-window") { Some(Kind::Firefox) } else { None };
+        return Some((kind, argv));
     }
     if wsl() {
         // The .exe directly, so cmd.exe never parses the '&' in httpgd's token URL.
@@ -410,22 +428,28 @@ pub fn browser_argv(url: &str) -> Option<Vec<String>> {
                 let (_, windows, ..) = NAMED.iter().find(|(m, ..)| m == n)?;
                 windows.iter().find(|p| Path::new(p).exists()).map(|p| (p.to_string(), named_kind(n)))
             }))?;
-        return Some(open_with(kind, Some(&exe), None, url));
+        return Some((Some(kind), open_with(kind, Some(&exe), None, url)));
     }
     if cfg!(target_os = "macos") {
         let id = mac_default();
-        if kind_of(&id) == Kind::Chromium {
-            return Some(vec!["open".into(), "-nb".into(), id, "--args".into(), format!("--app={url}")]);
-        }
-        return Some(open_with(Kind::Other, None, None, url));
+        return Some(match kind_of(&id) {
+            Kind::Chromium => (Some(Kind::Chromium), vec!["open".into(), "-nb".into(), id, "--args".into(), format!("--app={url}")]),
+            Kind::Firefox if mac_app("Firefox.app").is_some() => {
+                let app = mac_app("Firefox.app").map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
+                (Some(Kind::Firefox), open_with(Kind::Firefox, None, Some(&app), url))
+            }
+            _ => (Some(Kind::Other), open_with(Kind::Other, None, None, url)),
+        });
     }
-    if let Some(desktop) = linux_default().filter(|d| kind_of(d) == Kind::Chromium) {
+    let desktop = linux_default().unwrap_or_default();
+    let kind = kind_of(&desktop);
+    if kind != Kind::Other {
         let name = NAMED.iter().find(|(n, ..)| desktop.to_lowercase().contains(&n.replace("edge", "microsoft-edge")));
         if let Some(cmd) = name.and_then(|(_, _, _, cmds)| cmds.iter().find_map(|c| env::which(c))) {
-            return Some(open_with(Kind::Chromium, Some(&cmd.to_string_lossy()), None, url));
+            return Some((Some(kind), open_with(kind, Some(&cmd.to_string_lossy()), None, url)));
         }
     }
-    env::which("xdg-open").map(|_| open_with(Kind::Other, None, None, url))
+    env::which("xdg-open").map(|_| (Some(Kind::Other), open_with(Kind::Other, None, None, url)))
 }
 
 pub fn open_app_window(url: &str) {
@@ -492,7 +516,7 @@ pub fn bring_to_front(title: &str, place: bool) {
         return; // no windows are being opened, so none to raise
     }
     let (where_, w, h) = window_place();
-    let placing = place && !where_.is_empty();
+    let placing = place && !where_.is_empty() && own_window();
     let extra = if placing { format!(" -Place {where_} -Width {w} -Height {h}") } else { String::new() };
     let place_arg = if placing { where_ } else { "" };
     let cmd = front_command(title, 8.0, &extra).or_else(|| {
@@ -1099,6 +1123,9 @@ mod tests {
         assert_eq!(open_with(Kind::Chromium, None, Some("/Applications/Google Chrome.app"), url),
                    ["open", "-na", "/Applications/Google Chrome.app", "--args", &format!("--app={url}")]);
         assert_eq!(open_with(Kind::Other, None, Some("/Applications/Safari.app"), url), ["open", "-a", "/Applications/Safari.app", url]);
+        // Firefox on a Mac: its own program, for a new window, never a tab in yours.
+        assert_eq!(open_with(Kind::Firefox, None, Some("/Applications/Firefox.app"), url),
+                   ["/Applications/Firefox.app/Contents/MacOS/firefox", "--new-window", url]);
         let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
         assert_eq!(open_with(Kind::Other, None, None, url), [opener, url]);
     }
