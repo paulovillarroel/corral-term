@@ -190,6 +190,28 @@ def size_of(x) -> int | None:
         return None
 
 
+# A single value that may be a secret shows no preview, in the variables pane or to an
+# agent (corral vars --json): its name says so (password, token, secret, API key...), or its
+# text has the shape of one (a known key's prefix, a JWT, a private key, a URL with a
+# password). The same patterns as secret_name and secret_text in r/corral.R.
+SECRET_NAME = re.compile(r"(?i)(pass(word|wd)?|pwd|secret|token|api[._-]?key|access[._-]?key|private[._-]?key|credential|bearer)")
+SECRET_TEXT = re.compile(r"^(sk-|sk_live_|rk_live_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|hf_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.)|-----BEGIN|://[^/@:\s]+:[^/@\s]+@")
+
+
+def may_be_secret(name: str, x) -> bool:
+    if SECRET_NAME.search(name):
+        return True
+    # A NumPy value (np.array("…"), 0-d) holds its text inside: look at that.
+    if type(x).__module__ == "numpy":
+        try:
+            x = x.item()
+        except Exception:
+            return False
+    if isinstance(x, bytes):
+        x = x.decode("utf-8", "replace")
+    return isinstance(x, str) and bool(SECRET_TEXT.search(x))
+
+
 def describe(name: str, x) -> dict:
     kind, preview, size, fingerprint = "other", "", None, None
     if is_plot(x):
@@ -204,7 +226,8 @@ def describe(name: str, x) -> dict:
         except (TypeError, ValueError):
             preview = "def(…)"
     elif x is None or isinstance(x, (bool, int, float, complex, str, bytes)) or type(x).__module__ == "numpy" and getattr(x, "ndim", None) == 0:
-        kind, preview, size = "value", clip(repr(x)), size_of(x)
+        kind, size = "value", size_of(x)
+        preview = tr("hidden: may be a secret", "oculto: puede ser una clave") if may_be_secret(name, x) else clip(repr(x))
     elif isinstance(x, (list, tuple, set, frozenset, dict)) or (
             type(x).__name__ in ("ndarray", "Series") and type(x).__module__.split(".")[0] in ("numpy", "pandas", "polars")):
         kind, size = "value", size_of(x)
