@@ -69,14 +69,22 @@ jobs:
       - name: Live tests
         run: cargo test --release --locked --manifest-path rs/Cargo.toml --test live -- --ignored --test-threads 1 --skip cost_report --skip restore_time_report
 
-  # A new Mac, as someone installing Corral has it: R from CRAN and nothing else of
-  # Corral's (no herdr, Fresh, DuckDB, Air, uv or R packages). The installer runs on a
-  # package built here as the release builds it, the way the install line gets one,
-  # in a terminal (script) given a few Enters, which answer yes to what it offers (two
-  # questions: what's missing, and uv). Then every program it brought must run, and
-  # every R package it put in must load.
-  install-macos:
-    runs-on: macos-15
+  # A new machine, as someone installing Corral has it: R from CRAN and nothing else of
+  # Corral's (no herdr, Fresh, DuckDB, Air, uv or R packages), on macOS and on Ubuntu.
+  # The installer runs on a package built here as the release builds it, the way the
+  # install line gets one, and with no terminal at all: an installation must run on its
+  # own, so anything that waits for an answer fails here. Then every program it brought
+  # must run, and every R package it put in must load.
+  install-new-machine:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            package: corral-term-aarch64-macos.tar.gz
+          - os: ubuntu-24.04
+            package: corral-term-x86_64-linux.tar.gz
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -93,21 +101,18 @@ jobs:
           git archive --format=tar --prefix=corral-term/ HEAD | tar -x -C "$dir"
           mkdir -p "$dir/corral-term/rs/target/release"
           cp rs/target/release/corral "$dir/corral-term/rs/target/release/corral"
-          tar -czf "$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz" -C "$dir" corral-term
+          tar -czf "$RUNNER_TEMP/${{ matrix.package }}" -C "$dir" corral-term
           cp install.sh "$RUNNER_TEMP/install.sh"
 
-      - name: Install, answering yes
+      - name: Install, unattended
         env:
           CORRAL_NO_TELEMETRY: "1"
           CORRAL_LANG: en
         run: |
-          export CORRAL_URL="file://$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz"
-          CORRAL_SHA256=$(shasum -a 256 "$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz" | cut -d' ' -f1)
+          export CORRAL_URL="file://$RUNNER_TEMP/${{ matrix.package }}"
+          CORRAL_SHA256=$( (sha256sum "$RUNNER_TEMP/${{ matrix.package }}" 2>/dev/null || shasum -a 256 "$RUNNER_TEMP/${{ matrix.package }}") | cut -d' ' -f1)
           export CORRAL_SHA256
-          # A finite input: script queues whatever it reads until the installer asks.
-          # Its own exit status is script's, so the installer's goes to a file.
-          printf '\n\n\n\n\n\n\n\n' | script -q /dev/null sh -c 'sh "$RUNNER_TEMP/install.sh"; echo $? > "$RUNNER_TEMP/install-status"' || true
-          test "$(cat "$RUNNER_TEMP/install-status")" = 0
+          sh "$RUNNER_TEMP/install.sh" < /dev/null
 
       - name: What it brought runs
         run: |
@@ -123,3 +128,41 @@ jobs:
       - name: What R said while installing packages
         if: always()
         run: cat "$HOME/.local/state/corral/install-r.log" || true
+
+  # Mirador in Safari: the browser a Mac opens it in when nobody chose another. WebKit
+  # through safaridriver, driven with curl: the page loads, its script runs to the end
+  # (the tabs and the plot size menu are built), and its state object is there.
+  mirador-safari:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Build corral
+        run: cargo build --release --locked --manifest-path rs/Cargo.toml
+
+      - name: Mirador in Safari
+        run: |
+          sudo safaridriver --enable
+          safaridriver -p 4444 &
+          home="$RUNNER_TEMP/home"
+          mkdir -p "$home"
+          HOME="$home" CORRAL_MIRADOR_PORT=0 CORRAL_LANG=en ./rs/target/release/corral _mirador &
+          info="$home/.local/state/corral/mirador.json"
+          for _ in $(seq 100); do [ -s "$info" ] && break; sleep 0.2; done
+          url=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["url"])' "$info")
+          wd=http://127.0.0.1:4444
+          for _ in $(seq 50); do curl -fs "$wd/status" >/dev/null && break; sleep 0.2; done
+          session=$(curl -fsS -X POST "$wd/session" -H 'Content-Type: application/json' \
+            -d '{"capabilities":{"alwaysMatch":{"browserName":"safari"}}}' | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"]["sessionId"])')
+          curl -fsS -X POST "$wd/session/$session/url" -H 'Content-Type: application/json' -d "{\"url\":\"$url\"}" >/dev/null
+          check='return JSON.stringify({title: document.title, state: typeof S, tabs: document.querySelector("#tabs").children.length, sizes: document.querySelector("#plotsize").options.length})'
+          for _ in $(seq 50); do
+            got=$(curl -fsS -X POST "$wd/session/$session/execute/sync" -H 'Content-Type: application/json' \
+              -d "$(python3 -c 'import json, sys; print(json.dumps({"script": sys.argv[1], "args": []}))' "$check")" | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')
+            echo "$got"
+            python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got" && break
+            sleep 0.2
+          done
+          python3 -c 'import json, sys; v = json.loads(sys.argv[1]); sys.exit(0 if v["title"] == "Mirador" and v["state"] == "object" and v["tabs"] > 0 and v["sizes"] > 0 else 1)' "$got"
+          curl -fsS -X DELETE "$wd/session/$session" >/dev/null
