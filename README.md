@@ -31,10 +31,10 @@ Written in Rust. DuckDB for your data.</p>
 |---|---|
 | Linux x86_64, or Windows with WSL | On Windows: `wsl --install` in PowerShell, then do everything inside Ubuntu. The macOS version is in development. |
 | `curl` and `tar` | Ubuntu has them; otherwise `sudo apt install curl tar`. |
-| [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. If it's missing, the installer offers to install it, and if it's older, to update it with `herdr update`. |
-| R, with the `jsonlite` package | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig). If jsonlite is missing, the installer offers to put it in your R library, with pak if you use it. httpgd, for the plots, it installs by itself. |
+| [herdr TUI](https://herdr.dev/tui/) 0.9.5 or newer | herdr's terminal version, not the Herdr App. If it's missing, the installer installs it, and if it's older, updates it with `herdr update`. |
+| R, with the `jsonlite` package | R from [CRAN](https://cloud.r-project.org) or [rig](https://github.com/r-lib/rig). If R is missing, the installer shows how to install it and waits; jsonlite and httpgd, for the plots, it puts in your R library by itself, with pak if you use it. |
 
-Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console (the installer offers it when it's missing), and the R package `rlang`.
+Optional: an agent (Claude Code, Codex, Gemini CLI, opencode…; the layout opens the first one installed, and the palette chooses another), [uv](https://docs.astral.sh/uv/) for the Python console (the installer brings it when it's missing), and the R package `rlang`.
 
 ### One line
 
