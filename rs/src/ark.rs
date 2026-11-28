@@ -41,7 +41,9 @@ fn log_file() -> PathBuf {
 // --------------------------------------------------------------------------- kernel
 
 enum Event {
-    Bytes(Vec<u8>),
+    /// What the terminal sent, and when it was read: the decoder tells a CR LF cut between
+    /// two reads by when they were read, not by when they are handled.
+    Bytes(Vec<u8>, std::time::Instant),
     /// msg_type, parent msg_id, content
     IoPub(String, String, Value),
     /// A shell reply: msg_type, parent msg_id, content
@@ -517,7 +519,7 @@ fn read_terminal(tx: Sender<Event>) {
         loop {
             match tty.read(&mut buf) {
                 Ok(n) if n > 0 => {
-                    if tx.send(Event::Bytes(buf[..n].to_vec())).is_err() {
+                    if tx.send(Event::Bytes(buf[..n].to_vec(), std::time::Instant::now())).is_err() {
                         break;
                     }
                 }
@@ -561,9 +563,10 @@ const CR_LF: std::time::Duration = std::time::Duration::from_millis(30);
 struct Decoder {
     pending: Vec<u8>,
     paste: Option<Vec<u8>>,
-    /// When the last read ended in a CR: an LF that opens the next read within CR_LF is its
-    /// pair, cut between reads; later, it is Ctrl+J. The bytes are the same, and no one
-    /// types Enter and Ctrl+J that close together.
+    /// When the read that ended in a CR was read: an LF that opens a read made within CR_LF
+    /// of it is its pair, cut between reads; later, it is Ctrl+J. The bytes are the same,
+    /// and no one types Enter and Ctrl+J that close together. Read times, not when the
+    /// bytes are handled: those can wait in the queue while R says whether code is complete.
     after_cr: Option<std::time::Instant>,
 }
 
@@ -604,8 +607,14 @@ fn csi(seq: &[u8]) -> Key {
 }
 
 impl Decoder {
+    #[cfg(test)]
     fn feed(&mut self, bytes: &[u8]) -> Vec<Key> {
-        let pair = self.after_cr.take().is_some_and(|t| t.elapsed() < CR_LF) && self.pending.is_empty();
+        self.feed_at(bytes, std::time::Instant::now())
+    }
+
+    /// The keys in `bytes`, read from the terminal at `read_at`.
+    fn feed_at(&mut self, bytes: &[u8], read_at: std::time::Instant) -> Vec<Key> {
+        let pair = self.after_cr.take().is_some_and(|t| read_at.saturating_duration_since(t) < CR_LF) && self.pending.is_empty();
         let bytes = if pair { bytes.strip_prefix(b"\n").unwrap_or(bytes) } else { bytes };
         self.pending.extend_from_slice(bytes);
         let p = std::mem::take(&mut self.pending);
@@ -681,7 +690,7 @@ impl Decoder {
                     if p.get(i + 1) == Some(&b'\n') {
                         i += 1;
                     } else if i + 1 == p.len() {
-                        self.after_cr = Some(std::time::Instant::now());
+                        self.after_cr = Some(read_at);
                     }
                     Key::Enter
                 }
@@ -1419,9 +1428,9 @@ impl Console {
         };
         out(&format!("{}{gone}\n", trf!("[corral] R ended unexpectedly: {why}{what}. Starting a new session.",
                                           "[corral] R terminó inesperadamente: {why}{what}. Inicio una sesión nueva.")));
-        let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(_))).collect();
+        let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(..))).collect();
         while let Ok(ev) = self.rx.try_recv() {
-            if matches!(ev, Event::Bytes(_)) {
+            if matches!(ev, Event::Bytes(..)) {
                 kept.push_back(ev);
             }
         }
@@ -1434,7 +1443,7 @@ impl Console {
             let log = log.display();
             return Err(trf!("Ark did not answer; see {log}", "Ark no respondió; revisa {log}"));
         }
-        self.backlog.retain(|e| matches!(e, Event::Bytes(_)));
+        self.backlog.retain(|e| matches!(e, Event::Bytes(..)));
         self.backlog.extend(kept);
         self.mode = Mode::Edit;
         self.count = 1;
@@ -1475,8 +1484,8 @@ impl Console {
                 },
             };
             match ev {
-                Some(Event::Bytes(b)) => {
-                    let keys = self.dec.feed(&b);
+                Some(Event::Bytes(b, read_at)) => {
+                    let keys = self.dec.feed_at(&b, read_at);
                     self.keys.extend(keys);
                 }
                 Some(Event::IoPub(kind, parent, content)) => self.on_iopub(&kind, &parent, &content),
@@ -1738,6 +1747,12 @@ mod tests {
         assert_eq!(d.feed(b"f(\r"), vec![Key::Char('f'), Key::Char('('), Key::Enter]);
         d.after_cr = std::time::Instant::now().checked_sub(CR_LF * 4);
         assert_eq!(d.feed(b"\n"), vec![Key::AltEnter]);
+        // A split pair read together but handled late (the console waited for R to say
+        // whether the code is complete): read times count, so it is still one Enter.
+        let read = std::time::Instant::now();
+        assert_eq!(d.feed_at(b"g(\r", read), vec![Key::Char('g'), Key::Char('('), Key::Enter]);
+        std::thread::sleep(CR_LF * 2);
+        assert_eq!(d.feed_at(b"\n", read + std::time::Duration::from_millis(1)), vec![]);
     }
 
     #[test]
