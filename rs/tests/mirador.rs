@@ -125,15 +125,17 @@ fn servers(home: &Path) -> Vec<i64> {
 }
 
 /// The Mirador servers running with `home` as their HOME: macOS has no /proc, and its
-/// ps shows a process's environment after its command (-E), for this user's processes.
-/// The servers run with only HOME, PATH and a few CORRAL_ variables, all without spaces.
+/// ps shows a process's environment after its command (-E), for this user's processes,
+/// everything joined by spaces. The program's path may hold spaces too (a checkout in
+/// "Work Projects"), so the command is cut at " _mirador", after a path ending in corral.
 #[cfg(target_os = "macos")]
 fn servers(home: &Path) -> Vec<i64> {
     let out = Command::new("ps").args(["-x", "-E", "-ww", "-o", "pid=,command="]).output().unwrap();
-    let home_var = format!("HOME={}", home.display());
+    let home_var = format!(" HOME={} ", home.display());
     String::from_utf8_lossy(&out.stdout).lines().filter_map(|line| {
-        let words: Vec<&str> = line.split_whitespace().collect();
-        (words.get(2) == Some(&"_mirador") && words.contains(&home_var.as_str())).then(|| words[0].parse().ok()).flatten()
+        let (pid, command) = line.trim_start().split_once(' ')?;
+        let (program, rest) = command.split_once(" _mirador")?;
+        (program.ends_with("/corral") && format!("{rest} ").contains(&home_var)).then(|| pid.parse().ok())?
     }).collect()
 }
 
