@@ -4,7 +4,6 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -114,13 +113,28 @@ fn a_session_id_cannot_leave_the_sessions_folder() {
 }
 
 /// The Mirador servers running with `home` as their HOME.
+#[cfg(target_os = "linux")]
 fn servers(home: &Path) -> Vec<i64> {
+    use std::os::unix::ffi::OsStrExt;
     let home_var = [b"HOME=", home.as_os_str().as_bytes()].concat();
     std::fs::read_dir("/proc").unwrap().flatten()
         .filter_map(|e| e.file_name().to_str()?.parse::<i64>().ok())
         .filter(|pid| std::fs::read(format!("/proc/{pid}/cmdline")).is_ok_and(|c| c.split(|b| *b == 0).nth(1) == Some(b"_mirador")))
         .filter(|pid| std::fs::read(format!("/proc/{pid}/environ")).is_ok_and(|e| e.split(|b| *b == 0).any(|v| v == home_var)))
         .collect()
+}
+
+/// The Mirador servers running with `home` as their HOME: macOS has no /proc, and its
+/// ps shows a process's environment after its command (-E), for this user's processes.
+/// The servers run with only HOME, PATH and a few CORRAL_ variables, all without spaces.
+#[cfg(target_os = "macos")]
+fn servers(home: &Path) -> Vec<i64> {
+    let out = Command::new("ps").args(["-x", "-E", "-ww", "-o", "pid=,command="]).output().unwrap();
+    let home_var = format!("HOME={}", home.display());
+    String::from_utf8_lossy(&out.stdout).lines().filter_map(|line| {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        (words.get(2) == Some(&"_mirador") && words.contains(&home_var.as_str())).then(|| words[0].parse().ok()).flatten()
+    }).collect()
 }
 
 /// A HOME of its own, and no Mirador left running with it afterwards.
