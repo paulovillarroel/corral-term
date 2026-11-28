@@ -701,6 +701,33 @@ fn a_month_without_a_look_shows_in_the_variables_pane() {
     wait_for(Duration::from_secs(20), "the reminder to go", || !live.screen(&live.vars).contains("No update check"));
 }
 
+/// A single value that may be a secret shows no preview, in R and in Python, so an agent
+/// reading `corral vars --json` (full output here) doesn't get it, and it isn't written to
+/// the session's vars.json either: named like one, or shaped like one. Other values show.
+#[test]
+#[ignore]
+fn values_that_may_be_secrets_show_no_preview() {
+    let live = Live::start("secrets");
+    // The made-up secrets are put together in the session, so no string here looks like one.
+    let code = r#"db_password <- paste0("hunter", "2-xyz"); conn_url <- paste0("postgres://ana", ":", "s3cr3t-pw", "@db.example.org/clinic"); my_key <- paste0("sk", "-abc123def456"); n_rows <- 42L; author <- "Paulo""#;
+    assert_eq!(live.eval(&[code]).0, 0);
+    let python = "db_password = 'hunter' + '2-xyz'; conn_url = 'postgres://ana' + ':' + 's3cr3t-pw' + '@db.example.org/clinic'; my_key = 'sk' + '-abc123def456'; n_rows = 42; author = 'Paulo'";
+    assert_eq!(live.eval(&["--lang", "python", "--timeout", "180", python]).0, 0);
+    for lang in ["r", "python"] {
+        let vars = || String::from_utf8_lossy(&live.corral(&["vars", "--json", "--lang", lang]).stdout).to_string();
+        wait_for(Duration::from_secs(20), "the variables", || vars().contains("n_rows"));
+        let json = vars();
+        assert!(json.contains(r#""restricted": false"#), "{lang}: {json}");
+        for secret in ["hunter2", "s3cr3t-pw", "sk-abc123"] {
+            assert!(!json.contains(secret), "{lang}: {secret} reached the agent: {json}");
+        }
+        assert_eq!(json.matches("hidden: may be a secret").count(), 3, "{lang}: {json}");
+        assert!(json.contains("42") && json.contains("Paulo"), "{lang}: other values show: {json}");
+        let file = std::fs::read_to_string(live.session_dir(lang).unwrap().join("vars.json")).unwrap();
+        assert!(!file.contains("hunter2") && !file.contains("s3cr3t-pw"), "{lang}: on disk: {file}");
+    }
+}
+
 /// `corral context` tells an agent, in one call and without starting anything, which
 /// consoles run, whether SQL works in each, and the rules as they apply to each session.
 #[test]
