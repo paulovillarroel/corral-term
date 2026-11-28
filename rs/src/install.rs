@@ -1397,7 +1397,7 @@ pkgs <- c({list})
 try({{
   {install}
 }}, silent = TRUE)
-quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#)
+quit(status = if (all(vapply(pkgs, loads, logical(1)))) 0 else 1)"#)
 }
 
 /// r_install_code with install.packages, but only packages already compiled for this
@@ -1408,12 +1408,15 @@ fn r_install_binary_code(pkgs: &[&str]) -> String {
 }
 
 /// The start of the R code that installs packages: into the first library of R_LIBS_USER
-/// (yours), and with R's User-Agent, by which Posit's server picks compiled packages.
+/// (yours), with R's User-Agent, by which Posit's server picks compiled packages, and
+/// loads(), which says in the log why a package that went in doesn't load.
 const R_LIB: &str = r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
 if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
 lib <- path.expand(lib)
 dir.create(lib, recursive = TRUE, showWarnings = FALSE)
-options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))"#;
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+loads <- function(p) tryCatch({ loadNamespace(p, lib.loc = c(lib, .libPaths())); TRUE },
+  error = function(e) { message(p, " doesn't load: ", conditionMessage(e)); FALSE })"#;
 
 /// httpgd on macOS. Posit's snapshot has it only as source there, which needs Xcode's
 /// command line tools to compile, while CRAN has it compiled for macOS. So it comes from
@@ -1430,7 +1433,7 @@ have <- tryCatch(available.packages(repos = cran, type = "binary")["httpgd", "Ve
 if (!is.na(want) && identical(unname(want), unname(have))) {{
   try(install.packages("httpgd", lib = lib, repos = cran, type = "binary", dependencies = FALSE, quiet = TRUE), silent = TRUE) # net: r-packages
 }}
-quit(status = if (requireNamespace("httpgd", lib.loc = c(lib, .libPaths()), quietly = TRUE)) 0 else 1)"#)
+quit(status = if (loads("httpgd")) 0 else 1)"#)
 }
 
 /// The R code that picks where R packages come from, in this order:
