@@ -307,10 +307,19 @@ fn wsl() -> bool {
     std::env::var_os("WSL_DISTRO_NAME").is_some()
 }
 
+/// The kind of a browser CORRAL_BROWSER names: all but Firefox and Safari are Chromium-based.
+fn named_kind(name: &str) -> Kind {
+    match name {
+        "firefox" => Kind::Firefox,
+        "safari" => Kind::Other,
+        _ => Kind::Chromium,
+    }
+}
+
 /// The browser CORRAL_BROWSER names, as installed on this system.
 fn named_browser(name: &str, url: &str) -> Option<Vec<String>> {
     let (_, windows, apps, commands) = NAMED.iter().find(|(n, ..)| *n == name)?;
-    let kind = kind_of(name);
+    let kind = named_kind(name);
     if wsl() {
         let exe = windows.iter().find(|p| Path::new(p).exists())?;
         return Some(open_with(kind, Some(exe), None, url));
@@ -399,7 +408,7 @@ pub fn browser_argv(url: &str) -> Option<Vec<String>> {
         let (exe, kind) = windows_default().filter(|(p, _)| Path::new(p).exists())
             .or_else(|| ["firefox", "edge", "chrome"].iter().find_map(|n| {
                 let (_, windows, ..) = NAMED.iter().find(|(m, ..)| m == n)?;
-                windows.iter().find(|p| Path::new(p).exists()).map(|p| (p.to_string(), kind_of(n)))
+                windows.iter().find(|p| Path::new(p).exists()).map(|p| (p.to_string(), named_kind(n)))
             }))?;
         return Some(open_with(kind, Some(&exe), None, url));
     }
@@ -1051,6 +1060,11 @@ mod tests {
         }
         for name in ["com.apple.safari", "company.thebrowser.browser", "epiphany.desktop"] {
             assert_eq!(kind_of(name), Kind::Other, "{name}");
+        }
+        // The names CORRAL_BROWSER takes: edge, chrome, brave and chromium open app windows.
+        for (name, ..) in NAMED {
+            let want = match *name { "firefox" => Kind::Firefox, "safari" => Kind::Other, _ => Kind::Chromium };
+            assert_eq!(named_kind(name), want, "{name}");
         }
     }
 
