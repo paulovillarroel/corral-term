@@ -1587,13 +1587,33 @@ options(repos = repos)"#)
 /// itself. None without pak, or when pak has nothing to say.
 fn system_libs_hint(r: &Path, pkgs: &[&str]) -> Option<String> {
     if !has_pak() {
-        return None;
+        return known_system_libs(pkgs);
     }
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
     let code = format!("sr <- tryCatch(pak::pkg_sysreqs(c({list})), error = function(e) NULL)
 if (!is.null(sr)) cat(c(sr$pre_install, sr$install_scripts, sr$post_install), sep = \"\\n\")");
     let out = Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     with_sudo(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Without pak, the system libraries Corral knows the packages it installs need, as one
+/// command to run with sudo: httpgd's (through unigd: cairo, freetype, fontconfig, png,
+/// tiff, as pak lists them for Ubuntu 24.04), by the two -dev packages that bring them
+/// all (cairo's brings freetype's, fontconfig's and png's) with names every Ubuntu and
+/// Debian release has; Fedora's equivalents. A new Ubuntu, WSL's included, lacks some (CI
+/// found libtiffxx.so.6 missing). None on macOS, where CRAN's builds carry them, and for
+/// other packages.
+fn known_system_libs(pkgs: &[&str]) -> Option<String> {
+    if cfg!(target_os = "macos") || !pkgs.iter().any(|p| matches!(*p, "httpgd" | "unigd")) {
+        return None;
+    }
+    if which("apt-get").is_some() {
+        Some("sudo apt install libcairo2-dev libtiff-dev".into())
+    } else if which("dnf").is_some() {
+        Some("sudo dnf install cairo-devel libtiff-devel".into())
+    } else {
+        None
+    }
 }
 
 /// pak's system commands (apt-get, dnf…), one per line, as one line to run with sudo.
@@ -1609,8 +1629,8 @@ fn with_sudo(text: &str) -> Option<String> {
 /// After R packages didn't install or load: what pak says they need from the system.
 fn system_libs_step(r: &Path, pkgs: &[&str]) {
     if let Some(cmd) = system_libs_hint(r, pkgs) {
-        println!("    {}", trf!("If a system library is missing, pak says what they need: {cmd}",
-                                "Si falta una librería del sistema, pak indica lo que necesitan: {cmd}"));
+        println!("    {}", trf!("If a system library is missing, this installs what they need: {cmd}",
+                                "Si falta una librería del sistema, esto instala lo que necesitan: {cmd}"));
     }
     println!("    {}", trf!("What R said: {}", "Lo que dijo R: {}", short(&r_log())));
 }
@@ -1619,6 +1639,10 @@ fn system_libs_step(r: &Path, pkgs: &[&str]) {
 /// (it needs cairo and libpng from the system), Corral works without plots there, and
 /// the step says how to add it later, with pak's list of what the system lacks.
 /// Some("httpgd") when it tried and couldn't, for the install's ping.
+/// The command that installs what httpgd needs from the system, when it didn't load for
+/// lack of it, for the closing lines: the installation finishes without waiting.
+static HTTPGD_LIBS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 fn r_httpgd() -> Option<&'static str> {
     let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
     if setup::r_packages(&r, &["httpgd"])[0] {
@@ -1637,6 +1661,9 @@ fn r_httpgd() -> Option<&'static str> {
                    "no pude instalar httpgd: Corral funciona, pero los gráficos de R no llegan a Mirador ni al agente hasta que lo instales: {}",
                    install_r(&["httpgd"])), State::Warn);
         system_libs_step(&r, &["httpgd"]);
+        if let Some(cmd) = system_libs_hint(&r, &["httpgd"]) {
+            let _ = HTTPGD_LIBS.set(cmd);
+        }
         Some("httpgd")
     }
 }
@@ -1796,6 +1823,10 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     println!("  {n}. {}", trf!("Go to a project folder and type {bold}corral{off}: herdr opens with the agent, the script, the R console and the variables.",
                                "Entra a la carpeta de un proyecto y escribe {bold}corral{off}: herdr se abre con el agente, el script, la consola de R y las variables."));
     println!("  {}. {}", n + 1, trf!("{bold}ctrl+b space{off} shows every shortcut.", "{bold}ctrl+b space{off} muestra todos los atajos."));
+    if let Some(cmd) = HTTPGD_LIBS.get() {
+        println!("  {}", trf!("For R's plots, httpgd needs some system libraries. Install them, then run {bold}corral install{off}: {bold}{cmd}{off}",
+                              "Para los gráficos de R, httpgd necesita unas librerías del sistema. Instálalas y después corre {bold}corral install{off}: {bold}{cmd}{off}"));
+    }
     if let Some(how) = option_as_alt(std::env::var("TERM_PROGRAM").ok().as_deref(), std::env::var_os("KITTY_WINDOW_ID").is_some()) {
         println!("  {}", trf!("For the Alt shortcuts, Option has to work as Alt: {how}. Until then, Ctrl+J and Ctrl+L do the same.",
                               "Para los atajos con Alt, Option tiene que funcionar como Alt: {how}. Mientras tanto, Ctrl+J y Ctrl+L hacen lo mismo."));
@@ -2435,6 +2466,19 @@ mod tests {
 
     /// The system a ping names when it isn't WSL.
     const SYS: &str = if cfg!(target_os = "macos") { "macos" } else { "linux" };
+
+    /// Without pak, httpgd's system libraries come from Corral's own list, by -dev names that
+    /// every Ubuntu and Debian release has; nothing for other packages, or on macOS.
+    #[test]
+    fn httpgd_system_libraries_without_pak() {
+        let got = known_system_libs(&["httpgd"]);
+        if cfg!(target_os = "macos") {
+            assert_eq!(got, None);
+        } else if which("apt-get").is_some() {
+            assert_eq!(got.as_deref(), Some("sudo apt install libcairo2-dev libtiff-dev"));
+        }
+        assert_eq!(known_system_libs(&["nanoparquet"]), None);
+    }
 
     /// duckdb on macOS goes in only compiled, never from source.
     #[test]
