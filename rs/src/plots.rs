@@ -379,6 +379,25 @@ fn mac_default_in(plist: &Value) -> String {
         .and_then(|h| h.get("LSHandlerRoleAll").str()).unwrap_or("com.apple.safari").to_string()
 }
 
+/// How to run Linux's default browser directly, by its desktop file, only for the standard
+/// ones a browser package installs: its command then is the browser itself, with no
+/// arguments of its own. Any other (firefox-work.desktop, a Flatpak's) may carry a profile
+/// or a sandbox in its Exec line, so it opens through xdg-open, as the desktop does.
+fn linux_launch(desktop: &str) -> Option<(Kind, PathBuf)> {
+    const STANDARD: &[(&str, &[&str])] = &[
+        ("firefox.desktop", &["firefox"]),
+        ("firefox-esr.desktop", &["firefox-esr"]),
+        ("google-chrome.desktop", &["google-chrome", "google-chrome-stable"]),
+        ("microsoft-edge.desktop", &["microsoft-edge", "microsoft-edge-stable"]),
+        ("brave-browser.desktop", &["brave-browser"]),
+        ("chromium.desktop", &["chromium"]),
+        ("chromium-browser.desktop", &["chromium-browser", "chromium"]),
+    ];
+    let (_, commands) = STANDARD.iter().find(|(d, _)| *d == desktop)?;
+    let cmd = commands.iter().find_map(|c| env::which(c))?;
+    Some((kind_of(desktop), cmd))
+}
+
 /// Linux's default browser, as xdg-settings names it (firefox.desktop).
 fn linux_default() -> Option<String> {
     let out = Command::new(env::which("xdg-settings")?).args(["get", "default-web-browser"]).output().ok()?;
@@ -441,13 +460,8 @@ fn choose(url: &str) -> Option<(Option<Kind>, Vec<String>)> {
             _ => (Some(Kind::Other), open_with(Kind::Other, None, None, url)),
         });
     }
-    let desktop = linux_default().unwrap_or_default();
-    let kind = kind_of(&desktop);
-    if kind != Kind::Other {
-        let name = NAMED.iter().find(|(n, ..)| desktop.to_lowercase().contains(&n.replace("edge", "microsoft-edge")));
-        if let Some(cmd) = name.and_then(|(_, _, _, cmds)| cmds.iter().find_map(|c| env::which(c))) {
-            return Some((Some(kind), open_with(kind, Some(&cmd.to_string_lossy()), None, url)));
-        }
+    if let Some((kind, cmd)) = linux_default().and_then(|d| linux_launch(&d)) {
+        return Some((Some(kind), open_with(kind, Some(&cmd.to_string_lossy()), None, url)));
     }
     env::which("xdg-open").map(|_| (Some(Kind::Other), open_with(Kind::Other, None, None, url)))
 }
