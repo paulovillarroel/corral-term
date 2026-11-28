@@ -17,6 +17,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ACTIVE_WINDOW_S: f64 = 6.0;
+/// A window Corral has just opened counts as a page this long while the browser starts and
+/// loads it, before the page asks anything: R drawing for a while and a slow browser
+/// mustn't get the same plot a second window.
+const OPENING_S: f64 = 20.0;
+
+/// Whether a Mirador page is showing: one asked within ACTIVE_WINDOW_S, or Corral opened a
+/// window within OPENING_S that may still be loading.
+fn page_active(now: f64, last_client: f64, opened_at: f64) -> bool {
+    now - last_client < ACTIVE_WINDOW_S || now - opened_at < OPENING_S
+}
 const MAX_PAGE: i64 = 500;
 /// How long a page's /api/state?wait= request may wait for a change.
 const WAIT_MAX: Duration = Duration::from_secs(25);
@@ -28,6 +38,8 @@ struct App {
     token: String,
     port: u16,
     last_client: f64,
+    /// When Corral last opened a window (/api/opened).
+    opened_at: f64,
     tables: Vec<Value>,
     schema: HashMap<String, Value>,
     /// Each table's number of rows, without filters.
@@ -826,9 +838,9 @@ fn get(app: &Shared, path: &str, q: &HashMap<String, String>) -> Result<Reply, S
     Ok(match path {
         "/" | "/index.html" => Reply { code: 200, ctype: "text/html; charset=utf-8".into(), body: themed_page(), extra: Vec::new() },
         "/api/ping" => {
-            let last = app.lock().unwrap().last_client;
+            let (last, opened_at) = { let a = app.lock().unwrap(); (a.last_client, a.opened_at) };
             json_reply(200, &obj(vec![("ok", true.into()), ("version", VERSION.into()),
-                                       ("active", (now() - last < ACTIVE_WINDOW_S).into()), ("pid", (std::process::id() as f64).into())]))
+                                       ("active", page_active(now(), last, opened_at).into()), ("pid", (std::process::id() as f64).into())]))
         }
         "/api/state" => {
             app.lock().unwrap().last_client = now();
@@ -954,7 +966,7 @@ fn post(app: &Shared, path: &str, body: &Value) -> Result<Reply, String> {
             json_reply(200, &obj(vec![("ok", true.into()), ("seq", seq.into())]))
         }
         "/api/opened" => {
-            app.lock().unwrap().last_client = now();
+            app.lock().unwrap().opened_at = now();
             json_reply(200, &obj(vec![("ok", true.into())]))
         }
         "/api/tables/close" => {
@@ -1012,7 +1024,7 @@ pub fn serve() -> Result<(), String> {
     let tables: Vec<Value> = env::read_json(&tables_file()).arr().iter()
         .filter(|t| Path::new(t.get("path").str().unwrap_or("")).is_file()).cloned().collect();
     let app: Shared = Arc::new(Mutex::new(App {
-        token: token.clone(), port, last_client: 0.0, tables, schema: HashMap::new(), all: HashMap::new(), show_plot: Value::Null, theme_asked: None, heavy: Default::default(),
+        token: token.clone(), port, last_client: 0.0, opened_at: 0.0, tables, schema: HashMap::new(), all: HashMap::new(), show_plot: Value::Null, theme_asked: None, heavy: Default::default(),
     }));
 
     let url = format!("http://127.0.0.1:{port}/?token={token}");
@@ -1032,6 +1044,17 @@ pub fn serve() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A page that asked lately counts; so does a window Corral opened that may still be
+    /// loading, for longer, so a slow browser doesn't get a second one.
+    #[test]
+    fn a_window_still_loading_counts_as_a_page() {
+        let now = 1_000.0;
+        assert!(page_active(now, now - 2.0, 0.0), "a page that asked 2 s ago");
+        assert!(!page_active(now, now - 7.0, 0.0), "none for 7 s, none opened");
+        assert!(page_active(now, 0.0, now - 15.0), "a window opened 15 s ago, still loading");
+        assert!(!page_active(now, 0.0, now - 21.0), "opened 21 s ago and never asked: gone");
+    }
 
     #[test]
     fn heavy_plots_by_size() {

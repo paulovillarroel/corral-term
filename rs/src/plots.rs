@@ -181,7 +181,8 @@ pub fn open_mirador_window(info: &Value) {
 /// Mirador in a new window unless a page already shows it, one caller at a time: R's first
 /// plot and the variables pane can ask at the same moment, and each, seeing no page yet,
 /// would open its own. Under the lock the second sees the first's (`/api/opened` counts
-/// as a page for a few seconds). Whether it opened one; the caller brings it forward.
+/// as a page for up to 20 s, while the browser loads it, so a long drawing doesn't get a
+/// second window either). Whether it opened one; the caller brings it forward.
 pub fn open_window_once(info: &Value, url: &str) -> bool {
     let _lock = file_lock("mirador-window.lock", Duration::from_secs(5));
     if mirador_alive(info, true) {
