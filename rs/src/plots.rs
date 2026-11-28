@@ -244,7 +244,7 @@ pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-// ----------------------------------------------------------------------- the browser (Windows from WSL, or xdg-open)
+// ----------------------------------------------------------------------- the browser (Windows from WSL, open on macOS, or xdg-open)
 
 /// Windows browsers reachable from WSL, in default order. Firefox has no app
 /// mode, so it gets a new window; Edge and Chrome open one without tabs or address bar.
@@ -283,7 +283,8 @@ pub fn browser_argv(url: &str) -> Option<Vec<String>> {
             }
         }
     }
-    env::which("xdg-open").map(|_| vec!["xdg-open".to_string(), url.to_string()])
+    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    env::which(opener).map(|_| vec![opener.to_string(), url.to_string()])
 }
 
 pub fn open_app_window(url: &str) {

@@ -382,12 +382,15 @@ pub fn windows_env(cmd: &mut Command) {
     }
 }
 
-/// The text in the system clipboard (CORRAL_CLIPBOARD, Wayland, X11, or Windows
+/// The text in the system clipboard (CORRAL_CLIPBOARD, macOS, Wayland, X11, or Windows
 /// from WSL). Only text: an image there (a screenshot) counts as nothing.
 pub fn read_clipboard() -> String {
     let mut candidates: Vec<Vec<String>> = Vec::new();
     if let Ok(custom) = std::env::var("CORRAL_CLIPBOARD") {
         candidates.push(vec!["sh".into(), "-c".into(), custom]);
+    }
+    if cfg!(target_os = "macos") {
+        candidates.push(vec!["pbpaste".into()]);
     }
     if std::env::var_os("WAYLAND_DISPLAY").is_some() && which("wl-paste").is_some() {
         candidates.push(vec!["wl-paste".into(), "--no-newline".into(), "--type".into(), "text".into()]);
