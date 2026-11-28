@@ -225,7 +225,9 @@ pub(crate) fn local_only(folder: Option<&Path>) -> bool {
         return true;
     }
     folder.is_some_and(|f| {
-        let r = combine(&cfg, &[f.to_path_buf()], false);
+        // Projects are kept by their real path: `.` or a link resolves first.
+        let f = std::fs::canonicalize(f).unwrap_or_else(|_| f.to_path_buf());
+        let r = combine(&cfg, &[f], false);
         r.sensitive || r.profile == "sensitive"
     })
 }
@@ -235,9 +237,18 @@ pub(crate) fn local_only(folder: Option<&Path>) -> bool {
 const HERDR_MARK: &str = "# corral: sensitive profile";
 const HERDR_WAS: &str = "# corral: was ";
 
+/// The bare name in a TOML key or table name, `"name"` and `'name'` included.
+fn toml_name(text: &str) -> &str {
+    let t = text.trim();
+    t.strip_prefix('"').and_then(|x| x.strip_suffix('"'))
+        .or_else(|| t.strip_prefix('\'').and_then(|x| x.strip_suffix('\'')))
+        .unwrap_or(t)
+}
+
 /// herdr's config.toml with its two checks of herdr.dev (new versions, agent-detection
 /// updates) off, or, with `off` false, back as it was before Corral turned them off. A
-/// check you turned off yourself stays off either way.
+/// check you turned off yourself stays off either way. `[update]` and its keys are found
+/// written in any of TOML's ways (`["update"]`, `"version_check"`).
 pub(crate) fn herdr_checks(text: &str, off: bool) -> String {
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
     if !off {
@@ -246,7 +257,11 @@ pub(crate) fn herdr_checks(text: &str, off: bool) -> String {
             None => l,
         }).collect();
     } else {
-        let header = |l: &str| l.split('#').next().unwrap_or("").trim() == "[update]";
+        let code = |l: &str| l.split('#').next().unwrap_or("").trim().to_string();
+        let header = |l: &str| {
+            let c = code(l);
+            c.starts_with('[') && !c.starts_with("[[") && c.ends_with(']') && toml_name(&c[1..c.len() - 1]) == "update"
+        };
         let h = match lines.iter().position(|l| header(l)) {
             Some(h) => h,
             None => {
@@ -256,15 +271,13 @@ pub(crate) fn herdr_checks(text: &str, off: bool) -> String {
         };
         for key in ["version_check", "manifest_check"] {
             let end = lines[h + 1..].iter().position(|l| l.trim_start().starts_with('[')).map_or(lines.len(), |i| h + 1 + i);
-            let at = (h + 1..end).find(|&i| {
-                let t = lines[i].trim_start();
-                t.strip_prefix(key).is_some_and(|rest| rest.trim_start().starts_with('='))
-            });
+            let at = (h + 1..end).find(|&i| code(&lines[i]).split_once('=').is_some_and(|(k, _)| toml_name(k) == key));
             match at {
                 Some(i) => {
-                    let value = lines[i].split_once('=').map(|(_, v)| v.split('#').next().unwrap_or("").trim().to_string()).unwrap_or_default();
+                    let value = code(&lines[i]).split_once('=').map(|(_, v)| v.trim().to_string()).unwrap_or_default();
                     if value != "false" {
-                        lines[i] = format!("{key} = false  {HERDR_WAS}{value}");
+                        let written = code(&lines[i]).split_once('=').map(|(k, _)| k.trim().to_string()).unwrap_or_else(|| key.into());
+                        lines[i] = format!("{written} = false  {HERDR_WAS}{value}");
                     }
                 }
                 None => lines.insert(h + 1, format!("{key} = false  {HERDR_MARK}")),
@@ -279,19 +292,25 @@ pub(crate) fn herdr_checks(text: &str, off: bool) -> String {
 }
 
 /// herdr's two checks of herdr.dev, off with the sensitive profile for all your work and
-/// back as they were without it; herdr reloads its config. Run whenever Corral's settings
-/// are written, and by the installer.
+/// back as they were without it. Run once Corral's settings are saved, and by the
+/// installer. The file is replaced only once herdr accepts the new one, in one step, and
+/// herdr reloads it (theme::write_herdr); one it can't read is left alone. Says so when
+/// it couldn't.
 pub(crate) fn sync_herdr(cfg: &Value) {
     let off = combine(cfg, &[], false).profile == "sensitive";
     let path = crate::theme::herdr_config();
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(_) => return,
+    };
     let new = herdr_checks(&text, off);
     if new == text || path.parent().is_none_or(|d| !d.is_dir()) {
         return;
     }
-    if std::fs::write(&path, new).is_ok() {
-        let _ = std::process::Command::new("herdr").args(["server", "reload-config"])
-            .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    if let Err(e) = crate::theme::write_herdr(&new) {
+        env::notify(tr("herdr's checks of herdr.dev", "Las consultas de herdr a herdr.dev"),
+                    &trf!("couldn't change them in {}: {e}", "no pude cambiarlas en {}: {e}", path.display()));
     }
 }
 
@@ -485,6 +504,12 @@ mod tests {
         let off = herdr_checks(yours, true);
         assert!(off.contains("manifest_check = false\n") && !off.contains("manifest_check = false  #"), "{off}");
         assert_eq!(herdr_checks(&off, false), yours);
+        // Keys and tables written with quotes are the same ones.
+        let quoted = "[\"update\"]\n\"version_check\" = true\n";
+        let off = herdr_checks(quoted, true);
+        assert_eq!(off.matches("version_check").count(), 1, "{off}");
+        assert!(off.contains("\"version_check\" = false  # corral: was true") && off.contains("manifest_check = false"), "{off}");
+        assert_eq!(herdr_checks(&off, false), quoted);
         // herdr's own commented example lines are left alone.
         let example = "[update]\n# version_check = true\n";
         assert!(herdr_checks(example, true).contains("# version_check = true\nmanifest_check") || herdr_checks(example, true).contains("version_check = false  # corral: sensitive profile"));

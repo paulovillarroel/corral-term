@@ -2049,12 +2049,15 @@ fn worth_telling(have: &str, latest: &str, told: Option<&str>) -> bool {
     as_tuple(latest) > as_tuple(have) && told != Some(latest)
 }
 
-/// A look for the latest version, made: when, and what it found. The daily check and
-/// `corral update` (with --check too) both count, so the reminder starts over.
+/// A look for the latest version that reached GitHub: when (`looked`, which the reminder
+/// counts from), and what it found. The daily check and `corral update` (with --check too)
+/// both record it; `checked`, the daily check's attempt, also counts toward the next one.
 fn record_check(latest: &str) {
     let path = update_state();
     let mut st = env::read_json(&path);
-    st.set("checked", (now_secs() as f64).into());
+    let now = now_secs() as f64;
+    st.set("checked", now.into());
+    st.set("looked", now.into());
     st.set("latest", latest.into());
     env::write_json(&path, &st);
 }
@@ -2069,7 +2072,8 @@ const REMIND_AFTER_DAYS: u64 = 30;
 pub fn check_reminder() -> Option<u64> {
     let installed = std::fs::metadata(manifest()).and_then(|m| m.modified()).ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs());
-    let looked = env::read_json(&update_state()).get("checked").num().map(|c| c as u64);
+    // A look that reached GitHub: an attempt that didn't (`checked`) leaves the count.
+    let looked = env::read_json(&update_state()).get("looked").num().map(|c| c as u64);
     reminder_days(looked.or(installed), now_secs())
 }
 
@@ -2110,6 +2114,7 @@ pub fn cmd_update_check() -> Result<(), String> {
     let tag = latest_tag()?;
     let latest = tag.trim_start_matches('v').to_string();
     st.set("latest", latest.as_str().into());
+    st.set("looked", (now_secs() as f64).into());
     if worth_telling(VERSION, &latest, st.get("told").str()) {
         let shown = crate::herdr::call("notification.show", crate::json::obj(vec![
             ("title", trf!("Corral {latest} is out", "Salió Corral {latest}").into()),
