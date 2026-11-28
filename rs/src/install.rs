@@ -1418,21 +1418,28 @@ options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(
 loads <- function(p) tryCatch({ loadNamespace(p, lib.loc = c(lib, .libPaths())); TRUE },
   error = function(e) { message(p, " doesn't load: ", conditionMessage(e)); FALSE })"#;
 
-/// httpgd on macOS. Posit's snapshot has it only as source there, which needs Xcode's
-/// command line tools to compile, while CRAN has it compiled for macOS. So it comes from
-/// CRAN's compiled packages, and only in the version the snapshot (or your repository)
-/// has: nothing newer than the snapshot gets in. unigd, which it needs, goes in first
-/// from the snapshot as usual (r_httpgd).
+/// httpgd and unigd on macOS. Posit's snapshot has httpgd only as source there, which
+/// needs Xcode's command line tools to compile, and its own build of unigd links to
+/// XQuartz (/opt/X11), which a Mac doesn't have: it goes in and doesn't load. CRAN's
+/// builds of both carry cairo inside. So the two come from CRAN's compiled packages, only
+/// in the versions the snapshot (or your repository) has, so nothing newer than the
+/// snapshot gets in; what they need comes from the snapshot first, as usual.
 fn httpgd_from_cran_code() -> String {
     let repos = r_repos_code(None);
     format!(r#"{R_LIB}
 {repos}
-want <- tryCatch(available.packages(repos = repos, type = "source")["httpgd", "Version"], error = function(e) NA)
+want <- c("unigd", "httpgd")
+snap <- tryCatch(available.packages(repos = repos, type = "source"), error = function(e) NULL)
 cran <- c(CRAN = "{CRAN}")
-have <- tryCatch(available.packages(repos = cran, type = "binary")["httpgd", "Version"], error = function(e) NA)
-if (!is.na(want) && identical(unname(want), unname(have))) {{
-  try(install.packages("httpgd", lib = lib, repos = cran, type = "binary", dependencies = FALSE, quiet = TRUE), silent = TRUE) # net: r-packages
-}}
+bin <- tryCatch(available.packages(repos = cran, type = "binary"), error = function(e) NULL)
+same <- !is.null(snap) && !is.null(bin) && all(want %in% rownames(snap)) && all(want %in% rownames(bin)) &&
+  identical(unname(snap[want, "Version"]), unname(bin[want, "Version"]))
+if (same) {{
+  deps <- unique(unlist(tools::package_dependencies(want, db = snap, which = c("Depends", "Imports"), recursive = TRUE)))
+  deps <- setdiff(deps, c(want, rownames(installed.packages(lib.loc = c(lib, .libPaths())))))
+  if (length(deps)) try(install.packages(deps, lib = lib, quiet = TRUE), silent = TRUE) # net: r-packages
+  try(install.packages(want, lib = lib, repos = cran, type = "binary", dependencies = FALSE, quiet = TRUE), silent = TRUE) # net: r-packages
+}} else message("CRAN's compiled unigd and httpgd aren't the snapshot's versions")
 quit(status = if (loads("httpgd")) 0 else 1)"#)
 }
 
@@ -1510,7 +1517,7 @@ fn r_httpgd() -> Option<&'static str> {
                         "… instalo httpgd en tu biblioteca de R, para los gráficos de R (segundos; unos minutos si hay que compilarlo)"));
     // On macOS, compiled from CRAN when R takes compiled packages; otherwise, or if that
     // didn't work, as any other package (compiled from source where there is no binary).
-    let from_cran = cfg!(target_os = "macos") && r_binaries() && r_install(&r, &["unigd"]) && run_r(&r, &httpgd_from_cran_code());
+    let from_cran = cfg!(target_os = "macos") && r_binaries() && run_r(&r, &httpgd_from_cran_code());
     if from_cran || r_install(&r, &["httpgd"]) {
         step(tr("httpgd in your R library (R's plots in Mirador)", "httpgd en tu biblioteca de R (los gráficos de R en Mirador)"), State::Ok);
         None
@@ -2308,15 +2315,16 @@ mod tests {
         assert!(code.contains(r#"pkgs <- c("duckdb", "DBI")"#) && !code.contains("pak::"), "{code}");
     }
 
-    /// httpgd on macOS comes compiled from CRAN, but only in the version the snapshot
-    /// (or your repository) has, and without pulling newer dependencies from CRAN.
+    /// httpgd and unigd on macOS come compiled from CRAN, but only in the versions the
+    /// snapshot (or your repository) has; what they need comes from the snapshot.
     #[test]
     fn httpgd_on_macos_comes_from_cran_only_in_the_snapshots_version() {
         let code = httpgd_from_cran_code();
-        assert!(code.contains(r#"available.packages(repos = repos, type = "source")["httpgd", "Version"]"#), "{code}");
+        assert!(code.contains(r#"want <- c("unigd", "httpgd")"#), "{code}");
         assert!(code.contains(&format!(r#"cran <- c(CRAN = "{CRAN}")"#)), "{code}");
-        assert!(code.contains("identical(unname(want), unname(have))"), "{code}");
-        assert!(code.contains(r#"install.packages("httpgd", lib = lib, repos = cran, type = "binary", dependencies = FALSE"#), "{code}");
+        assert!(code.contains(r#"identical(unname(snap[want, "Version"]), unname(bin[want, "Version"]))"#), "{code}");
+        assert!(code.contains("tools::package_dependencies(want, db = snap"), "{code}");
+        assert!(code.contains(r#"install.packages(want, lib = lib, repos = cran, type = "binary", dependencies = FALSE"#), "{code}");
         assert!(code.contains(r#"CRAN = paste0("https://p3m.dev/cran/", day)"#), "the snapshot decides the version: {code}");
         assert!(code.starts_with(R_LIB));
     }
