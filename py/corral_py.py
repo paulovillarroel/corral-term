@@ -195,7 +195,7 @@ def size_of(x) -> int | None:
 # text has the shape of one (a known key's prefix, a JWT, a private key, a URL with a
 # password). The same patterns as secret_name and secret_text in r/corral.R.
 SECRET_NAME = re.compile(r"(?i)(pass(word|wd)?|pwd|secret|token|api[._-]?key|access[._-]?key|private[._-]?key|credential|bearer)")
-SECRET_TEXT = re.compile(r"^(sk-|sk_live_|rk_live_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|hf_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.)|-----BEGIN|://[^/@:\s]+:[^/@\s]+@")
+SECRET_TEXT = re.compile(r"^(sk-|sk_live_|rk_live_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|hf_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.)|-----BEGIN|://[^/?#@:\s]*:[^/?#@\s]+@")
 
 
 def may_be_secret(name: str, x) -> bool:
