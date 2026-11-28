@@ -102,7 +102,7 @@
     <p>Making things stricter never asks. A looser profile, or removing a project's, from an agent's pane waits for your approval in a popup, as <code>corral config</code> does.</p>
 
     <h2 id="follows">What a project's profile follows</h2>
-    <p>Sessions, by the folder they work in: the one they started in, and the one they are in now, which Corral reads from the process itself (<code>/proc/PID/cwd</code>), so a <code>setwd()</code> or <code>os.chdir()</code> counts at once. A request that moves into a sensitive project gets that project's output for its own result, with a note saying so, and the next request already asks; approval can't be asked after the fact, so what that one request ran, it ran.</p>
+    <p>Sessions, by the folder they work in: the one they started in, and the one they are in now, which Corral reads from the process itself (<code>/proc/PID/cwd</code> on Linux, <code>proc_pidinfo</code> on macOS), so a <code>setwd()</code> or <code>os.chdir()</code> counts at once. A request that moves into a sensitive project gets that project's output for its own result, with a note saying so, and the next request already asks; approval can't be asked after the fact, so what that one request ran, it ran.</p>
     <p>It doesn't follow files: code that reads a project's files by absolute path from a session in another folder isn't covered, and approved code can do anything your user can (read any file, use the network). For data no agent may reach, make <code>sensitive</code> your global profile on that machine, and deny the agent's own tools those folders (<a href="security.html#for-sensitive-data">for sensitive data</a>).</p>
 
     <h2 id="where">Where it is kept, and teams</h2>
