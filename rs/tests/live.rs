@@ -1788,12 +1788,13 @@ fn an_agent_cannot_loosen_the_harness_by_itself() {
 #[test]
 #[ignore]
 fn a_plot_object_opens_mirador_while_r_draws() {
-    // The "browser" writes down each address it is asked to open.
+    // The "browser" writes down each address it is asked to open. Asked for an app window
+    // (--app), it gets a window of Mirador's own, the kind Corral places.
     let script = PathBuf::from(format!("/tmp/corral-opens-{}.sh", std::process::id()));
     let log = script.with_extension("log");
     let _ = std::fs::remove_file(&log);
     std::fs::write(&script, format!("#!/bin/sh\necho \"$1\" >> '{}'\n", log.display())).unwrap();
-    let browser = format!("sh {} {{url}}", script.display());
+    let browser = format!("sh {} --app={{url}}", script.display());
     let live = Live::start_with("drawopen", &[("CORRAL_BROWSER", browser.as_str())]);
     // R draws this one only once the test says so.
     let go = live.dir.join("go");
