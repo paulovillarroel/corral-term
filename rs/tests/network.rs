@@ -126,9 +126,7 @@ fn the_sensitive_profile_turns_herdrs_checks_off() {
 /// A first installation that stops for something missing still says what: with no
 /// config.json yet, the install count's guard (which reads it) must not end the installer
 /// first, as `set -eu` would on a failed read. The count goes to a closed local port.
-/// Linux only until install.sh installs on macOS: there it stops sooner, on the system.
 #[test]
-#[cfg(target_os = "linux")]
 fn an_install_that_stops_says_why_without_a_config() {
     let home = std::env::temp_dir().join(format!("corral-test-install-stop-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
