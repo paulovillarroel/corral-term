@@ -450,6 +450,21 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
+    /// stty -g, the settings in a form stty reads back. On macOS without PENDIN in lflag:
+    /// a state bit the kernel sets itself when canonical mode comes back on (to retype
+    /// pending input), not a setting.
+    fn settings(tty: &File) -> String {
+        let g = stty(tty, &["-g"]);
+        if !cfg!(target_os = "macos") {
+            return g;
+        }
+        const PENDIN: u64 = 0x2000_0000;
+        g.trim_end().split(':').map(|f| match f.strip_prefix("lflag=").and_then(|v| u64::from_str_radix(v, 16).ok()) {
+            Some(v) => format!("lflag={:x}", v & !PENDIN),
+            None => f.to_string(),
+        }).collect::<Vec<_>>().join(":")
+    }
+
     fn words(text: &str) -> Vec<String> {
         text.split_whitespace().map(|w| w.trim_end_matches(';').to_string()).collect()
     }
@@ -464,9 +479,9 @@ mod tests {
         let saved = get(fd).expect("tcgetattr on a pty");
 
         // Written back unchanged, nothing changes: every field is where the system has it.
-        let before = stty(&tty, &["-g"]);
+        let before = settings(&tty);
         set(fd, &saved);
-        assert_eq!(stty(&tty, &["-g"]), before);
+        assert_eq!(settings(&tty), before);
 
         // What the console's mode switches off reads back as off, and nothing else.
         let on = words(&stty(&tty, &["-a"]));
@@ -479,7 +494,7 @@ mod tests {
             assert!(off.iter().any(|w| w == flag), "expected {flag} after keys_mode: {off:?}");
         }
         set(fd, &saved);
-        assert_eq!(stty(&tty, &["-g"]), before);
+        assert_eq!(settings(&tty), before);
 
         // VMIN and VTIME are read where stty writes them.
         stty(&tty, &["min", "5", "time", "3"]);
