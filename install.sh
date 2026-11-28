@@ -26,7 +26,9 @@ set -eu
 
 REPO=paulovillarroel/corral-term
 LINE="curl -LsSf https://corral-term.dev/install.sh | sh"
-PACKAGE=corral-term-x86_64-linux.tar.gz
+# The package for this system and processor (main picks it): corral-term-x86_64-linux,
+# corral-term-aarch64-macos or corral-term-x86_64-macos, .tar.gz.
+PACKAGE=""
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     red=$(printf '\033[31m'); green=$(printf '\033[32m'); bold=$(printf '\033[1m'); off=$(printf '\033[0m')
@@ -63,7 +65,8 @@ stop() {
 }
 
 # count_stop SYSTEM MISSING [VERSION]: one anonymous ping when the installer stops before
-# Corral is on this machine (a Mac, another system or processor, no tar), so the
+# Corral is on this machine (another system or processor, no tar, a version without a
+# macOS package), so the
 # project learns who it leaves out: the system and what was missing, nothing else
 # (api/installed.js). Also when a download doesn't check out (sha256, sha256_missing,
 # attestation), with VERSION: that one is an alarm about a published package.
@@ -91,9 +94,11 @@ count_stop() {
     fi
 }
 
-# linux or wsl: the system field of the ping.
+# linux, wsl or macos: the system field of the ping.
 system_name() {
-    if grep -qi microsoft /proc/version 2>/dev/null; then printf wsl; else printf linux; fi
+    if [ "$(uname -s)" = Darwin ]; then printf macos
+    elif grep -qi microsoft /proc/version 2>/dev/null; then printf wsl
+    else printf linux; fi
 }
 
 # corral_of DIR AGAIN: make sure DIR has the `corral` command, compiling it if needed:
@@ -183,25 +188,19 @@ latest_tag() {
 
 main() {
     for arg in "$@"; do case "$arg" in --check) check_only=1 ;; esac; done
-    case "$(uname -s)" in
-        Linux) ;;
-        Darwin) count_stop macos system
-                stop "$(t "Corral doesn't work on macOS yet." "Corral todavía no funciona en macOS.")" \
-                     "$(t "herdr does work on a Mac, but several parts of Corral use features only Linux has." \
-                          "herdr sí funciona en Mac, pero varias piezas de Corral usan funciones propias de Linux.")" \
-                     "$(t "For now Corral works on Linux and on Windows with WSL." \
-                          "Por ahora Corral funciona en Linux y en Windows con WSL.")" ;;
+    case "$(uname -s)/$(uname -m)" in
+        Linux/x86_64 | Linux/amd64) PACKAGE=corral-term-x86_64-linux.tar.gz ;;
+        Darwin/arm64 | Darwin/aarch64) PACKAGE=corral-term-aarch64-macos.tar.gz ;;
+        Darwin/x86_64) PACKAGE=corral-term-x86_64-macos.tar.gz ;;
+        Linux/* | Darwin/*)
+           count_stop "$(system_name)" arch
+           stop "$(t "Corral installs on Linux x86_64 (Intel or AMD) and on Macs, and this machine is $(uname -s) $(uname -m)." \
+                     "Corral se instala en Linux x86_64 (Intel o AMD) y en Mac, y este equipo es $(uname -s) $(uname -m).")" ;;
         *) count_stop other system
-           stop "$(t "Corral works on Linux and on Windows with WSL, and this system is $(uname -s)." \
-                     "Corral funciona en Linux y en Windows con WSL, y este sistema es $(uname -s).")" \
+           stop "$(t "Corral works on Linux, macOS and Windows with WSL, and this system is $(uname -s)." \
+                     "Corral funciona en Linux, macOS y Windows con WSL, y este sistema es $(uname -s).")" \
                 "$(t "On Windows, open a WSL (Ubuntu) terminal and run the installation there." \
                      "En Windows, abre una terminal de WSL (Ubuntu) y corre ahí la instalación.")" ;;
-    esac
-    case "$(uname -m)" in
-        x86_64 | amd64) ;;
-        *) count_stop "$(system_name)" arch
-           stop "$(t "For now Corral only installs on x86_64 machines (Intel or AMD), and this one is $(uname -m)." \
-                     "Corral por ahora se instala solo en equipos x86_64 (Intel o AMD), y este es $(uname -m).")" ;;
     esac
 
     missing=""
@@ -255,10 +254,19 @@ main() {
         base="https://github.com/$REPO/releases/download/$tag"
         printf '%s\n' "$(t "Downloading Corral ${tag#v}..." "Descargando Corral ${tag#v}...")"
         # net: corral-package
-        curl -fsSL "$base/$PACKAGE" -o "$tmp/$PACKAGE" 2>/dev/null ||
+        code=$(curl -fsSL -w '%{http_code}' "$base/$PACKAGE" -o "$tmp/$PACKAGE" 2>/dev/null) || {
+            # Versions published before the macOS version have no package for a Mac.
+            if [ "$code" = 404 ] && [ "$(uname -s)" = Darwin ]; then
+                count_stop macos system "${tag#v}"
+                stop "$(t "Corral ${tag#v} has no package for macOS." "Corral ${tag#v} no tiene un paquete para macOS.")" \
+                     "$(t "If it's the latest version, the macOS version isn't published yet; when it is, this same line installs it." \
+                          "Si es la última versión, la de macOS todavía no está publicada; cuando lo esté, esta misma línea la instala.")" \
+                     "$(t "Published versions: https://github.com/$REPO/releases" "Versiones publicadas: https://github.com/$REPO/releases")"
+            fi
             stop "$(t "Couldn't download Corral $tag from GitHub." "No pude descargar Corral $tag de GitHub.")" \
                  "$(t "Check the internet connection and try again." "Revisa la conexión a internet y vuelve a intentarlo.")" \
                  "$(t "Published versions: https://github.com/$REPO/releases" "Versiones publicadas: https://github.com/$REPO/releases")"
+        }
         # net: corral-package
         curl -fsSL "$base/$PACKAGE.sha256" -o "$tmp/$PACKAGE.sha256" 2>/dev/null || {
             count_stop "$(system_name)" sha256_missing "${tag#v}"
