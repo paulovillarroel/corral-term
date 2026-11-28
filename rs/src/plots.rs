@@ -906,7 +906,8 @@ pub fn cmd_plots_tui(_args: &[String]) -> Result<(), String> {
         return Ok(());
     }
     if env::which("chafa").is_none() {
-        message_screen(tr("chafa is missing", "Falta chafa"), tr("Install it with: sudo apt install chafa", "Instálalo con: sudo apt install chafa"));
+        let cmd = env::install_command("chafa");
+        message_screen(tr("chafa is missing", "Falta chafa"), &trf!("It draws the plots here. Install it with: {cmd}", "Dibuja los gráficos aquí. Instálalo con: {cmd}"));
         return Ok(());
     }
     let kitty = image_mode().0 == "kitty";
