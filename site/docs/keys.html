@@ -177,7 +177,7 @@
     <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
     <tbody>
     <tr><td><kbd>Enter</kbd></td><td>Run, if the expression is complete; if not, a new indented line</td></tr>
-    <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>Run even if something is still open</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>Run even if something is still open (<kbd>Ctrl</kbd>+<kbd>J</kbd> works in any terminal; many also send it for <kbd>Ctrl</kbd>+<kbd>Enter</kbd>)</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>History (with something typed, only the entries that start the same)</td></tr>
     <tr><td><kbd>Tab</kbd></td><td>Complete names, arguments and columns</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Interrupt what is running, or clear what you typed</td></tr>
@@ -332,6 +332,7 @@
 
     <h3 id="terminals-that-drop-keys">Terminals that drop keys</h3>
     <p>From Warp, through herdr, only <kbd>Ctrl</kbd> plus a letter and the function keys reach the editor intact: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> arrives as <kbd>Enter</kbd>, and shortcuts with <kbd>Ctrl</kbd>+<kbd>Shift</kbd> or <kbd>Alt</kbd> are cut. That is why Corral's main keys are <kbd>Ctrl</kbd>+<kbd>R</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd> and <kbd>Ctrl</kbd>+<kbd>U</kbd>.</p>
+    <p>On a Mac, <kbd>Ctrl</kbd> is <kbd>Control</kbd>, not <kbd>Command</kbd>, and <kbd>Alt</kbd> is <kbd>Option</kbd> once your terminal sends it as Alt: in Terminal, Settings → Profiles → Keyboard → Use Option as Meta key; in iTerm2, Settings → Profiles → Keys → Left Option key: Esc+; in Ghostty, <code>macos-option-as-alt = true</code>; in kitty, <code>macos_option_as_alt yes</code>; WezTerm sends it already. The installer says which one applies to your terminal. Until then, every shortcut with <kbd>Alt</kbd> has a <kbd>Ctrl</kbd> one that does the same (<kbd>Ctrl</kbd>+<kbd>J</kbd>, <kbd>Ctrl</kbd>+<kbd>L</kbd>). On a laptop, <kbd>F5</kbd> is <kbd>fn</kbd>+<kbd>F5</kbd> unless the function keys are set as standard keys; <kbd>Ctrl</kbd>+<kbd>R</kbd> runs the line on any keyboard.</p>
 
     <nav class="pager" aria-label="Pages"></nav>
   </main>

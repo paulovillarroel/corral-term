@@ -466,6 +466,21 @@ pub fn stamp() -> String {
     format!("{y:04}{mo:02}{d:02}-{h:02}{mi:02}{s:02}")
 }
 
+/// The command that installs a system package here, for you to run (Corral never runs
+/// sudo): Homebrew on macOS, with where to get it when it isn't there; apt, dnf, pacman or
+/// zypper on Linux and WSL.
+pub fn install_command(pkg: &str) -> String {
+    if cfg!(target_os = "macos") {
+        return if which("brew").is_some() { format!("brew install {pkg}") } else { format!("brew install {pkg}   (Homebrew: https://brew.sh)") };
+    }
+    for (tool, cmd) in [("apt-get", "sudo apt install"), ("dnf", "sudo dnf install"), ("pacman", "sudo pacman -S"), ("zypper", "sudo zypper install")] {
+        if which(tool).is_some() {
+            return format!("{cmd} {pkg}");
+        }
+    }
+    trf!("{pkg}, with your system's package manager", "{pkg}, con el gestor de paquetes de tu sistema")
+}
+
 /// Quote a word for a shell command line, like Python's shlex.quote.
 pub fn sh_quote(s: &str) -> String {
     if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "@%+=:,./_-".contains(c)) {

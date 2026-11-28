@@ -71,7 +71,7 @@ const DOWNLOADS: [Download; 3] = [
     ]),
 ];
 
-/// herdr, when it is missing and you say yes: the version Corral was tested with, from
+/// herdr, when it is missing: the version Corral was tested with, from
 /// herdr's own GitHub release, checked against the SHA-256 written here like the
 /// downloads above. It goes where herdr's own installer puts it (~/.local/bin/herdr),
 /// as your herdr: `herdr update` keeps it current, and `corral uninstall` leaves it.
@@ -84,7 +84,7 @@ const HERDR: (&str, PerSystem) = ("0.9.5", [
      "5fb0a908ec7f6745e3e245738b06bfad56c46391c391ab3c0955fbead01f1369"),
 ]);
 
-/// uv, for the Python console, when it's missing and you say yes (uv_step): a release
+/// uv, for the Python console, when it's missing (uv_step): a release
 /// at least three days old, from uv's GitHub release (on Linux the static musl build,
 /// which runs on any Linux), checked against the SHA-256 written here. uv and uvx go
 /// where uv's own installer puts them (~/.local/bin), as your uv; uninstalling Corral
@@ -354,7 +354,7 @@ struct Check {
     name: String,
     detail: String,
     fix: Vec<String>, // what to do, line by line; a line starting with two spaces is a command
-    /// What is missing that the installer can bring itself, if you say yes (bring):
+    /// What is missing that the installer can bring itself (bring):
     /// a short name, and what it would do.
     brings: Option<(String, String)>,
 }
@@ -373,6 +373,81 @@ impl Check {
         self.brings = Some((short.into(), what.into()));
         self
     }
+}
+
+/// How to install R here, line by line (a line starting with two spaces is a command or
+/// an address): CRAN's installer for this Mac's chip, apt on Ubuntu and Debian (WSL
+/// included), CRAN's page for other Linux. R is the one requirement the installer can't
+/// bring, since it takes an administrator's password; with a terminal, it waits for it
+/// (guide_r).
+fn r_install_steps() -> Vec<String> {
+    if cfg!(target_os = "macos") {
+        let chip = if setup::SYSTEM == 1 { tr("Apple silicon (arm64)", "Apple silicon (arm64)") } else { tr("Intel (x86_64)", "Intel (x86_64)") };
+        vec![trf!("Install R from CRAN: on this page, the .pkg for {chip}; it asks for your password, as any Mac installer does:",
+                  "Instala R desde CRAN: en esta página, el .pkg para {chip}; pide tu contraseña, como cualquier instalador del Mac:"),
+             format!("  {R_MAC_PAGE}")]
+    } else if which("apt-get").is_some() {
+        vec![tr("Install R (it asks for your password):", "Instala R (pide tu contraseña):").into(), "  sudo apt install r-base".into()]
+    } else {
+        vec![tr("Install R for your distribution, from CRAN's page:", "Instala R para tu distribución, desde la página de CRAN:").into(),
+             "  https://cloud.r-project.org/bin/linux/".into()]
+    }
+}
+
+/// CRAN's page with R's installers for macOS.
+const R_MAC_PAGE: &str = "https://cloud.r-project.org/bin/macosx/";
+
+/// R was all that stopped the installation, and there is a terminal: after the steps
+/// (missing_steps), on macOS it opens CRAN's page, then waits for Enter and looks again,
+/// so the installation goes on without running the line again. True when R is there now;
+/// false with q, or when the terminal goes away.
+fn guide_r() -> bool {
+    use std::io::{BufRead, Write};
+    if cfg!(target_os = "macos") {
+        println!("\n  {}", tr("Opening that page in your browser.", "Abro esa página en tu navegador."));
+        let _ = Command::new("open").arg(R_MAC_PAGE).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+    loop {
+        print!("\n  {} ", tr("When R is installed, press Enter and I'll check again (q stops):",
+                              "Cuando R esté instalado, aprieta Enter y vuelvo a revisar (q para salir):"));
+        let _ = std::io::stdout().flush();
+        let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return false };
+        let mut answer = String::new();
+        if std::io::BufReader::new(tty).read_line(&mut answer).map_or(true, |n| n == 0) || answer.trim().eq_ignore_ascii_case("q") {
+            return false;
+        }
+        if crate::versions::rscript().or_else(|| which("Rscript")).is_some() {
+            step(tr("R is installed", "R está instalado"), State::Ok);
+            return true;
+        }
+        println!("  {}", tr("R isn't there yet (a new terminal finds it if this one doesn't).",
+                            "R todavía no está (si esta terminal no lo encuentra, una nueva sí)."));
+    }
+}
+
+/// On macOS, how to make Option work as Alt in the terminal the installer runs in, where
+/// that terminal needs it (WezTerm already sends Alt): Alt+Enter in the console, Alt+- in
+/// the editor. None elsewhere.
+fn option_as_alt(term_program: Option<&str>, kitty: bool) -> Option<String> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    Some(match (term_program.unwrap_or(""), kitty) {
+        (_, true) => tr("add macos_option_as_alt yes to kitty.conf", "agrega macos_option_as_alt yes a kitty.conf").into(),
+        ("Apple_Terminal", _) => tr("Terminal → Settings → Profiles → Keyboard → Use Option as Meta key",
+                                    "Terminal → Ajustes → Perfiles → Teclado → Usar Opción como tecla Meta").into(),
+        ("iTerm.app", _) => tr("iTerm2 → Settings → Profiles → Keys → Left Option key: Esc+",
+                               "iTerm2 → Ajustes → Profiles → Keys → Left Option key: Esc+").into(),
+        ("ghostty", _) => tr("add macos-option-as-alt = true to Ghostty's config", "agrega macos-option-as-alt = true a la configuración de Ghostty").into(),
+        ("WezTerm", _) => return None,
+        _ => tr("turn on \"Option as Meta (or Alt)\" in your terminal's settings", "activa \"Option como Meta (o Alt)\" en los ajustes de tu terminal").into(),
+    })
+}
+
+/// Whether R is the only thing missing that the installer can't bring itself.
+fn only_r_is_manual(rows: &[Check], offer: bool) -> bool {
+    let manual: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing && !(offer && r.brings.is_some())).collect();
+    !manual.is_empty() && manual.iter().all(|r| r.id == "r")
 }
 
 fn checks(in_place: bool, src: &Path) -> Vec<Check> {
@@ -394,7 +469,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             let update = [tr("Corral needs herdr 0.9.5 or newer. Update it:", "Corral necesita herdr 0.9.5 o más nuevo. Actualízalo:"), "  herdr update"];
             let shown = if v.is_empty() { tr("unknown version", "versión desconocida").to_string() } else { v.clone() };
             let row = check("required", if ok { State::Ok } else { State::Missing }, "herdr", shown.clone(), if ok { &[] } else { &update }).id("herdr_old");
-            // Too old: herdr's own updater brings the latest, with your yes (bring).
+            // Too old: herdr's own updater brings the latest (bring).
             out.push(if ok { row } else {
                 row.brings("herdr", trf!("herdr update, from {shown} to its latest version: herdr's own updater, which checks what it downloads",
                                          "herdr update, de {shown} a su última versión: el actualizador del propio herdr, que comprueba lo que descarga"))
@@ -402,14 +477,11 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
         }
     }
     match crate::versions::rscript().or_else(|| which("Rscript")) {
-        None => out.push(check("required", State::Missing, "R", tr("not installed", "no está instalado"),
-                               &[if cfg!(target_os = "macos") {
-                                   tr("Install R from CRAN, the .pkg for your Mac (Apple silicon or Intel): https://cloud.r-project.org/bin/macosx/ (or with rig).",
-                                      "Instala R desde CRAN, el .pkg para tu Mac (Apple silicon o Intel): https://cloud.r-project.org/bin/macosx/ (o con rig).")
-                               } else {
-                                   tr("Install R from https://cran.r-project.org (on Ubuntu: sudo apt install r-base).",
-                                      "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")
-                               }]).id("r")),
+        None => {
+            let fix = r_install_steps();
+            let fix: Vec<&str> = fix.iter().map(String::as_str).collect();
+            out.push(check("required", State::Missing, "R", tr("not installed", "no está instalado"), &fix).id("r"));
+        }
         Some(r) => {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
             let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI", "pak"];
@@ -508,10 +580,22 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     // Optional -------------------------------------------------------------
     match which("uv") {
         Some(uv) => out.push(check("optional", State::Ok, "uv", trf!("{} (Python console)", "{} (consola de Python)", version_of(&uv, "--version")), &[])),
+        None if !asks() => out.push(check("installer", State::Download, "uv",
+                               trf!("will download {} (the Python console; with Python and its packages, about 400 MB, once)",
+                                    "descargo {} (la consola de Python; con Python y sus paquetes, unos 400 MB, una vez)", UV.0), &[])),
         None => out.push(check("optional", State::Warn, "uv", tr("without uv there is no Python console", "sin uv no hay consola de Python"),
-                               &[tr("For Python in Corral, the installer offers uv while it installs, in a terminal; or install it yourself:",
-                                    "Para Python en Corral, el instalador ofrece uv mientras instala, en una terminal; o instálalo tú:"),
+                               &[tr("For Python in Corral, the installer asks about uv while it installs; or install it yourself:",
+                                    "Para Python en Corral, el instalador pregunta por uv mientras instala; o instálalo tú:"),
                                  "  curl -LsSf https://astral.sh/uv/install.sh | sh"])),
+    }
+    // The plot viewer inside the terminal (ctrl+b f) draws with chafa, sharp or with characters.
+    match which("chafa") {
+        Some(_) => out.push(check("optional", State::Ok, "chafa", tr("plots inside the terminal (ctrl+b f)", "gráficos dentro de la terminal (ctrl+b f)"), &[])),
+        None => {
+            let cmd = format!("  {}", env::install_command("chafa"));
+            out.push(check("optional", State::Warn, "chafa", tr("without chafa, plots show only in Mirador", "sin chafa, los gráficos se ven solo en Mirador"),
+                           &[tr("chafa draws R's plots inside the terminal (ctrl+b f); install it:", "chafa dibuja los gráficos de R dentro de la terminal (ctrl+b f); instálalo:"), &cmd]));
+        }
     }
     let places = and_list(&skill_places().iter().map(|(_, shown)| *shown).collect::<Vec<_>>());
     // The agent the layout opens: the one chosen, else the first one installed.
@@ -625,12 +709,21 @@ fn missing_steps(rows: &[Check], again: &str, offer: bool, unchanged: bool) -> b
                 }
             }
         }
+        // R alone, with a terminal: the installer waits for it here (guide_r).
+        let guided = offer && can_ask() && manual.iter().all(|r| r.id == "r");
         if !later.is_empty() {
             let names: Vec<&str> = later.iter().filter_map(|r| r.brings.as_ref().map(|b| b.0.as_str())).collect();
-            println!("\n  {}", trf!("When you run it again, the installer can bring {} itself (it will ask you).",
-                                    "Cuando lo vuelvas a correr, el instalador puede poner {} por su cuenta (te lo va a preguntar).", and_list(&names)));
+            if guided {
+                println!("\n  {}", trf!("Then the installer brings {} itself.",
+                                        "Después el instalador pone {} por su cuenta.", and_list(&names)));
+            } else {
+                println!("\n  {}", trf!("When you run it again, the installer brings {} itself.",
+                                        "Cuando lo vuelvas a correr, el instalador pone {} por su cuenta.", and_list(&names)));
+            }
         }
-        println!("\n  {}\n     {}{again}{}", tr("Then run the installation again:", "Después vuelve a correr la instalación:"), s.bold, s.off);
+        if !guided {
+            println!("\n  {}\n     {}{again}{}", tr("Then run the installation again:", "Después vuelve a correr la instalación:"), s.bold, s.off);
+        }
     }
     blocking.is_empty()
 }
@@ -639,6 +732,18 @@ fn missing_steps(rows: &[Check], again: &str, offer: bool, unchanged: bool) -> b
 /// answer from (the install line reads its script from a pipe). Not in CI or a log.
 fn can_ask() -> bool {
     std::io::stdout().is_terminal() && std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty").is_ok()
+}
+
+/// Whether the installer asks before each thing it brings: only with CORRAL_ASK=1. By
+/// default it brings what it can (herdr, R packages, uv, the PATH line) and says what it
+/// did, so an installation runs on its own, with or without a terminal.
+fn asks() -> bool {
+    std::env::var("CORRAL_ASK").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
+/// Yes, unless CORRAL_ASK=1: then the question, on the terminal (no terminal, no).
+fn consent(question: &str) -> bool {
+    !asks() || ask(question) == Some(true)
 }
 
 /// Enter, y, yes, s or sí: yes.
@@ -660,7 +765,7 @@ fn ask(question: &str) -> Option<bool> {
 }
 
 /// When all that is missing is what the installer can bring (herdr, or a newer one,
-/// and jsonlite), it offers to, and Enter says yes. None when it didn't bring anything
+/// and jsonlite), it brings it (asking first with CORRAL_ASK=1). None when it didn't bring anything
 /// (it couldn't ask, or you said no); otherwise whether everything came.
 fn bring(rows: &[Check]) -> Option<bool> {
     let missing: Vec<&Check> = rows.iter().filter(|r| r.state == State::Missing).collect();
@@ -668,15 +773,14 @@ fn bring(rows: &[Check]) -> Option<bool> {
         return None;
     }
     let s = style();
-    println!("\n{}{}{}", s.bold, tr("The installer can bring what is missing:", "El instalador puede poner lo que falta:"), s.off);
+    println!("\n{}{}{}", s.bold, tr("The installer brings what is missing:", "El instalador pone lo que falta:"), s.off);
     for r in &missing {
         println!("  • {}", r.brings.as_ref().map(|b| b.1.as_str()).unwrap_or_default());
     }
-    if ask(tr("Install it now?", "¿Lo instalo ahora?"))? {
-        println!();
-    } else {
+    if !consent(tr("Install it now?", "¿Lo instalo ahora?")) {
         return None;
     }
+    println!();
     let mut all = true;
     for r in &missing {
         all &= match r.id {
@@ -710,7 +814,7 @@ fn bring_herdr_update() -> bool {
 const PATH_LINE: &str = "export PATH=\"$HOME/.local/bin:$PATH\"";
 
 /// ~/.local/bin on the PATH, so a new terminal finds herdr and corral. When it isn't,
-/// the installer offers to add PATH_LINE to your shell's startup file (~/.bashrc or
+/// the installer adds PATH_LINE to your shell's startup file (~/.bashrc or
 /// ~/.zshrc), after a copy of it, as with the other files it edits. Uninstalling
 /// leaves the line: other tools (herdr, uv) live there too. True when the line is in
 /// that file now, added or already there.
@@ -730,12 +834,11 @@ fn path_step(saved: &mut Vec<String>) -> bool {
     if text.lines().any(|l| l.trim() == PATH_LINE) {
         return true;
     }
-    if !can_ask() {
-        return false;
+    if asks() {
+        println!("\n  {}", trf!("{} isn't on your PATH, so a new terminal won't find herdr or corral.",
+                                "{} no está en tu PATH, así que una terminal nueva no encontrará herdr ni corral.", short(&bin())));
     }
-    println!("\n  {}", trf!("{} isn't on your PATH, so a new terminal won't find herdr or corral.",
-                            "{} no está en tu PATH, así que una terminal nueva no encontrará herdr ni corral.", short(&bin())));
-    if ask(&format!("  {}", trf!("Add it in ~/{rc}?", "¿Lo agrego en ~/{rc}?"))) != Some(true) {
+    if !consent(&format!("  {}", trf!("Add it in ~/{rc}?", "¿Lo agrego en ~/{rc}?"))) {
         return false;
     }
     backup(&path, saved);
@@ -818,17 +921,19 @@ fn place_in_bin(name: &str, data: &[u8]) -> std::io::Result<PathBuf> {
     written.map(|_| exe)
 }
 
-/// uv for the Python console, when it's missing: the installer offers it, in a
-/// terminal, and Enter says yes. Without uv there is no Python console, and with it
-/// python_ready, right after, gets Python and the console's packages once. No
-/// terminal to ask in, or a no: the checklist's hint says how to add it later.
+/// uv for the Python console, when it's missing: the installer brings it (asking first
+/// with CORRAL_ASK=1). Without uv there is no Python console, and with it python_ready,
+/// right after, gets Python and the console's packages once. A no: the checklist's hint
+/// says how to add it later.
 fn uv_step() {
-    if which("uv").is_some() || !can_ask() {
+    if which("uv").is_some() {
         return;
     }
-    println!("\n  {}", tr("uv isn't installed, so there's no Python console. With uv, it also gets Python and the console's packages, once (about 400 MB on disk).",
-                          "uv no está instalado, así que no hay consola de Python. Con uv también trae Python y los paquetes de la consola, una vez (unos 400 MB en disco)."));
-    if ask(&format!("  {}", trf!("Install uv {}?", "¿Instalo uv {}?", UV.0))) == Some(true) {
+    if asks() {
+        println!("\n  {}", tr("uv isn't installed, so there's no Python console. With uv, it also gets Python and the console's packages, once (about 400 MB on disk).",
+                              "uv no está instalado, así que no hay consola de Python. Con uv también trae Python y los paquetes de la consola, una vez (unos 400 MB en disco)."));
+    }
+    if consent(&format!("  {}", trf!("Install uv {}?", "¿Instalo uv {}?", UV.0))) {
         bring_uv();
     }
 }
@@ -1251,10 +1356,10 @@ fn skill(dest: &Path) {
     }
 }
 
-/// With several agents installed and none chosen, ask once which one the agent pane
-/// opens. Only in a terminal: the install line reads its script from a pipe, so the
-/// answer comes from /dev/tty, and without one (CI, a log) nothing is asked. Enter
-/// keeps Corral's choice, the first one installed. The install record remembers
+/// With several agents installed and none chosen: the agent pane opens the first one
+/// installed, and the palette changes it. With CORRAL_ASK=1, in a terminal, it asks once
+/// instead (the answer comes from /dev/tty, since the install line reads its script from
+/// a pipe), and Enter keeps the first one installed. The install record remembers
 /// that it asked, so an update doesn't ask again; the palette changes it later.
 fn ask_agent(before: &Value, done: &mut Value) {
     use std::io::{BufRead, Write};
@@ -1266,7 +1371,13 @@ fn ask_agent(before: &Value, done: &mut Value) {
         return;
     }
     let found: Vec<(&str, &str)> = env::AGENTS.iter().filter(|(cmd, _)| env::which(cmd).is_some()).copied().collect();
-    if found.len() < 2 || !std::io::stdout().is_terminal() {
+    if found.len() < 2 {
+        return;
+    }
+    // Without CORRAL_ASK, the first one installed; the palette changes it.
+    if !asks() || !std::io::stdout().is_terminal() {
+        step(&trf!("the agent pane opens the first agent installed, {} now (the palette changes it: Agent: …)",
+                   "el panel del agente abre el primer agente instalado, {} ahora (la paleta lo cambia: Agente: …)", found[0].1), State::Ok);
         return;
     }
     let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return };
@@ -1476,13 +1587,33 @@ options(repos = repos)"#)
 /// itself. None without pak, or when pak has nothing to say.
 fn system_libs_hint(r: &Path, pkgs: &[&str]) -> Option<String> {
     if !has_pak() {
-        return None;
+        return known_system_libs(pkgs);
     }
     let list = pkgs.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
     let code = format!("sr <- tryCatch(pak::pkg_sysreqs(c({list})), error = function(e) NULL)
 if (!is.null(sr)) cat(c(sr$pre_install, sr$install_scripts, sr$post_install), sep = \"\\n\")");
     let out = Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     with_sudo(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Without pak, the system libraries Corral knows the packages it installs need, as one
+/// command to run with sudo: httpgd's (through unigd: cairo, freetype, fontconfig, png,
+/// tiff, as pak lists them for Ubuntu 24.04), by the two -dev packages that bring them
+/// all (cairo's brings freetype's, fontconfig's and png's) with names every Ubuntu and
+/// Debian release has; Fedora's equivalents. A new Ubuntu, WSL's included, lacks some (CI
+/// found libtiffxx.so.6 missing). None on macOS, where CRAN's builds carry them, and for
+/// other packages.
+fn known_system_libs(pkgs: &[&str]) -> Option<String> {
+    if cfg!(target_os = "macos") || !pkgs.iter().any(|p| matches!(*p, "httpgd" | "unigd")) {
+        return None;
+    }
+    if which("apt-get").is_some() {
+        Some("sudo apt install libcairo2-dev libtiff-dev".into())
+    } else if which("dnf").is_some() {
+        Some("sudo dnf install cairo-devel libtiff-devel".into())
+    } else {
+        None
+    }
 }
 
 /// pak's system commands (apt-get, dnf…), one per line, as one line to run with sudo.
@@ -1498,8 +1629,8 @@ fn with_sudo(text: &str) -> Option<String> {
 /// After R packages didn't install or load: what pak says they need from the system.
 fn system_libs_step(r: &Path, pkgs: &[&str]) {
     if let Some(cmd) = system_libs_hint(r, pkgs) {
-        println!("    {}", trf!("If a system library is missing, pak says what they need: {cmd}",
-                                "Si falta una librería del sistema, pak indica lo que necesitan: {cmd}"));
+        println!("    {}", trf!("If a system library is missing, this installs what they need: {cmd}",
+                                "Si falta una librería del sistema, esto instala lo que necesitan: {cmd}"));
     }
     println!("    {}", trf!("What R said: {}", "Lo que dijo R: {}", short(&r_log())));
 }
@@ -1508,6 +1639,10 @@ fn system_libs_step(r: &Path, pkgs: &[&str]) {
 /// (it needs cairo and libpng from the system), Corral works without plots there, and
 /// the step says how to add it later, with pak's list of what the system lacks.
 /// Some("httpgd") when it tried and couldn't, for the install's ping.
+/// The command that installs what httpgd needs from the system, when it didn't load for
+/// lack of it, for the closing lines: the installation finishes without waiting.
+static HTTPGD_LIBS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 fn r_httpgd() -> Option<&'static str> {
     let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
     if setup::r_packages(&r, &["httpgd"])[0] {
@@ -1526,6 +1661,9 @@ fn r_httpgd() -> Option<&'static str> {
                    "no pude instalar httpgd: Corral funciona, pero los gráficos de R no llegan a Mirador ni al agente hasta que lo instales: {}",
                    install_r(&["httpgd"])), State::Warn);
         system_libs_step(&r, &["httpgd"]);
+        if let Some(cmd) = system_libs_hint(&r, &["httpgd"]) {
+            let _ = HTTPGD_LIBS.set(cmd);
+        }
         Some("httpgd")
     }
 }
@@ -1580,11 +1718,24 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     let s = style();
     println!("{}Corral {VERSION}{}: {}", s.bold, s.off,
              tr("checking what it needs, without changing anything yet.", "reviso lo que necesita, sin cambiar nada todavía."));
-    let offer = can_ask();
+    // It brings what it can unless it has to ask first (CORRAL_ASK=1) and can't.
+    let offer = !asks() || can_ask();
     let mut rows = checks(in_place, src);
-    if !report(&rows, again, offer) {
-        // When all that's missing is what the installer can bring, it asks, brings it
-        // with your yes and checks again; if you say no or something fails, the steps to
+    let mut fine = report(&rows, again, offer);
+    // R, the one requirement the installer can't bring (it takes an administrator's
+    // password): with a terminal, it waits while you install it, and looks again.
+    if !fine && can_ask() && only_r_is_manual(&rows, offer) {
+        if guide_r() {
+            rows = checks(in_place, src);
+            fine = report(&rows, again, offer);
+        } else {
+            let s = style();
+            println!("\n  {}\n     {}{again}{}", tr("Then run the installation again:", "Después vuelve a correr la instalación:"), s.bold, s.off);
+        }
+    }
+    if !fine {
+        // When all that's missing is what the installer can bring, it brings it (asking
+        // first with CORRAL_ASK=1) and checks again; if you say no or something fails, the steps to
         // do it yourself. Anything else missing, report already gave its steps.
         let only_brought = offer && rows.iter().filter(|r| r.state == State::Missing).all(|r| r.brings.is_some());
         let mut brought = None;
@@ -1664,13 +1815,25 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
         println!("  {n}. {}", tr("Open a new terminal, so it finds herdr and corral.", "Abre una terminal nueva, para que encuentre herdr y corral."));
         n += 1;
     } else if !on_path(&bin()) {
-        println!("  {n}. {}", trf!("Add {bold}{PATH_LINE}{off} at the end of ~/.bashrc and open a new terminal.",
-                                   "Agrega {bold}{PATH_LINE}{off} al final de ~/.bashrc y abre una terminal nueva."));
+        // Your shell's file; macOS's own (zsh) only when the shell isn't known.
+        let shell = std::env::var("SHELL").unwrap_or_default();
+        let rc = if shell.ends_with("zsh") { "~/.zshrc" } else if shell.ends_with("bash") { "~/.bashrc" }
+                 else if cfg!(target_os = "macos") { "~/.zshrc" } else { "~/.bashrc" };
+        println!("  {n}. {}", trf!("Add {bold}{PATH_LINE}{off} at the end of {rc} and open a new terminal.",
+                                   "Agrega {bold}{PATH_LINE}{off} al final de {rc} y abre una terminal nueva."));
         n += 1;
     }
     println!("  {n}. {}", trf!("Go to a project folder and type {bold}corral{off}: herdr opens with the agent, the script, the R console and the variables.",
                                "Entra a la carpeta de un proyecto y escribe {bold}corral{off}: herdr se abre con el agente, el script, la consola de R y las variables."));
     println!("  {}. {}", n + 1, trf!("{bold}ctrl+b space{off} shows every shortcut.", "{bold}ctrl+b space{off} muestra todos los atajos."));
+    if let Some(cmd) = HTTPGD_LIBS.get() {
+        println!("  {}", trf!("For R's plots, httpgd needs some system libraries. Install them, then run {bold}corral install{off}: {bold}{cmd}{off}",
+                              "Para los gráficos de R, httpgd necesita unas librerías del sistema. Instálalas y después corre {bold}corral install{off}: {bold}{cmd}{off}"));
+    }
+    if let Some(how) = option_as_alt(std::env::var("TERM_PROGRAM").ok().as_deref(), std::env::var_os("KITTY_WINDOW_ID").is_some()) {
+        println!("  {}", trf!("For the Alt shortcuts, Option has to work as Alt: {how}. Until then, Ctrl+J and Ctrl+L do the same.",
+                              "Para los atajos con Alt, Option tiene que funcionar como Alt: {how}. Mientras tanto, Ctrl+J y Ctrl+L hacen lo mismo."));
+    }
     let copies: Vec<String> = saved[earlier..].iter().map(|b| short(Path::new(b))).collect();
     if !copies.is_empty() {
         println!("\n{}{}{}{}", s.dim, tr("Copies of the files I changed: ", "Copias de los archivos que cambié: "), copies.join(", "), s.off);
@@ -2307,6 +2470,19 @@ mod tests {
     /// The system a ping names when it isn't WSL.
     const SYS: &str = if cfg!(target_os = "macos") { "macos" } else { "linux" };
 
+    /// Without pak, httpgd's system libraries come from Corral's own list, by -dev names that
+    /// every Ubuntu and Debian release has; nothing for other packages, or on macOS.
+    #[test]
+    fn httpgd_system_libraries_without_pak() {
+        let got = known_system_libs(&["httpgd"]);
+        if cfg!(target_os = "macos") {
+            assert_eq!(got, None);
+        } else if which("apt-get").is_some() {
+            assert_eq!(got.as_deref(), Some("sudo apt install libcairo2-dev libtiff-dev"));
+        }
+        assert_eq!(known_system_libs(&["nanoparquet"]), None);
+    }
+
     /// duckdb on macOS goes in only compiled, never from source.
     #[test]
     fn duckdb_on_macos_goes_in_only_compiled() {
@@ -2517,7 +2693,7 @@ mod tests {
     }
 
     #[test]
-    fn the_uv_it_offers_is_pinned_and_checked() {
+    fn the_uv_it_brings_is_pinned_and_checked() {
         let (v, files) = UV;
         assert!(plain_version(v), "{v}");
         for ((url, sha), ending) in files.iter().zip(["x86_64-unknown-linux-musl.tar.gz", "aarch64-apple-darwin.tar.gz", "x86_64-apple-darwin.tar.gz"]) {

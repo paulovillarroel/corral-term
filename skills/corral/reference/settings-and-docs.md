@@ -24,10 +24,10 @@ Read them whenever it helps to answer. Change one only when the user asks, and t
 | `checkpoints` | `on`, `off` | Keep a checkpoint of each console's objects, so they come back if R or Python crashes. |
 | `checkpoint_max_mb` | `1024`, a size in MB | Objects bigger than this aren't kept in the checkpoint. |
 | `images` | `auto`, `kitty`, `symbols` | How plots are drawn inside herdr. |
-| `mirador_window` | `right`, `free` | Where a new Mirador window goes (Windows with WSL only). |
+| `mirador_window` | `right`, `free` | Where a new Mirador window goes (WSL; macOS with Accessibility allowed; Linux with wmctrl on X11). |
 | `agent` | a command, `none` | The agent the layout opens in its agent pane; unset, the first installed of claude, codex, gemini and opencode. The next layout uses it. |
 | `plot_size` | `window`, `WIDTHxHEIGHT` | The size Mirador draws R plots at: fitting its window, or fixed (`1000x650`). At once. |
-| `mirador_size` | `0.5x0.85` | A new Mirador window's size, as fractions of the screen from 0.2 to 1 (WSL only). |
+| `mirador_size` | `0.5x0.85` | A new Mirador window's size, as fractions of the screen from 0.2 to 1 (where it can be placed). |
 | `table_viewer` | unset, `visidata` | Corral's own table viewer, or VisiData when `vd` is installed. |
 | `theme` | `herdr`, `dark-2026` | Follow herdr's theme, or Corral's own for Corral and herdr. At once. |
 | `terminal_tab` | `on`, `off` | A new layout opens a tab named terminal with a shell in the project folder. |

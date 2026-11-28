@@ -41,7 +41,9 @@ fn log_file() -> PathBuf {
 // --------------------------------------------------------------------------- kernel
 
 enum Event {
-    Bytes(Vec<u8>),
+    /// What the terminal sent, and when it was read: the decoder tells a CR LF cut between
+    /// two reads by when they were read, not by when they are handled.
+    Bytes(Vec<u8>, std::time::Instant),
     /// msg_type, parent msg_id, content
     IoPub(String, String, Value),
     /// A shell reply: msg_type, parent msg_id, content
@@ -517,7 +519,7 @@ fn read_terminal(tx: Sender<Event>) {
         loop {
             match tty.read(&mut buf) {
                 Ok(n) if n > 0 => {
-                    if tx.send(Event::Bytes(buf[..n].to_vec())).is_err() {
+                    if tx.send(Event::Bytes(buf[..n].to_vec(), std::time::Instant::now())).is_err() {
                         break;
                     }
                 }
@@ -553,11 +555,19 @@ enum Key {
     Other,
 }
 
+/// How soon after a read that ends in CR an LF still counts as its pair (Decoder::after_cr).
+const CR_LF: std::time::Duration = std::time::Duration::from_millis(30);
+
 /// Bytes from the terminal to keys; a sequence cut between two reads waits for the rest.
 #[derive(Default)]
 struct Decoder {
     pending: Vec<u8>,
     paste: Option<Vec<u8>>,
+    /// When the read that ended in a CR was read: an LF that opens a read made within CR_LF
+    /// of it is its pair, cut between reads; later, it is Ctrl+J. The bytes are the same,
+    /// and no one types Enter and Ctrl+J that close together. Read times, not when the
+    /// bytes are handled: those can wait in the queue while R says whether code is complete.
+    after_cr: Option<std::time::Instant>,
 }
 
 fn utf8_len(b: u8) -> usize {
@@ -597,7 +607,15 @@ fn csi(seq: &[u8]) -> Key {
 }
 
 impl Decoder {
+    #[cfg(test)]
     fn feed(&mut self, bytes: &[u8]) -> Vec<Key> {
+        self.feed_at(bytes, std::time::Instant::now())
+    }
+
+    /// The keys in `bytes`, read from the terminal at `read_at`.
+    fn feed_at(&mut self, bytes: &[u8], read_at: std::time::Instant) -> Vec<Key> {
+        let pair = self.after_cr.take().is_some_and(|t| read_at.saturating_duration_since(t) < CR_LF) && self.pending.is_empty();
+        let bytes = if pair { bytes.strip_prefix(b"\n").unwrap_or(bytes) } else { bytes };
         self.pending.extend_from_slice(bytes);
         let p = std::mem::take(&mut self.pending);
         let mut keys = Vec::new();
@@ -671,10 +689,16 @@ impl Decoder {
                 b'\r' => {
                     if p.get(i + 1) == Some(&b'\n') {
                         i += 1;
+                    } else if i + 1 == p.len() {
+                        self.after_cr = Some(read_at);
                     }
                     Key::Enter
                 }
-                b'\n' => Key::Enter,
+                // A lone line feed: Ctrl+J, which many terminals also send for Ctrl+Enter.
+                // It runs even if something is left open, like Alt+Enter, which a Mac
+                // terminal sends only with Option set as Alt (Enter itself sends \r, and
+                // \r\n counts as one Enter above).
+                b'\n' => Key::AltEnter,
                 b'\t' => Key::Tab,
                 0x7f | 0x08 => Key::Backspace,
                 1..=26 => Key::Ctrl(b + b'a' - 1),
@@ -1404,9 +1428,9 @@ impl Console {
         };
         out(&format!("{}{gone}\n", trf!("[corral] R ended unexpectedly: {why}{what}. Starting a new session.",
                                           "[corral] R terminó inesperadamente: {why}{what}. Inicio una sesión nueva.")));
-        let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(_))).collect();
+        let mut kept: VecDeque<Event> = self.backlog.drain(..).filter(|e| matches!(e, Event::Bytes(..))).collect();
         while let Ok(ev) = self.rx.try_recv() {
-            if matches!(ev, Event::Bytes(_)) {
+            if matches!(ev, Event::Bytes(..)) {
                 kept.push_back(ev);
             }
         }
@@ -1419,7 +1443,7 @@ impl Console {
             let log = log.display();
             return Err(trf!("Ark did not answer; see {log}", "Ark no respondió; revisa {log}"));
         }
-        self.backlog.retain(|e| matches!(e, Event::Bytes(_)));
+        self.backlog.retain(|e| matches!(e, Event::Bytes(..)));
         self.backlog.extend(kept);
         self.mode = Mode::Edit;
         self.count = 1;
@@ -1460,8 +1484,8 @@ impl Console {
                 },
             };
             match ev {
-                Some(Event::Bytes(b)) => {
-                    let keys = self.dec.feed(&b);
+                Some(Event::Bytes(b, read_at)) => {
+                    let keys = self.dec.feed_at(&b, read_at);
                     self.keys.extend(keys);
                 }
                 Some(Event::IoPub(kind, parent, content)) => self.on_iopub(&kind, &parent, &content),
@@ -1710,6 +1734,25 @@ mod tests {
         assert_eq!(d.feed(&"é".as_bytes()[..1]), vec![]);
         assert_eq!(d.feed(&"é".as_bytes()[1..]), vec![Key::Char('é')]);
         assert_eq!(d.feed(b"\x03\x1b[1;5D\x1b[3~"), vec![Key::Ctrl(b'c'), Key::WordLeft, Key::Delete]);
+        // Ctrl+J (a lone line feed) runs even if something is left open, as Alt+Enter does;
+        // a CR LF pair is still one Enter.
+        assert_eq!(d.feed(b"f(\n"), vec![Key::Char('f'), Key::Char('('), Key::AltEnter]);
+        assert_eq!(d.feed(b"\x1b\r"), vec![Key::AltEnter]);
+        assert_eq!(d.feed(b"\r\n"), vec![Key::Enter]);
+        // A CR LF split between two reads is still one Enter; a later LF is Ctrl+J again.
+        assert_eq!(d.feed(b"x\r"), vec![Key::Char('x'), Key::Enter]);
+        assert_eq!(d.feed(b"\ny"), vec![Key::Char('y')]);
+        assert_eq!(d.feed(b"\n"), vec![Key::AltEnter]);
+        // Enter, and Ctrl+J typed after it: the LF comes long after the CR, so it runs.
+        assert_eq!(d.feed(b"f(\r"), vec![Key::Char('f'), Key::Char('('), Key::Enter]);
+        d.after_cr = std::time::Instant::now().checked_sub(CR_LF * 4);
+        assert_eq!(d.feed(b"\n"), vec![Key::AltEnter]);
+        // A split pair read together but handled late (the console waited for R to say
+        // whether the code is complete): read times count, so it is still one Enter.
+        let read = std::time::Instant::now();
+        assert_eq!(d.feed_at(b"g(\r", read), vec![Key::Char('g'), Key::Char('('), Key::Enter]);
+        std::thread::sleep(CR_LF * 2);
+        assert_eq!(d.feed_at(b"\n", read + std::time::Duration::from_millis(1)), vec![]);
     }
 
     #[test]
