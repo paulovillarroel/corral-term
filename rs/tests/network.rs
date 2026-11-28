@@ -120,3 +120,30 @@ fn the_sensitive_profile_turns_herdrs_checks_off() {
     assert_eq!(std::fs::read_to_string(&herdr).unwrap(), mine);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A first installation that stops for something missing still says what: with no
+/// config.json yet, the install count's guard (which reads it) must not end the installer
+/// first, as `set -eu` would on a failed read. The count goes to a closed local port.
+#[test]
+fn an_install_that_stops_says_why_without_a_config() {
+    let home = std::env::temp_dir().join(format!("corral-test-install-stop-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    // Every program of the system but tar.
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    for dir in ["/usr/bin", "/bin"] {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let name = e.file_name();
+            if name != "tar" && !bin.join(&name).exists() {
+                let _ = std::os::unix::fs::symlink(e.path(), bin.join(&name));
+            }
+        }
+    }
+    let out = std::process::Command::new("/bin/sh").arg(repo().join("install.sh")).env_clear()
+        .env("HOME", &home).env("PATH", &bin).env("CORRAL_LANG", "en")
+        .env("CORRAL_TELEMETRY_URL", "http://127.0.0.1:9/").stdin(std::process::Stdio::null()).output().unwrap();
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success());
+    assert!(said.contains("Some basic programs are missing") && said.contains("tar"), "it stopped without saying why: {said:?}");
+    let _ = std::fs::remove_dir_all(&home);
+}
