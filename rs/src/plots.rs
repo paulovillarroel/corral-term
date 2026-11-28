@@ -166,10 +166,14 @@ fn file_lock(name: &str, wait: Duration) -> Option<std::fs::File> {
     Some(lock)
 }
 
+/// Mirador's page title, which finds its window to place and raise: distinctive, so no
+/// other window (a document called "Mirador del valle", say) is taken for it.
+pub const MIRADOR_TITLE: &str = "Mirador · Corral";
+
 pub fn open_mirador_window(info: &Value) {
     open_app_window(&with_fit(info.get("url").str().unwrap_or("")));
     let _ = mirador_call(info, "/api/opened", Some(&Value::obj()), Duration::from_secs(3)); // no second window while it loads
-    bring_to_front("Mirador", true);
+    bring_to_front(MIRADOR_TITLE, true);
 }
 
 /// Mirador in a new window unless a page already shows it, one caller at a time: R's first
@@ -239,7 +243,7 @@ pub fn cmd_mirador(args: &[String]) -> Result<(), String> {
     if has("--open") {
         open_mirador_window(&info);
     } else if open_window_once(&info, info.get("url").str().unwrap_or("")) {
-        bring_to_front("Mirador", true);
+        bring_to_front(MIRADOR_TITLE, true);
     }
     Ok(())
 }
@@ -629,7 +633,7 @@ fn open_plot(dir: &Path, id: &str) -> Result<&'static str, String> {
     mirador_call(&info, "/api/show-plot", Some(&obj(vec![("session", sid(dir).into()), ("id", id.into())])), Duration::from_secs(3))?;
     let opened = open_window_once(&info, &format!("{}#plot:{}:{id}", info.get("url").str().unwrap_or(""), sid(dir)));
     // Windows leaves windows opened from the background behind the active one.
-    bring_to_front("Mirador", opened);
+    bring_to_front(MIRADOR_TITLE, opened);
     Ok("Mirador")
 }
 
@@ -686,7 +690,7 @@ pub fn show_plot_object(dir: &Path, name: &str) -> String {
     if !(image_mode().0 == "kitty" && env::in_herdr()) {
         if let Ok(info) = ensure_mirador() {
             if open_window_once(&info, &format!("{}#plot:{}:", info.get("url").str().unwrap_or(""), sid(dir))) {
-                bring_to_front("Mirador", true);
+                bring_to_front(MIRADOR_TITLE, true);
             }
         }
     }
@@ -904,7 +908,7 @@ pub fn table_to_mirador(path: &str, title: &str, session: Option<&str>) -> Resul
                         ("session", session.filter(|s| !s.is_empty()).map(Value::from).unwrap_or(Value::Null))]);
     mirador_call(&info, "/api/tables", Some(&body), Duration::from_secs(10))?;
     if open_window_once(&info, info.get("url").str().unwrap_or("")) {
-        bring_to_front("Mirador", true);
+        bring_to_front(MIRADOR_TITLE, true);
     }
     Ok(())
 }
@@ -1154,7 +1158,7 @@ mod tests {
         let log = dir.join("calls");
         std::fs::write(dir.join("wmctrl"), format!(r#"#!/bin/sh
 case "$1" in
-  -l) printf '0x01  0 host Corral notes\n0x02  0 host Mirador — plots\n' ;;
+  -l) printf '0x01  0 host Mirador del valle.docx - Writer\n0x02  0 host Mirador · Corral — Mozilla Firefox\n' ;;
   -d) printf '0  * DG: 1920x1080  VP: 0,0  WA: 0,27 1920x1053  Workspace 1\n' ;;
   *) echo "$*" >> {} ;;
 esac
@@ -1162,7 +1166,7 @@ esac
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(dir.join("wmctrl"), std::fs::Permissions::from_mode(0o755)).unwrap();
         let path = format!("{}:/usr/bin:/bin", dir.display());
-        let status = Command::new("sh").args(["-c", LINUX_FRONT, "sh", "Mirador", "1", "right", "0.5", "0.85"])
+        let status = Command::new("sh").args(["-c", LINUX_FRONT, "sh", MIRADOR_TITLE, "1", "right", "0.5", "0.85"])
             .env("PATH", &path).status().unwrap();
         assert!(status.success());
         let calls = std::fs::read_to_string(&log).unwrap();
@@ -1170,7 +1174,7 @@ esac
         assert_eq!(calls, "-i -r 0x02 -b remove,maximized_vert,maximized_horz\n-i -r 0x02 -e 0,937,106,960,895\n-i -a 0x02\n");
         // Without placing, only raised.
         std::fs::remove_file(&log).unwrap();
-        Command::new("sh").args(["-c", LINUX_FRONT, "sh", "Mirador", "1", "", "0.5", "0.85"]).env("PATH", &path).status().unwrap();
+        Command::new("sh").args(["-c", LINUX_FRONT, "sh", MIRADOR_TITLE, "1", "", "0.5", "0.85"]).env("PATH", &path).status().unwrap();
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "-i -a 0x02\n");
         let _ = std::fs::remove_dir_all(&dir);
     }

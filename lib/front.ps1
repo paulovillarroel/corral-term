@@ -6,7 +6,7 @@
 #                (Width/Height are fractions of it). Used only for new windows.
 # -DryRun        print what would happen without touching any window.
 param(
-    [string]$Prefix = "Mirador",
+    [string]$Prefix = "Mirador · Corral",
     [double]$WaitSeconds = 8,
     [switch]$FindOnly,
     [string]$Place = "",
