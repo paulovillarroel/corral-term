@@ -11,7 +11,7 @@
 use crate::env;
 use crate::i18n::tr;
 use crate::json::{self, Value};
-use crate::setup::{self, ARK_VERSION};
+use crate::setup::{self, PerSystem, ARK_VERSION, SYSTEM};
 use crate::theme;
 use crate::toml;
 use crate::zip;
@@ -38,37 +38,65 @@ const RENAMED_ACTIONS: [(&str, &str); 4] = [
 ];
 
 /// A single-file program the installer downloads when it is missing:
-/// name, shown name, version, what for (English, Spanish), URL, and the SHA-256 of
-/// that version's package. The hashes live here, in Corral's own code (which the
-/// installer checks), so each download is checked whether or not its project
-/// publishes a checksum; a new version needs its new hash.
-type Download = (&'static str, &'static str, &'static str, (&'static str, &'static str), &'static str, &'static str);
+/// name, shown name, version, what for (English, Spanish), and for each system
+/// (setup::SYSTEMS) the URL and the SHA-256 of that version's package. The hashes live
+/// here, in Corral's own code (which the installer checks), so each download is checked
+/// whether or not its project publishes a checksum; a new version needs its new hashes.
+type Download = (&'static str, &'static str, &'static str, (&'static str, &'static str), PerSystem);
 
 const DOWNLOADS: [Download; 3] = [
-    ("fresh", "Fresh", "0.5.9", ("script editor", "editor de scripts"),
-     "https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-x86_64-unknown-linux-musl.tar.gz",
-     "97717593ded1f66946d9c598bbf9f2cdf9c53ed2b5d528c92d4e51b8137b3203"),
-    ("duckdb", "DuckDB", "1.5.6", ("View() tables", "tablas de View()"),
-     "https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-linux-amd64.gz",
-     "cce2687a38681db644c248198b99ecd86170ff47e324c5f33e50c0042f142839"),
-    ("air", "Air", "0.13.0", ("R code formatting", "formato del código de R"),
-     "https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-unknown-linux-gnu.tar.gz",
-     "3909b12870df0b6a44e3f40376cd59aca373791c0abedd02dcbda7b136e4573c"),
+    ("fresh", "Fresh", "0.5.9", ("script editor", "editor de scripts"), [
+        ("https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-x86_64-unknown-linux-musl.tar.gz",
+         "97717593ded1f66946d9c598bbf9f2cdf9c53ed2b5d528c92d4e51b8137b3203"),
+        ("https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-aarch64-apple-darwin.tar.xz",
+         "aea215709bce0e1db25afe1040ff597e203e38a99a4d4302b9972e6a606a6f71"),
+        ("https://github.com/sinelaw/fresh/releases/download/v{v}/fresh-editor-x86_64-apple-darwin.tar.xz",
+         "9f1ff6bc9e62c5857c92c72f05d551a7604d8131951244e32b1fb28fd90372de"),
+    ]),
+    ("duckdb", "DuckDB", "1.5.6", ("View() tables", "tablas de View()"), [
+        ("https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-linux-amd64.gz",
+         "cce2687a38681db644c248198b99ecd86170ff47e324c5f33e50c0042f142839"),
+        ("https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-osx-arm64.gz",
+         "7f19ac71f0a4bde308a247ac556d93ee95c03adc327ec85eeab9113294f11dd5"),
+        ("https://github.com/duckdb/duckdb/releases/download/v{v}/duckdb_cli-osx-amd64.gz",
+         "388ce7e8a96307d040a27709a4c193f455ad1d3bbcd576c118bf1ae8158973e7"),
+    ]),
+    ("air", "Air", "0.13.0", ("R code formatting", "formato del código de R"), [
+        ("https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-unknown-linux-gnu.tar.gz",
+         "3909b12870df0b6a44e3f40376cd59aca373791c0abedd02dcbda7b136e4573c"),
+        ("https://github.com/posit-dev/air/releases/download/{v}/air-aarch64-apple-darwin.tar.gz",
+         "43a063302643c49c2e0eb98162a4a3e9388be1113252ff647e817378c251354f"),
+        ("https://github.com/posit-dev/air/releases/download/{v}/air-x86_64-apple-darwin.tar.gz",
+         "f49a1659147224000da9d87b9a13dafc49170b7f40c5b6a90d4d874827c4329f"),
+    ]),
 ];
 
 /// herdr, when it is missing and you say yes: the version Corral was tested with, from
 /// herdr's own GitHub release, checked against the SHA-256 written here like the
 /// downloads above. It goes where herdr's own installer puts it (~/.local/bin/herdr),
 /// as your herdr: `herdr update` keeps it current, and `corral uninstall` leaves it.
-const HERDR: (&str, &str, &str) = ("0.9.5", "https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-linux-x86_64",
-                                   "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d");
+const HERDR: (&str, PerSystem) = ("0.9.5", [
+    ("https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-linux-x86_64",
+     "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"),
+    ("https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-macos-aarch64",
+     "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2"),
+    ("https://github.com/herdrdev/herdr/releases/download/v{v}/herdr-macos-x86_64",
+     "5fb0a908ec7f6745e3e245738b06bfad56c46391c391ab3c0955fbead01f1369"),
+]);
 
 /// uv, for the Python console, when it's missing and you say yes (uv_step): a release
-/// at least three days old, from uv's GitHub release (the static musl build, which runs
-/// on any Linux), checked against the SHA-256 written here. uv and uvx go where uv's
-/// own installer puts them (~/.local/bin), as your uv; uninstalling Corral leaves them.
-const UV: (&str, &str, &str) = ("0.13.9", "https://github.com/astral-sh/uv/releases/download/{v}/uv-x86_64-unknown-linux-musl.tar.gz",
-                                "58ccf5f1792b8a5a88d01bc910ea131a8b3db4a319a17ad5fad75e0845a3e271");
+/// at least three days old, from uv's GitHub release (on Linux the static musl build,
+/// which runs on any Linux), checked against the SHA-256 written here. uv and uvx go
+/// where uv's own installer puts them (~/.local/bin), as your uv; uninstalling Corral
+/// leaves them.
+const UV: (&str, PerSystem) = ("0.13.9", [
+    ("https://github.com/astral-sh/uv/releases/download/{v}/uv-x86_64-unknown-linux-musl.tar.gz",
+     "58ccf5f1792b8a5a88d01bc910ea131a8b3db4a319a17ad5fad75e0845a3e271"),
+    ("https://github.com/astral-sh/uv/releases/download/{v}/uv-aarch64-apple-darwin.tar.gz",
+     "5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca"),
+    ("https://github.com/astral-sh/uv/releases/download/{v}/uv-x86_64-apple-darwin.tar.gz",
+     "617a3211261b0fc739562f0071aa34e9739797c510208ede8e2977c30903d041"),
+]);
 
 /// The R package Corral can't work without: jsonlite carries the variables (the
 /// variables pane, `corral vars`, the plot index). httpgd, for plots, goes in too, but
@@ -352,7 +380,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     let target = if in_place { src.to_path_buf() } else { dest() };
 
     // Required -------------------------------------------------------------
-    out.push(check("required", State::Ok, tr("System", "Sistema"), format!("Linux x86_64{}", if is_wsl() { " (WSL)" } else { "" }), &[]));
+    out.push(check("required", State::Ok, tr("System", "Sistema"), format!("{}{}", setup::SYSTEMS[SYSTEM], if is_wsl() { " (WSL)" } else { "" }), &[]));
     match which("herdr") {
         None => out.push(check("required", State::Missing, "herdr", tr("not installed", "no está instalado"),
                                &[tr("Install herdr, the terminal Corral lives in:", "Instala herdr, la terminal donde vive Corral:"),
@@ -375,8 +403,13 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     }
     match crate::versions::rscript().or_else(|| which("Rscript")) {
         None => out.push(check("required", State::Missing, "R", tr("not installed", "no está instalado"),
-                               &[tr("Install R from https://cran.r-project.org (on Ubuntu: sudo apt install r-base).",
-                                    "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")]).id("r")),
+                               &[if cfg!(target_os = "macos") {
+                                   tr("Install R from CRAN, the .pkg for your Mac (Apple silicon or Intel): https://cloud.r-project.org/bin/macosx/ (or with rig).",
+                                      "Instala R desde CRAN, el .pkg para tu Mac (Apple silicon o Intel): https://cloud.r-project.org/bin/macosx/ (o con rig).")
+                               } else {
+                                   tr("Install R from https://cran.r-project.org (on Ubuntu: sudo apt install r-base).",
+                                      "Instala R desde https://cran.r-project.org (en Ubuntu: sudo apt install r-base).")
+                               }]).id("r")),
         Some(r) => {
             out.push(check("required", State::Ok, "R", version_of(&r, "--version"), &[]));
             let pkgs = ["httpgd", "jsonlite", "nanoparquet", "arrow", "rlang", "duckdb", "DBI", "pak"];
@@ -424,7 +457,7 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
             // long while, so elsewhere it is optional.
             if has[5] && has[6] {
                 out.push(check("installer", State::Ok, "duckdb", tr("you already have it (SQL in R)", "ya lo tienes (SQL en R)"), &[]));
-            } else if p3m_codename().is_some() {
+            } else if r_binaries() {
                 out.push(check("installer", State::Download, "duckdb",
                                tr("will install it in your R library, already compiled (SQL in R)",
                                   "lo instalo en tu biblioteca de R, ya compilado (SQL en R)"), &[]));
@@ -499,6 +532,8 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     let browser = tr("Browser", "Navegador");
     if is_wsl() {
         out.push(check("optional", State::Ok, browser, tr("the Windows one, for Mirador", "el de Windows, para Mirador"), &[]));
+    } else if cfg!(target_os = "macos") {
+        out.push(check("optional", State::Ok, browser, tr("your default one (open), for Mirador", "el que tengas por defecto (open), para Mirador"), &[]));
     } else if env::which("xdg-open").is_some() {
         out.push(check("optional", State::Ok, browser, tr("xdg-open, for Mirador", "xdg-open, para Mirador"), &[]));
     } else {
@@ -510,8 +545,13 @@ fn checks(in_place: bool, src: &Path) -> Vec<Check> {
     } else {
         out.push(check("optional", State::Warn, "PATH",
                        trf!("{} isn't on the PATH; R and the editor wouldn't find corral", "{} no está en el PATH; R y el editor no encontrarían corral", short(&bin())),
-                       &[tr("Add this line at the end of ~/.bashrc (or ~/.zshrc) and open a new terminal:",
-                            "Agrega esta línea al final de ~/.bashrc (o ~/.zshrc) y abre una terminal nueva:"),
+                       &[if cfg!(target_os = "macos") {
+                             tr("Add this line at the end of ~/.zshrc and open a new terminal:",
+                                "Agrega esta línea al final de ~/.zshrc y abre una terminal nueva:")
+                         } else {
+                             tr("Add this line at the end of ~/.bashrc (or ~/.zshrc) and open a new terminal:",
+                                "Agrega esta línea al final de ~/.bashrc (o ~/.zshrc) y abre una terminal nueva:")
+                         },
                          "  export PATH=\"$HOME/.local/bin:$PATH\""]));
     }
     let mine = bin().join("corral");
@@ -714,10 +754,33 @@ fn path_step(saved: &mut Vec<String>) -> bool {
     }
 }
 
+/// The file called `name` in a .tar.xz (Fresh's package on macOS), already checked
+/// against its SHA-256. Corral's own code reads gzip but not xz, so the system's tar
+/// (macOS's reads xz) unpacks it into a new private folder, removed afterwards.
+fn tar_xz_member(data: &[u8], name: &str) -> Option<Vec<u8>> {
+    use std::os::unix::fs::DirBuilderExt;
+    let dir = std::env::temp_dir().join(format!("corral-unpack-{}", env::random_hex(8)));
+    // Made here, so nobody else made it first.
+    std::fs::DirBuilder::new().mode(0o700).create(&dir).ok()?;
+    let archive = dir.join("package.tar.xz");
+    let unpacked = std::fs::write(&archive, data).is_ok()
+        && Command::new("tar").arg("-xf").arg(&archive).arg("-C").arg(&dir)
+            .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+    // The program is at the top or one folder down (fresh-editor-aarch64-apple-darwin/fresh).
+    let found = unpacked.then(|| {
+        std::iter::once(dir.join(name))
+            .chain(std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path().join(name)))
+            .find(|p| p.is_file()).and_then(|p| std::fs::read(p).ok())
+    }).flatten();
+    let _ = std::fs::remove_dir_all(&dir);
+    found
+}
+
 /// herdr into ~/.local/bin, from its GitHub release and checked against HERDR's
 /// SHA-256 before it is written.
 fn bring_herdr() -> bool {
-    let (v, url, sha) = HERDR;
+    let (v, files) = HERDR;
+    let (url, sha) = files[SYSTEM];
     println!("  {}", trf!("… downloading herdr {v}", "… descargando herdr {v}"));
     // net: tools
     let data = match setup::download(&url.replace("{v}", v)) {
@@ -773,7 +836,8 @@ fn uv_step() {
 /// uv and uvx into ~/.local/bin, from uv's GitHub release and checked against UV's
 /// SHA-256 before anything is written.
 fn bring_uv() -> bool {
-    let (v, url, sha) = UV;
+    let (v, files) = UV;
+    let (url, sha) = files[SYSTEM];
     println!("  {}", trf!("… downloading uv {v}", "… descargando uv {v}"));
     // net: tools
     let data = match setup::download(&url.replace("{v}", v)) {
@@ -891,6 +955,8 @@ fn download(name: &str, shown: &str, v: &str, what: &str, url_t: &str, sha: &str
     }
     let program = if url.ends_with(".tar.gz") {
         zip::gunzip(&data).ok().and_then(|tar| zip::tar_member(&tar, name))
+    } else if url.ends_with(".tar.xz") {
+        tar_xz_member(&data, name)
     } else {
         zip::gunzip(&data).ok()
     };
@@ -1269,9 +1335,25 @@ fn p3m_codename() -> Option<String> {
 /// installs them with pak, as you would, and with install.packages if pak couldn't.
 /// True when R can load them all afterwards.
 fn r_install(r: &Path, pkgs: &[&str]) -> bool {
-    let run = |code: String| Command::new(r).args(["--no-init-file", "-e", &code]).stdin(Stdio::null()).stdout(Stdio::null())
-        .stderr(Stdio::null()).status().is_ok_and(|s| s.success());
-    (has_pak() && run(r_install_code(pkgs, true))) || run(r_install_code(pkgs, false))
+    (has_pak() && run_r(r, &r_install_code(pkgs, true))) || run_r(r, &r_install_code(pkgs, false))
+}
+
+/// R code run without your .Rprofile and without output; true when it ends with status 0.
+fn run_r(r: &Path, code: &str) -> bool {
+    Command::new(r).args(["--no-init-file", "-e", code]).stdin(Stdio::null()).stdout(Stdio::null())
+        .stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+}
+
+/// Whether R packages come already compiled here: on Linux, on a release Posit's package
+/// manager builds for; on macOS, with an R from CRAN or rig (in /Library/Frameworks),
+/// which takes CRAN's compiled packages for macOS. Homebrew's R compiles every package.
+fn r_binaries() -> bool {
+    if cfg!(target_os = "macos") {
+        crate::versions::rscript().or_else(|| which("Rscript")).and_then(|r| std::fs::canonicalize(r).ok())
+            .is_some_and(|r| r.starts_with("/Library/Frameworks/R.framework"))
+    } else {
+        p3m_codename().is_some()
+    }
 }
 
 /// The R code r_install runs: into the first library of R_LIBS_USER (yours), from
@@ -1286,17 +1368,39 @@ fn r_install_code(pkgs: &[&str], pak: bool) -> String {
         "install.packages(pkgs, lib = lib, quiet = TRUE)" // net: r-packages
     };
     let repos = r_repos_code(p3m_codename().as_deref());
-    format!(r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
-if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
-lib <- path.expand(lib)
-dir.create(lib, recursive = TRUE, showWarnings = FALSE)
-options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))
+    format!(r#"{R_LIB}
 {repos}
 pkgs <- c({list})
 try({{
   {install}
 }}, silent = TRUE)
 quit(status = if (all(vapply(pkgs, requireNamespace, logical(1), lib.loc = c(lib, .libPaths()), quietly = TRUE))) 0 else 1)"#)
+}
+
+/// The start of the R code that installs packages: into the first library of R_LIBS_USER
+/// (yours), and with R's User-Agent, by which Posit's server picks compiled packages.
+const R_LIB: &str = r#"lib <- strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep)[[1]][1]
+if (is.na(lib) || !nzchar(lib)) lib <- .libPaths()[1]
+lib <- path.expand(lib)
+dir.create(lib, recursive = TRUE, showWarnings = FALSE)
+options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os)))"#;
+
+/// httpgd on macOS. Posit's snapshot has it only as source there, which needs Xcode's
+/// command line tools to compile, while CRAN has it compiled for macOS. So it comes from
+/// CRAN's compiled packages, and only in the version the snapshot (or your repository)
+/// has: nothing newer than the snapshot gets in. unigd, which it needs, goes in first
+/// from the snapshot as usual (r_httpgd).
+fn httpgd_from_cran_code() -> String {
+    let repos = r_repos_code(None);
+    format!(r#"{R_LIB}
+{repos}
+want <- tryCatch(available.packages(repos = repos, type = "source")["httpgd", "Version"], error = function(e) NA)
+cran <- c(CRAN = "{CRAN}")
+have <- tryCatch(available.packages(repos = cran, type = "binary")["httpgd", "Version"], error = function(e) NA)
+if (!is.na(want) && identical(unname(want), unname(have))) {{
+  try(install.packages("httpgd", lib = lib, repos = cran, type = "binary", dependencies = FALSE, quiet = TRUE), silent = TRUE) # net: r-packages
+}}
+quit(status = if (requireNamespace("httpgd", lib.loc = c(lib, .libPaths()), quietly = TRUE)) 0 else 1)"#)
 }
 
 /// The R code that picks where R packages come from, in this order:
@@ -1370,7 +1474,10 @@ fn r_httpgd() -> Option<&'static str> {
     }
     println!("  {}", tr("… installing httpgd in your R library, for R's plots (seconds; a few minutes if it has to compile)",
                         "… instalo httpgd en tu biblioteca de R, para los gráficos de R (segundos; unos minutos si hay que compilarlo)"));
-    if r_install(&r, &["httpgd"]) {
+    // On macOS, compiled from CRAN when R takes compiled packages; otherwise, or if that
+    // didn't work, as any other package (compiled from source where there is no binary).
+    let from_cran = cfg!(target_os = "macos") && r_binaries() && r_install(&r, &["unigd"]) && run_r(&r, &httpgd_from_cran_code());
+    if from_cran || r_install(&r, &["httpgd"]) {
         step(tr("httpgd in your R library (R's plots in Mirador)", "httpgd en tu biblioteca de R (los gráficos de R en Mirador)"), State::Ok);
         None
     } else {
@@ -1409,7 +1516,7 @@ fn r_nanoparquet() -> Option<&'static str> {
 /// Some("duckdb") when it tried and couldn't, for the install's ping.
 fn r_duckdb() -> Option<&'static str> {
     let r = crate::versions::rscript().or_else(|| which("Rscript"))?;
-    if setup::r_packages(&r, &["duckdb", "DBI"]).iter().all(|h| *h) || p3m_codename().is_none() {
+    if setup::r_packages(&r, &["duckdb", "DBI"]).iter().all(|h| *h) || !r_binaries() {
         return None;
     }
     println!("  {}", tr("… installing duckdb and DBI in your R library, already compiled (SQL in R)",
@@ -1481,8 +1588,9 @@ fn install(src: &Path, in_place: bool, again: &str) -> Result<(), String> {
     }
     link(&exe, &bin().join("corral"))?;
     step(&trf!("corral command in {}", "comando corral en {}", short(&bin().join("corral"))), State::Ok);
-    for (name, shown, v, what, url, sha) in DOWNLOADS {
+    for (name, shown, v, what, files) in DOWNLOADS {
         if which(name).is_none() {
+            let (url, sha) = files[SYSTEM];
             download(name, shown, v, tr(what.0, what.1), url, sha, &mut done);
         }
     }
@@ -1649,7 +1757,8 @@ fn major_minor(v: &str) -> String {
 
 /// What every ping starts with: the version, the system, its kind and the source.
 fn ping_base(kind: &str, wsl: bool, in_place: bool) -> Value {
-    json::obj(vec![("version", VERSION.into()), ("system", (if wsl { "wsl" } else { "linux" }).into()),
+    let system = if wsl { "wsl" } else if cfg!(target_os = "macos") { "macos" } else { "linux" };
+    json::obj(vec![("version", VERSION.into()), ("system", system.into()),
                    ("kind", kind.into()), ("source", (if in_place { "clone" } else { "release" }).into())])
 }
 
@@ -2134,6 +2243,39 @@ pub fn cmd_update_check() -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// Fresh comes as a .tar.xz on macOS: the program comes out of its folder in the package.
+    #[test]
+    fn a_program_comes_out_of_a_tar_xz() {
+        let dir = std::env::temp_dir().join(format!("corral-test-xz-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("fresh-editor-aarch64-apple-darwin")).unwrap();
+        std::fs::write(dir.join("fresh-editor-aarch64-apple-darwin/fresh"), b"the program").unwrap();
+        std::fs::write(dir.join("fresh-editor-aarch64-apple-darwin/README.md"), b"not it").unwrap();
+        let made = Command::new("tar").args(["-cJf", "package.tar.xz", "fresh-editor-aarch64-apple-darwin"]).current_dir(&dir).status().unwrap();
+        assert!(made.success());
+        let data = std::fs::read(dir.join("package.tar.xz")).unwrap();
+        assert_eq!(tar_xz_member(&data, "fresh").as_deref(), Some(&b"the program"[..]));
+        assert_eq!(tar_xz_member(&data, "missing"), None);
+        assert_eq!(tar_xz_member(b"not a package", "fresh"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The system a ping names when it isn't WSL.
+    const SYS: &str = if cfg!(target_os = "macos") { "macos" } else { "linux" };
+
+    /// httpgd on macOS comes compiled from CRAN, but only in the version the snapshot
+    /// (or your repository) has, and without pulling newer dependencies from CRAN.
+    #[test]
+    fn httpgd_on_macos_comes_from_cran_only_in_the_snapshots_version() {
+        let code = httpgd_from_cran_code();
+        assert!(code.contains(r#"available.packages(repos = repos, type = "source")["httpgd", "Version"]"#), "{code}");
+        assert!(code.contains(&format!(r#"cran <- c(CRAN = "{CRAN}")"#)), "{code}");
+        assert!(code.contains("identical(unname(want), unname(have))"), "{code}");
+        assert!(code.contains(r#"install.packages("httpgd", lib = lib, repos = cran, type = "binary", dependencies = FALSE"#), "{code}");
+        assert!(code.contains(r#"CRAN = paste0("https://p3m.dev/cran/", day)"#), "the snapshot decides the version: {code}");
+        assert!(code.starts_with(R_LIB));
+    }
+
     /// A month without a look for a newer version, and Corral says how long it has been;
     /// before that, or with no date at all, nothing.
     #[test]
@@ -2169,7 +2311,7 @@ mod tests {
         assert_eq!(ping_body(None, true, false, &none, &[]),
                    format!(r#"{{"version":"{VERSION}","system":"wsl","kind":"new","source":"release"}}"#));
         assert_eq!(ping_body(Some("0.1.15"), false, true, &none, &[]),
-                   format!(r#"{{"version":"{VERSION}","system":"linux","kind":"update","source":"clone","from":"0.1.15"}}"#));
+                   format!(r#"{{"version":"{VERSION}","system":"{SYS}","kind":"update","source":"clone","from":"0.1.15"}}"#));
         // A version that doesn't read as one is left out, and it is still an update.
         let odd = ping_body(Some(r#"0.1"}x"#), true, false, &none, &[]);
         assert!(odd.contains(r#""kind":"update""#) && !odd.contains("from"), "{odd}");
@@ -2186,7 +2328,7 @@ mod tests {
         assert!(ping_body(None, true, false, &envs, &["httpgd", "duckdb"]).contains(r#""r_failed":["httpgd","duckdb"]"#),
                 "{}", ping_body(None, true, false, &envs, &["httpgd", "duckdb"]));
         assert!(!ping_body(None, true, false, &envs, &[]).contains("r_failed"));
-        assert_eq!(uninstall_body(false, false), format!(r#"{{"version":"{VERSION}","system":"linux","kind":"uninstall","source":"release"}}"#));
+        assert_eq!(uninstall_body(false, false), format!(r#"{{"version":"{VERSION}","system":"{SYS}","kind":"uninstall","source":"release"}}"#));
         let installed = |c: &str| c == "codex";
         assert_eq!(agent_kind(None, installed), "codex");
         assert_eq!(agent_kind(None, |_: &str| false), "none");
@@ -2267,8 +2409,10 @@ mod tests {
     #[test]
     fn every_download_has_a_sha256() {
         let hex = |h: &str| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
-        for (name, _, _, _, _, sha) in DOWNLOADS {
-            assert!(hex(sha), "{name}");
+        for (name, _, _, _, files) in DOWNLOADS {
+            for (url, sha) in files {
+                assert!(hex(sha), "{name}: {url}");
+            }
         }
     }
 
@@ -2280,10 +2424,12 @@ mod tests {
 
     #[test]
     fn the_herdr_it_brings_is_one_corral_accepts() {
-        let (v, url, sha) = HERDR;
+        let (v, files) = HERDR;
         assert!(as_tuple(v) >= HERDR_MIN, "{v}");
-        assert!(url.starts_with("https://github.com/herdrdev/herdr/releases/download/") && url.contains("{v}"), "{url}");
-        assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
+        for (url, sha) in files {
+            assert!(url.starts_with("https://github.com/herdrdev/herdr/releases/download/") && url.contains("{v}"), "{url}");
+            assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
+        }
     }
 
     #[test]
@@ -2319,10 +2465,12 @@ mod tests {
 
     #[test]
     fn the_uv_it_offers_is_pinned_and_checked() {
-        let (v, url, sha) = UV;
+        let (v, files) = UV;
         assert!(plain_version(v), "{v}");
-        assert!(url.starts_with("https://github.com/astral-sh/uv/releases/download/{v}/") && url.ends_with("-unknown-linux-musl.tar.gz"), "{url}");
-        assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
+        for ((url, sha), ending) in files.iter().zip(["x86_64-unknown-linux-musl.tar.gz", "aarch64-apple-darwin.tar.gz", "x86_64-apple-darwin.tar.gz"]) {
+            assert!(url.starts_with("https://github.com/astral-sh/uv/releases/download/{v}/") && url.ends_with(ending), "{url}");
+            assert!(sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{sha}");
+        }
     }
 
     #[test]
