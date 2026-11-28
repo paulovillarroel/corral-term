@@ -72,8 +72,9 @@ jobs:
   # A new Mac, as someone installing Corral has it: R from CRAN and nothing else of
   # Corral's (no herdr, Fresh, DuckDB, Air, uv or R packages). The installer runs on a
   # package built here as the release builds it, the way the install line gets one,
-  # in a terminal (script) where Enter answers yes to everything it offers. Then every
-  # program it brought must run, and every R package it put in must load.
+  # in a terminal (script) given a few Enters, which answer yes to what it offers (two
+  # questions: what's missing, and uv). Then every program it brought must run, and
+  # every R package it put in must load.
   install-macos:
     runs-on: macos-15
     timeout-minutes: 30
@@ -103,7 +104,10 @@ jobs:
           export CORRAL_URL="file://$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz"
           CORRAL_SHA256=$(shasum -a 256 "$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz" | cut -d' ' -f1)
           export CORRAL_SHA256
-          { yes '' || true; } | script -q /dev/null sh "$RUNNER_TEMP/install.sh"
+          # A finite input: script queues whatever it reads until the installer asks.
+          # Its own exit status is script's, so the installer's goes to a file.
+          printf '\n\n\n\n\n\n\n\n' | script -q /dev/null sh -c 'sh "$RUNNER_TEMP/install.sh"; echo $? > "$RUNNER_TEMP/install-status"' || true
+          test "$(cat "$RUNNER_TEMP/install-status")" = 0
 
       - name: What it brought runs
         run: |
@@ -115,3 +119,7 @@ jobs:
           "$HOME"/.local/share/corral/ark/*/ark --version
           Rscript -e 'for (p in c("jsonlite", "httpgd", "nanoparquet", "duckdb")) { suppressPackageStartupMessages(library(p, character.only = TRUE)); cat(p, format(packageVersion(p)), "\n") }'
           corral install --check
+
+      - name: What R said while installing packages
+        if: always()
+        run: cat "$HOME/.local/state/corral/install-r.log" || true
