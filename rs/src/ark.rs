@@ -674,7 +674,11 @@ impl Decoder {
                     }
                     Key::Enter
                 }
-                b'\n' => Key::Enter,
+                // A lone line feed: Ctrl+J, which many terminals also send for Ctrl+Enter.
+                // It runs even if something is left open, like Alt+Enter, which a Mac
+                // terminal sends only with Option set as Alt (Enter itself sends \r, and
+                // \r\n counts as one Enter above).
+                b'\n' => Key::AltEnter,
                 b'\t' => Key::Tab,
                 0x7f | 0x08 => Key::Backspace,
                 1..=26 => Key::Ctrl(b + b'a' - 1),
@@ -1710,6 +1714,11 @@ mod tests {
         assert_eq!(d.feed(&"é".as_bytes()[..1]), vec![]);
         assert_eq!(d.feed(&"é".as_bytes()[1..]), vec![Key::Char('é')]);
         assert_eq!(d.feed(b"\x03\x1b[1;5D\x1b[3~"), vec![Key::Ctrl(b'c'), Key::WordLeft, Key::Delete]);
+        // Ctrl+J (a lone line feed) runs even if something is left open, as Alt+Enter does;
+        // a CR LF pair is still one Enter.
+        assert_eq!(d.feed(b"f(\n"), vec![Key::Char('f'), Key::Char('('), Key::AltEnter]);
+        assert_eq!(d.feed(b"\x1b\r"), vec![Key::AltEnter]);
+        assert_eq!(d.feed(b"\r\n"), vec![Key::Enter]);
     }
 
     #[test]

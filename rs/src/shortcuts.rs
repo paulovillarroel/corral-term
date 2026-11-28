@@ -465,7 +465,7 @@ pub fn entries() -> Vec<Entry> {
     // The line editor of Corral's R console (Ark); IPython has its own.
     list.extend(fixed(Group::Console, "console", ("R console", "Consola de R"), &[
         ("Run, if the expression is complete", "Ejecutar, si la expresión está completa", &["enter"]),
-        ("Run even if something is left open", "Ejecutar aunque falte cerrar algo", &["alt+enter"]),
+        ("Run even if something is left open", "Ejecutar aunque falte cerrar algo", &["ctrl+j", "alt+enter"]),
         ("History (with something typed, only what starts the same)", "Historial (con algo escrito, solo lo que empieza igual)", &["↑", "↓"]),
         ("Complete names, arguments and columns", "Completar nombres, argumentos y columnas", &["tab"]),
         ("Interrupt what is running, or clear what you typed", "Interrumpir lo que corre, o borrar lo escrito", &["ctrl+c"]),
