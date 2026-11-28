@@ -75,7 +75,8 @@ count_stop() {
     case "${CORRAL_NO_TELEMETRY:-0}${DO_NOT_TRACK:-0}" in 00 | 0 | "") ;; *) return 0 ;; esac
     if [ "$check_only" = 1 ] || ! command -v curl >/dev/null 2>&1; then return 0; fi
     # The settings on one line: JSON may put a key and its value on separate ones.
-    flat=$([ -f "$config" ] && tr '\n\r' '  ' < "$config" 2>/dev/null)
+    flat=""
+    if [ -f "$config" ]; then flat=$(tr '\n\r' '  ' < "$config" 2>/dev/null || true); fi
     if printf '%s' "$flat" | grep -q '"telemetry"[[:space:]]*:[[:space:]]*"off"'; then return 0; fi
     # Nor with the sensitive profile: results without values, and agents asking (the default).
     if printf '%s' "$flat" | grep -q '"agent_output"[[:space:]]*:[[:space:]]*"structure"' &&
