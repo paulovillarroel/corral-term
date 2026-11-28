@@ -391,8 +391,14 @@ local({
     v <- suppressWarnings(as.numeric(Sys.getenv("CORRAL_CHECKPOINT_EVERY")))
     if (is.na(v) || v <= 0) 60 else v
   }
+  # Running, and not a zombie: Linux says so in /proc. macOS has no /proc, and there
+  # kill(pid, 0) only says whether a process of this user has that pid (a zombie counts).
+  on_linux <- startsWith(R.version$os, "linux")
   pid_alive <- function(pid) {
-    stat <- tryCatch(readLines(sprintf("/proc/%d/stat", as.integer(pid)), warn = FALSE), error = function(e) "")
+    pid <- suppressWarnings(as.integer(pid))
+    if (length(pid) != 1L || is.na(pid) || pid <= 0L) return(FALSE)
+    if (!on_linux) return(isTRUE(tools::pskill(pid, 0L)))
+    stat <- tryCatch(readLines(sprintf("/proc/%d/stat", pid), warn = FALSE), error = function(e) "")
     length(stat) > 0L && nzchar(stat[1]) && !sub("^.*\\) ([A-Za-z]).*$", "\\1", stat[1]) %in% c("Z", "X")
   }
 
@@ -483,12 +489,18 @@ local({
     if (!checkpoints_on()) return(invisible())
     pid_file <- file.path(session_dir, "keep-plots.pid")
     pid <- if (file.exists(pid_file)) suppressWarnings(as.integer(readLines(pid_file, n = 1L, warn = FALSE))) else NA_integer_
-    cmdline <- sprintf("/proc/%d/cmdline", if (length(pid) == 1L && !is.na(pid)) pid else 0L)
-    if (file.exists(cmdline)) {
-      # Its own watcher: another session's could have the pid now.
-      cmd <- tryCatch(readBin(cmdline, "raw", 512L), error = function(e) raw())
-      cmd[cmd == as.raw(0L)] <- as.raw(32L) # the arguments, separated by spaces
-      if (grepl(paste0(" _keep-plots ", session_id, " "), rawToChar(cmd), fixed = TRUE)) return(invisible())
+    if (!on_linux) {
+      # No /proc to read its arguments from (macOS): a live pid counts as the watcher. A
+      # second one would find the first's lock taken and leave anyway.
+      if (pid_alive(pid)) return(invisible())
+    } else {
+      cmdline <- sprintf("/proc/%d/cmdline", if (length(pid) == 1L && !is.na(pid)) pid else 0L)
+      if (file.exists(cmdline)) {
+        # Its own watcher: another session's could have the pid now.
+        cmd <- tryCatch(readBin(cmdline, "raw", 512L), error = function(e) raw())
+        cmd[cmd == as.raw(0L)] <- as.raw(32L) # the arguments, separated by spaces
+        if (grepl(paste0(" _keep-plots ", session_id, " "), rawToChar(cmd), fixed = TRUE)) return(invisible())
+      }
     }
     if (is.null(keep_bin)) keep_bin <<- tryCatch(env$corral_bin(), error = function(e) "")
     if (nzchar(keep_bin)) {
