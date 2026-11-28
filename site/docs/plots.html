@@ -144,7 +144,7 @@
     <pre><code><span class="p">$ </span>corral config mirador_size 0.4x0.7
 <span class="p">$ </span>corral config mirador_window free</code></pre>
     <p><code>mirador_size</code> is the fraction of the screen's width and height (<code>0.5x0.85</code> by default). <code>mirador_window free</code> leaves the window's size and position alone; <code>right</code> is the default.</p>
-    <p>On WSL, Corral uses Firefox if you have it, otherwise Edge or Chrome, which open Mirador as an app window without tabs or address bar. On Linux it uses <code>xdg-open</code>. <code>CORRAL_BROWSER</code> picks another one (see <a href="config.html#environment-variables">Configuration</a>).</p>
+    <p>On WSL, Corral uses Firefox if you have it, otherwise Edge or Chrome, which open Mirador as an app window without tabs or address bar. On Linux it uses <code>xdg-open</code>, and on macOS <code>open</code>, your default browser. <code>CORRAL_BROWSER</code> picks another one (see <a href="config.html#environment-variables">Configuration</a>).</p>
 
     <h2>R options for plots</h2>
     <p>In R, a few options change what the first plot does or which device draws; you set them in your <code>.Rprofile</code>. <a href="config.html#r-options">Configuration</a> lists them: <code>corral.viewer</code>, <code>corral.open_plots</code> and <code>corral.httpgd</code>.</p>
