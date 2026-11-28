@@ -18,6 +18,7 @@ mod json;
 mod layout;
 mod lsp;
 mod mirador;
+mod os;
 mod plots;
 mod profile;
 mod send;

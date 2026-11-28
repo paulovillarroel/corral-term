@@ -225,13 +225,7 @@ pub fn remove_ended_checkpoints(dir: &Path) -> (usize, Vec<String>) {
     (removed, failed)
 }
 
-pub fn pid_alive(pid: i64) -> bool {
-    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-        // "pid (name) S ...": the state comes after the name, which may hold spaces.
-        Ok(stat) => stat.rsplit_once(')').and_then(|(_, rest)| rest.trim_start().chars().next()).is_some_and(|s| s != 'Z' && s != 'X'),
-        Err(_) => false,
-    }
-}
+pub use crate::os::pid_alive;
 
 /// Folders of sessions whose R or Python has ended go away, with the previews of
 /// variables and the agents' requests they held. A folder without meta.json
@@ -480,12 +474,7 @@ pub fn sh_quote(s: &str) -> String {
 
 /// Command lines of this user's running processes (an editor shows the file it has open).
 pub fn command_lines() -> Vec<String> {
-    let Ok(dir) = std::fs::read_dir("/proc") else { return Vec::new() };
-    dir.flatten()
-        .filter(|e| e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit()))
-        .filter_map(|e| std::fs::read(e.path().join("cmdline")).ok())
-        .map(|b| String::from_utf8_lossy(&b).replace('\0', " "))
-        .collect()
+    crate::os::pids().into_iter().filter_map(crate::os::args).map(|a| a.join(" ")).collect()
 }
 
 extern "C" {

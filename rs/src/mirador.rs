@@ -61,7 +61,7 @@ fn close_inherited() {
     extern "C" {
         fn close(fd: i32) -> i32;
     }
-    let fds: Vec<i32> = std::fs::read_dir("/proc/self/fd").map(|d| d.flatten()
+    let fds: Vec<i32> = std::fs::read_dir(crate::os::FD_DIR).map(|d| d.flatten()
         .filter_map(|e| e.file_name().to_str()?.parse().ok()).filter(|&fd| fd > 2).collect()).unwrap_or_default();
     for fd in fds {
         // SAFETY: nothing here uses them yet; the one read_dir listed is already closed (EBADF).
