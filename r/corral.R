@@ -171,6 +171,17 @@ local({
     sprintf("%s [%d]", abbr, length(x))
   }
 
+  # A single value that may be a secret shows no preview, in the variables pane or to an
+  # agent (corral vars --json): its name says so (password, token, secret, API key...), or
+  # its text has the shape of one (a known key's prefix, a JWT, a private key, a URL with a
+  # password). The same patterns as SECRET_NAME and SECRET_TEXT in py/corral_py.py.
+  secret_name <- "(?i)(pass(word|wd)?|pwd|secret|token|api[._-]?key|access[._-]?key|private[._-]?key|credential|bearer)"
+  secret_text <- "^(sk-|sk_live_|rk_live_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|hf_|eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.)|-----BEGIN|://[^/@:\\s]+:[^/@\\s]+@"
+  may_be_secret <- function(name, x) {
+    length(x) == 1L && (grepl(secret_name, name, perl = TRUE) ||
+      (is.character(x) && !is.na(x) && grepl(secret_text, x, perl = TRUE)))
+  }
+
   plot_classes <- c("ggplot", "gg", "trellis", "recordedplot", "grob", "gtable", "patchwork")
 
   plot_preview <- function(x) {
@@ -194,7 +205,7 @@ local({
       data = paste(dim(x), collapse = " × "),
       `function` = paste0("function(", paste(names(formals(x)), collapse = ", "), ")"),
       plotobj = plot_preview(x),
-      value = value_preview(x),
+      value = if (may_be_secret(name, x)) tr("hidden: may be a secret", "oculto: puede ser una clave") else value_preview(x),
       other = if (is.list(x) && !is.object(x)) sprintf("list [%d]", length(x)) else paste(class(x), collapse = "/")
     ), error = function(e) class(x)[1])
     # object.size() walks every element; skip it for very large objects.
