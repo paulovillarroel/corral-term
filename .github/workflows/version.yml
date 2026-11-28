@@ -1,11 +1,13 @@
-# Each version tag (v0.1.0, v0.1.1, ...) publishes the package install.sh
-# downloads: the repository plus the Rust corral already compiled, so whoever
-# installs it doesn't need Rust. The binary is static (musl) and runs on any
-# x86_64 Linux, WSL included.
+# Each version tag (v0.1.0, v0.1.1, ...) publishes the packages install.sh downloads:
+# the repository plus the Rust corral already compiled, so whoever installs it doesn't
+# need Rust. One package per system: Linux x86_64 (a static musl build, which runs on
+# any x86_64 Linux, WSL included), and macOS on Apple silicon and on Intel, built on a
+# Mac. The release goes out once all three are built, so no version is published
+# without one of them.
 #
-# Next to the package: its SHA-256 (install.sh checks it before opening the
-# package) and a build provenance attestation, so anyone can check the package
-# came from this workflow: gh attestation verify FILE --repo paulovillarroel/corral-term
+# Next to each package: its SHA-256 (install.sh checks it before opening the package)
+# and a build provenance attestation, so anyone can check the package came from this
+# workflow: gh attestation verify FILE --repo paulovillarroel/corral-term
 #
 # The actions it uses are pinned to a commit, with the version in a comment: a tag can
 # be moved to other code, which would then run inside the build that gets attested.
@@ -14,11 +16,16 @@
 # The release notes are that version's section of CHANGELOG.md ("## 0.1.4"), with
 # GitHub's link to the full list of changes below; without a section, nothing is
 # published, so add it before tagging.
+#
+# A pull request that changes this file runs it too, to build and assemble every
+# package; only a tag writes release notes, attests and publishes.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/version.yml"]
 
 permissions:
   contents: write
@@ -26,12 +33,52 @@ permissions:
   attestations: write
 
 jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Build corral for Apple silicon and Intel
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --target "$target" --manifest-path rs/Cargo.toml
+            codesign --verify --verbose "rs/target/$target/release/corral"
+          done
+          file rs/target/*-apple-darwin/release/corral
+          ./rs/target/aarch64-apple-darwin/release/corral --version
+
+      # COPYFILE_DISABLE: no ._ files with macOS's file metadata in the packages.
+      - name: Assemble the packages
+        env:
+          COPYFILE_DISABLE: "1"
+        run: |
+          for arch in aarch64 x86_64; do
+            dir="$RUNNER_TEMP/$arch"
+            mkdir -p "$dir"
+            git archive --format=tar --prefix=corral-term/ HEAD | tar -x -C "$dir"
+            mkdir -p "$dir/corral-term/rs/target/release"
+            cp "rs/target/$arch-apple-darwin/release/corral" "$dir/corral-term/rs/target/release/corral"
+            tar -czf "corral-term-$arch-macos.tar.gz" -C "$dir" corral-term
+            shasum -a 256 "corral-term-$arch-macos.tar.gz" > "corral-term-$arch-macos.tar.gz.sha256"
+          done
+          cat corral-term-*-macos.tar.gz.sha256
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-packages
+          path: corral-term-*-macos.tar.gz*
+          if-no-files-found: error
+          retention-days: 1
+
   package:
+    needs: macos
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Release notes (CHANGELOG.md)
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
@@ -53,12 +100,32 @@ jobs:
           sha256sum corral-term-x86_64-linux.tar.gz > corral-term-x86_64-linux.tar.gz.sha256
           cat corral-term-x86_64-linux.tar.gz.sha256
 
-      - name: Attest the package's provenance
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: macos-packages
+
+      # Each package as the Mac built it: its SHA-256 still matches.
+      - name: The macOS packages
+        run: |
+          sha256sum -c corral-term-aarch64-macos.tar.gz.sha256 corral-term-x86_64-macos.tar.gz.sha256
+          tar -tzf corral-term-aarch64-macos.tar.gz corral-term/rs/target/release/corral corral-term/install.sh
+
+      - name: Attest the packages' provenance
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: corral-term-x86_64-linux.tar.gz
+          subject-path: |
+            corral-term-x86_64-linux.tar.gz
+            corral-term-aarch64-macos.tar.gz
+            corral-term-x86_64-macos.tar.gz
 
       - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 install.sh --title "Corral $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            corral-term-x86_64-linux.tar.gz corral-term-x86_64-linux.tar.gz.sha256 \
+            corral-term-aarch64-macos.tar.gz corral-term-aarch64-macos.tar.gz.sha256 \
+            corral-term-x86_64-macos.tar.gz corral-term-x86_64-macos.tar.gz.sha256 \
+            install.sh --title "Corral $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
