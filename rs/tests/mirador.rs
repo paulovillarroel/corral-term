@@ -193,7 +193,8 @@ fn callers_at_the_same_time_open_one_window() {
     let home = Home(std::env::temp_dir().join(format!("corral-test-mirador-window-{}", std::process::id())));
     let _ = std::fs::remove_dir_all(&home.0);
     std::fs::create_dir_all(&home.0).unwrap();
-    // The "browser" writes down each address it is asked to open.
+    // The "browser" writes down each address it is asked to open. Asked for an app window
+    // (--app), it gets a window of Mirador's own, the kind Corral places.
     let log = home.0.join("opened");
     let browser = home.0.join("browser.sh");
     std::fs::write(&browser, format!("#!/bin/sh\necho \"$1\" >> '{}'\n", log.display())).unwrap();
@@ -201,7 +202,7 @@ fn callers_at_the_same_time_open_one_window() {
         let mut c = Command::new(env!("CARGO_BIN_EXE_corral"));
         c.args(args).env_clear().env("HOME", &home.0).env("PATH", "/usr/bin:/bin").env("CORRAL_LANG", "en")
             .env("CORRAL_MIRADOR_PORT", "0").env("CORRAL_NO_TELEMETRY", "1")
-            .env("CORRAL_BROWSER", format!("sh {} {{url}}", browser.display())).stdin(Stdio::null());
+            .env("CORRAL_BROWSER", format!("sh {} --app={{url}}", browser.display())).stdin(Stdio::null());
         c
     };
     // The server first, so the callers only meet at the window.
