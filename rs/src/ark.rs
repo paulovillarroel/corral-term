@@ -558,6 +558,8 @@ enum Key {
 struct Decoder {
     pending: Vec<u8>,
     paste: Option<Vec<u8>>,
+    /// The last read ended in a CR: an LF first in the next one is its pair, not Ctrl+J.
+    after_cr: bool,
 }
 
 fn utf8_len(b: u8) -> usize {
@@ -598,6 +600,7 @@ fn csi(seq: &[u8]) -> Key {
 
 impl Decoder {
     fn feed(&mut self, bytes: &[u8]) -> Vec<Key> {
+        let bytes = if std::mem::take(&mut self.after_cr) && self.pending.is_empty() { bytes.strip_prefix(b"\n").unwrap_or(bytes) } else { bytes };
         self.pending.extend_from_slice(bytes);
         let p = std::mem::take(&mut self.pending);
         let mut keys = Vec::new();
@@ -671,6 +674,8 @@ impl Decoder {
                 b'\r' => {
                     if p.get(i + 1) == Some(&b'\n') {
                         i += 1;
+                    } else if i + 1 == p.len() {
+                        self.after_cr = true;
                     }
                     Key::Enter
                 }
@@ -1719,6 +1724,10 @@ mod tests {
         assert_eq!(d.feed(b"f(\n"), vec![Key::Char('f'), Key::Char('('), Key::AltEnter]);
         assert_eq!(d.feed(b"\x1b\r"), vec![Key::AltEnter]);
         assert_eq!(d.feed(b"\r\n"), vec![Key::Enter]);
+        // A CR LF split between two reads is still one Enter; a later LF is Ctrl+J again.
+        assert_eq!(d.feed(b"x\r"), vec![Key::Char('x'), Key::Enter]);
+        assert_eq!(d.feed(b"\ny"), vec![Key::Char('y')]);
+        assert_eq!(d.feed(b"\n"), vec![Key::AltEnter]);
     }
 
     #[test]
