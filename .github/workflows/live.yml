@@ -68,3 +68,50 @@ jobs:
       # The cost reports measure, they don't check: they stay out.
       - name: Live tests
         run: cargo test --release --locked --manifest-path rs/Cargo.toml --test live -- --ignored --test-threads 1 --skip cost_report --skip restore_time_report
+
+  # A new Mac, as someone installing Corral has it: R from CRAN and nothing else of
+  # Corral's (no herdr, Fresh, DuckDB, Air, uv or R packages). The installer runs on a
+  # package built here as the release builds it, the way the install line gets one,
+  # in a terminal (script) where Enter answers yes to everything it offers. Then every
+  # program it brought must run, and every R package it put in must load.
+  install-macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      - name: The package, as the release builds it
+        env:
+          COPYFILE_DISABLE: "1"
+        run: |
+          cargo build --release --locked --manifest-path rs/Cargo.toml
+          dir="$RUNNER_TEMP/package"
+          mkdir -p "$dir"
+          git archive --format=tar --prefix=corral-term/ HEAD | tar -x -C "$dir"
+          mkdir -p "$dir/corral-term/rs/target/release"
+          cp rs/target/release/corral "$dir/corral-term/rs/target/release/corral"
+          tar -czf "$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz" -C "$dir" corral-term
+          cp install.sh "$RUNNER_TEMP/install.sh"
+
+      - name: Install, answering yes
+        env:
+          CORRAL_NO_TELEMETRY: "1"
+          CORRAL_LANG: en
+        run: |
+          export CORRAL_URL="file://$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz"
+          CORRAL_SHA256=$(shasum -a 256 "$RUNNER_TEMP/corral-term-aarch64-macos.tar.gz" | cut -d' ' -f1)
+          export CORRAL_SHA256
+          { yes '' || true; } | script -q /dev/null sh "$RUNNER_TEMP/install.sh"
+
+      - name: What it brought runs
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          for program in corral herdr fresh duckdb air uv; do
+            printf '%s: ' "$program"
+            "$program" --version
+          done
+          "$HOME"/.local/share/corral/ark/*/ark --version
+          Rscript -e 'for (p in c("jsonlite", "httpgd", "nanoparquet", "duckdb")) { suppressPackageStartupMessages(library(p, character.only = TRUE)); cat(p, format(packageVersion(p)), "\n") }'
+          corral install --check
