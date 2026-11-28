@@ -558,7 +558,8 @@ let stageSize = [0, 0];
 // takes about half a second each time. Placed within a few pixels of that, the drawing
 // stays; not placed within a few seconds, plots fit the window as always.
 const FIT = (location.hash.slice(1).split(":").find((p) => p.startsWith("fit=")) || "").slice(4).split("x").map(Number);
-let placing = FIT.length === 2 && FIT.every((v) => v > 0 && v <= 1) ? { until: Date.now() + 4000 } : null;
+// performance.now(): a clock that doesn't move when the system's is set.
+let placing = FIT.length === 2 && FIT.every((v) => v > 0 && v <= 1) ? { until: performance.now() + 4000 } : null;
 let drawnFor = null; // the stage size the plot on screen was drawn for
 let kept = null;     // { at: the stage's size when a drawing was kept, size: the one it was drawn for }
 const near = (a, b) => Math.abs(a[0] - b[0]) <= 16 && Math.abs(a[1] - b[1]) <= 16;
@@ -568,7 +569,7 @@ function drawBox(stage) {
   if (placing) {
     const target = [Math.floor(screen.availWidth * FIT[0]), Math.floor(screen.availHeight * FIT[1])];
     const placed = near([window.outerWidth, window.outerHeight], target);
-    if (!placed && Date.now() < placing.until) return [now[0] + target[0] - window.outerWidth, now[1] + target[1] - window.outerHeight];
+    if (!placed && performance.now() < placing.until) return [now[0] + target[0] - window.outerWidth, now[1] + target[1] - window.outerHeight];
     placing = null;
     if (placed && drawnFor && near(now, drawnFor)) kept = { at: now, size: drawnFor };
   }
@@ -576,7 +577,8 @@ function drawBox(stage) {
   kept = null;
   return now;
 }
-if (placing) setTimeout(() => { if (placing && S.tab === "plots") renderPlot(); }, 4100);
+// Not placed by then: plots fit the window as it is.
+if (placing) setTimeout(() => { if (placing) { placing = null; if (S.tab === "plots") renderPlot(); } }, 4100);
 // Screen pixels per CSS pixel: a plot sent as PNG (too heavy as SVG) is drawn at that density.
 const DPR = Math.min(2, Math.max(1, Math.round((window.devicePixelRatio || 1) * 4) / 4));
 // SVG, or PNG when it would be too heavy; a server from before ?wait= (no rev) only knows SVG.
