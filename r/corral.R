@@ -490,9 +490,12 @@ local({
     pid_file <- file.path(session_dir, "keep-plots.pid")
     pid <- if (file.exists(pid_file)) suppressWarnings(as.integer(readLines(pid_file, n = 1L, warn = FALSE))) else NA_integer_
     if (!on_linux) {
-      # No /proc to read its arguments from (macOS): a live pid counts as the watcher. A
-      # second one would find the first's lock taken and leave anyway.
-      if (pid_alive(pid)) return(invisible())
+      # No /proc to read its arguments from (macOS): the watcher touches its pid file
+      # every 5 s, so a live pid with a fresh file is it. One that stopped leaves the file
+      # to age, even if another process gets its pid. A second watcher would find the
+      # first's lock taken and leave anyway.
+      age <- as.numeric(Sys.time()) - as.numeric(file.mtime(pid_file))
+      if (pid_alive(pid) && isTRUE(age < 30)) return(invisible())
     } else {
       cmdline <- sprintf("/proc/%d/cmdline", if (length(pid) == 1L && !is.na(pid)) pid else 0L)
       if (file.exists(cmdline)) {

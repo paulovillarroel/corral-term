@@ -326,10 +326,18 @@ pub(crate) fn cmd_keep_plots(rest: &[String]) -> Result<(), String> {
     if unsafe { crate::eval::flock(lock.as_raw_fd(), crate::eval::LOCK_EX | crate::eval::LOCK_NB) } != 0 {
         return Ok(());
     }
-    let _ = std::fs::write(sdir.join("keep-plots.pid"), std::process::id().to_string());
+    let pid_file = sdir.join("keep-plots.pid");
+    let _ = std::fs::write(&pid_file, std::process::id().to_string());
     let checkpoint = env::state_dir().join("checkpoints").join(format!("r-{sid}"));
     let mut last = String::new();
+    let mut beat = Instant::now();
     while env::pid_alive(pid) {
+        // On macOS R can't read this process's arguments to tell it is its watcher (no
+        // /proc), so the pid file's age says it: touched every 5 s while this runs.
+        if cfg!(target_os = "macos") && beat.elapsed() >= Duration::from_secs(5) {
+            beat = Instant::now();
+            let _ = std::fs::OpenOptions::new().write(true).open(&pid_file).and_then(|f| f.set_modified(SystemTime::now()));
+        }
         let rev = std::fs::read_to_string(sdir.join("plots-rev")).unwrap_or_default();
         // Copied: this revision was written and the checkpoint still has its plots. One
         // deleted (checkpoints turned off) and written again has none, so the session's
