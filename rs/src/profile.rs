@@ -106,13 +106,12 @@ fn combine(cfg: &Value, paths: &[PathBuf], marked: bool) -> Rules {
     Rules { access, output, sensitive, profile: name_of(access, output, sensitive), project }
 }
 
-/// The folder a session's process is in right now, as the kernel has it (/proc/PID/cwd).
+/// The folder a session's process is in right now, as the kernel has it (os::cwd).
 /// A setwd() or os.chdir() shows here at once, before R or Python note it in meta.json
 /// after the command: a request that follows straight away, or the one that moved, is
-/// judged by where the session really is. None where there is no /proc.
+/// judged by where the session really is. None when the kernel doesn't say.
 pub(crate) fn live_cwd(meta: &Value) -> Option<PathBuf> {
-    let pid = meta.get("pid").num()? as i64;
-    std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
+    crate::os::cwd(meta.get("pid").num()? as i64)
 }
 
 /// The rules for a session (its folder and meta.json). A session that started or runs in

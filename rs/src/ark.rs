@@ -199,7 +199,7 @@ fn no_private_sockets() -> String {
 /// /tmp is). Candidates: $XDG_RUNTIME_DIR, $TMPDIR, /tmp.
 fn short_socket_dir() -> Option<PathBuf> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-    let me = std::fs::metadata("/proc/self").ok()?.uid();
+    let me = crate::os::euid();
     let parents = [std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))];
     parents.into_iter().flatten().filter(|p| p.is_absolute()).find_map(|parent| {
         // Its real path: through any link, the folders that matter are the real ones,
@@ -368,18 +368,15 @@ fn connect(child: &mut Child, addr: &str, kind: &str, identity: Option<&[u8]>, e
 }
 
 /// Start Ark on a new connection file and connect to its four channels.
-/// The system's out-of-memory kills so far (`oom_kill` in /proc/vmstat).
-fn oom_kills() -> Option<u64> {
-    std::fs::read_to_string("/proc/vmstat").ok()?.lines()
-        .find_map(|l| l.strip_prefix("oom_kill ")).and_then(|n| n.trim().parse().ok())
-}
-
 /// Why R ended, in words. Signal 9 is how the kernel ends a process when memory runs
 /// out, and how `kill -9` ends one: the out-of-memory count, read when R started and
-/// again now, tells them apart.
-fn crash_cause(signal: Option<i32>, code: Option<i32>, memory: bool) -> String {
+/// again now, tells them apart. `memory` is None where the system keeps no such count
+/// (macOS), and then both stay possible.
+fn crash_cause(signal: Option<i32>, code: Option<i32>, memory: Option<bool>) -> String {
     match (signal, code) {
-        (Some(9), _) if memory => tr("the system ran out of memory (signal 9)", "el sistema se quedó sin memoria (señal 9)").into(),
+        (Some(9), _) if memory == Some(true) => tr("the system ran out of memory (signal 9)", "el sistema se quedó sin memoria (señal 9)").into(),
+        (Some(9), _) if memory.is_none() => tr("it was stopped from outside or the system ran out of memory (signal 9)",
+                                               "lo detuvieron desde fuera o el sistema se quedó sin memoria (señal 9)").into(),
         (Some(9), _) => tr("it was stopped from outside (signal 9)", "lo detuvieron desde fuera (señal 9)").into(),
         (Some(11), _) => tr("a crash in R or in a package (signal 11)", "un fallo de R o de un paquete (señal 11)").into(),
         (Some(6), _) => tr("R aborted (signal 6)", "R abortó (señal 6)").into(),
@@ -494,7 +491,7 @@ fn start(ark: &Path, conn_path: &Path, tx: &Sender<Event>, crashed_at: Option<f6
             h.get("msg_type").str() != Some("input_request") || t.send(Event::Input(h, content)).is_ok()
         });
     });
-    Ok(Kernel { child, started: Instant::now(), oom_kills: oom_kills(), key: key.into_bytes(), session, shell, stdin, control })
+    Ok(Kernel { child, started: Instant::now(), oom_kills: crate::os::oom_kills(), key: key.into_bytes(), session, shell, stdin, control })
 }
 
 /// Open a channel again while the kernel runs: a few seconds of tries.
@@ -1392,7 +1389,10 @@ impl Console {
     fn restart(&mut self, status: &std::process::ExitStatus) -> Result<(), String> {
         use std::os::unix::process::ExitStatusExt;
         let crashed_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).ok();
-        let memory = matches!((self.k.oom_kills, oom_kills()), (Some(a), Some(b)) if b > a);
+        let memory = match (self.k.oom_kills, crate::os::oom_kills()) {
+            (Some(a), Some(b)) => Some(b > a),
+            _ => None,
+        };
         let why = crash_cause(status.signal(), status.code(), memory);
         // What it was running, when it was running something.
         let running = if matches!(self.mode, Mode::Busy { .. }) { first_line(&eval_code(&self.last_code)) } else { String::new() };
@@ -1685,10 +1685,13 @@ mod tests {
 
     #[test]
     fn a_crash_says_why_in_words() {
-        assert!(crash_cause(Some(9), None, true).contains("memory"));
-        assert!(crash_cause(Some(9), None, false).contains("from outside"));
-        assert!(crash_cause(Some(11), None, false).contains("package"));
-        assert!(crash_cause(None, Some(2), false).contains("code 2"));
+        assert!(crash_cause(Some(9), None, Some(true)).contains("memory"));
+        assert!(crash_cause(Some(9), None, Some(false)).contains("from outside"));
+        assert!(!crash_cause(Some(9), None, Some(false)).contains("memory"));
+        let unknown = crash_cause(Some(9), None, None);
+        assert!(unknown.contains("from outside") && unknown.contains("memory"), "{unknown}");
+        assert!(crash_cause(Some(11), None, Some(false)).contains("package"));
+        assert!(crash_cause(None, Some(2), None).contains("code 2"));
         assert_eq!(first_line("\n  x <- 1\ny <- 2"), "x <- 1…");
         assert_eq!(first_line("summary(m)"), "summary(m)");
         assert_eq!(first_line(&"a".repeat(100)).chars().count(), 81);

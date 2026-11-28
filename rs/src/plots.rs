@@ -26,24 +26,17 @@ const KITTY_TERMINALS: [&str; 3] = ["wezterm", "kitty", "ghostty"];
 /// Which terminal each attached herdr window runs in (from the client processes' environment).
 fn herdr_client_terminals() -> Vec<String> {
     let mut found = Vec::new();
-    let Ok(dir) = std::fs::read_dir("/proc") else { return found };
-    for proc in dir.flatten().map(|e| e.path()) {
-        if !proc.file_name().is_some_and(|n| n.to_string_lossy().bytes().all(|b| b.is_ascii_digit())) {
+    for pid in crate::os::pids() {
+        if crate::os::name(pid).is_none_or(|n| n != "herdr") {
             continue;
         }
-        if std::fs::read_to_string(proc.join("comm")).map(|c| c.trim() != "herdr").unwrap_or(true) {
-            continue;
-        }
-        let args: Vec<String> = std::fs::read(proc.join("cmdline")).unwrap_or_default()
-            .split(|b| *b == 0).skip(1).filter(|a| !a.is_empty()).map(|a| String::from_utf8_lossy(a).into_owned()).collect();
-        if args.first().is_some_and(|a| !a.starts_with("--")) {
+        let args = crate::os::args(pid).unwrap_or_default();
+        if args.get(1).is_some_and(|a| !a.starts_with("--")) {
             continue; // the server or a CLI call, not a window
         }
-        let Ok(environ) = std::fs::read(proc.join("environ")) else { continue };
-        let vars: Vec<(String, String)> = environ.split(|b| *b == 0).filter_map(|kv| {
-            let kv = String::from_utf8_lossy(kv);
-            kv.split_once('=').map(|(k, v)| (k.to_string(), v.to_string()))
-        }).collect();
+        let Some(environ) = crate::os::environ(pid) else { continue };
+        let vars: Vec<(String, String)> = environ.iter()
+            .filter_map(|kv| kv.split_once('=').map(|(k, v)| (k.to_string(), v.to_string()))).collect();
         let get = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         found.push(if get("WEZTERM_PANE").is_some() || get("WEZTERM_EXECUTABLE").is_some() {
             "WezTerm".into()
@@ -114,7 +107,7 @@ fn mirador_call(info: &Value, path: &str, body: Option<&Value>, timeout: Duratio
 /// Is the server up? With `need_window`, is a Mirador page also polling it?
 pub fn mirador_alive(info: &Value, need_window: bool) -> bool {
     let Some(pid) = info.get("pid").num() else { return false };
-    if info.get("port").is_null() || !Path::new(&format!("/proc/{}", pid as i64)).exists() {
+    if info.get("port").is_null() || !env::pid_alive(pid as i64) {
         return false;
     }
     match mirador_call(info, "/api/ping", None, Duration::from_millis(1500)) {
